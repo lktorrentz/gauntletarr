@@ -1,15 +1,23 @@
-# The Media Gauntlet*rr — configurazione statica
+# The Media Gauntlet*rr - static configuration
 #
-# I dischi fisici NON si elencano qui: basta montarli nel container sotto
-# disk_scan_root (di default /mnt, vedi docker-compose.yml), e compariranno
-# da soli nella Web UI ("Dischi" -> "Aggiungi disco") pronti da aggiungere
-# con un click, senza toccare questo file né riavviare (vedi docs/SPEC.md §4).
+# Physical disks are NOT listed here: just mount them into the container
+# under disk_scan_root, and they'll show up on their own via the API
+# ("Add disk") ready to register, no need to touch this file or restart
+# (see docs/SPEC.md SS4).
 #
-# disk_scan_root: opzionale, default "/mnt". Cambialo solo se i tuoi bind
-# mount dei dischi vivono sotto un'altra radice dentro il container.
+# disk_scan_root: default "/data" - matches the TrashGuide convention
+# (a single unified data mount shared with your download client and
+# media manager, so hardlinks between them work). Change it only if your
+# setup mounts things elsewhere inside the container. A single-mount
+# setup like this registers disk_scan_root itself as its one Disk; a
+# multi-disk Unraid setup (mounting each physical disk directly, e.g.
+# /mnt/disk1) instead sets this to /mnt and registers each subfolder as
+# its own Disk - both are supported, see docs/SPEC.md SS2/SS4.
 #
-# data_dir: dati persistenti dell'app (database SQLite, cache poster).
+# data_dir: the app's own persistent state (SQLite database, poster
+# cache) - lives under the config mount by default so a single appdata
+# volume covers both config.yaml and this.
 
-disk_scan_root: /mnt
+disk_scan_root: /data
 
-data_dir: /app/data
+data_dir: /app/config/data

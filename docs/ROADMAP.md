@@ -1,130 +1,130 @@
-# Roadmap a fasi — The Media Gauntlet*rr
+# Phased roadmap - The Media Gauntlet*rr
 
-Ogni fase corrisponde grosso modo al completamento di una Media Stone (vedi `docs/SPEC.md`, sezione "Tema: le Media Stones"), più una fase 0 di fondamenta e una fase 7 di chiusura per il rilascio open source. Le fasi sono sequenziali per dipendenza logica (non è utile costruire il motore di matching prima che esistano gli adapter client e il resolver media che consuma), ma **non vanno intese come sprint a tempo fisso** — ciascuna si chiude quando la sua definition of done è soddisfatta, non a una scadenza.
+Each phase roughly corresponds to completing one Media Stone (see `docs/SPEC.md`, section "Theme: the Media Stones"), plus a Phase 0 for foundations and a Phase 7 to close out for the open source release. Phases are sequential by logical dependency (there's no point building the matching engine before the client adapters and media resolver it consumes exist), but **they are not meant as fixed-length sprints** - each one closes when its definition of done is met, not on a deadline.
 
-Riferimenti di sezione sempre a `docs/SPEC.md`.
-
----
-
-## Fase 0 — Fondamenta (nessuna Stone)
-
-**Obiettivo**: scheletro del progetto su cui si innestano tutte le fasi successive.
-
-- Struttura repo, `Dockerfile`, `docker-compose.yml`, `config.example.yaml`, `.env.example` (§2, §11)
-- FastAPI come API JSON pura sotto `/api/*` fin dall'inizio (nessun refactor Jinja2→SPA da fare, a differenza di ratio-guardian)
-- SQLAlchemy + SQLite, primo schema DB (dischi/media_path/tracker/torrent_client/app_settings — le entità di matching arrivano in Fase 4, quelle di upload in Fase 6)
-- Split configurazione YAML statico / DB dinamico (§4 di ratio-guardian, ereditato)
-- Container singolo con supervisord (web + worker), anche se il worker non fa ancora nulla di significativo
-- CI minima (lint + test di base) — utile da subito visto l'obiettivo open source
-
-**Definition of done**: container che si avvia, espone `/api/health`, legge `config.yaml`, applica lo schema DB iniziale. Nessuna feature utente ancora.
+Section references always point to `docs/SPEC.md`.
 
 ---
 
-## Fase 1 — Pietra del Legame (Blu)
+## Phase 0 - Foundations (no Stone)
 
-**Obiettivo**: modello dischi/hardlink e stato unificato per file, sezioni §3-4.
+**Goal**: the project skeleton every later phase builds on.
 
-- Entità Disk (root_path, torrents_rel_path, st_dev cachato) e MediaPath (content_type, relative_path) — già mappate in `app/models.py` dalla Fase 0
-- File Browser API scoped-per-disco (§5 di ratio-guardian) — riusata da ogni pagina di configurazione successiva
-- Scansione filesystem: cammina MediaPath e cartella torrent di ogni disco, calcola hardlink via `(st_dev, st_ino)`
-- Popolamento di `media_file` e `seed_file` (§4) a ogni scan — bulk upsert a fine giro, mai query per file (vedi §4 per il perché)
-- Calcolo dello stato unificato per file (§3), **limitato per ora ai soli stati derivabili da hardlink/filesystem**: `seeding` (nlink>1, collegato — `seed_file.media_file_id` valorizzato), `orphan_media`/`orphan_torrent` come stato grezzo "nessun hardlink trovato" (senza ancora sapere *a cosa* dovrebbe collegarsi — quello arriva in Fase 4; `ignored` arriva in Fase 2, richiede sapere se un client traccia il file)
-- Import massivo (scan completo una tantum) come prima modalità di esecuzione, senza ancora scheduling (Fase 5)
+- Repo structure, `Dockerfile`, `docker-compose.yml`, `config.example.yaml`, `.env.example` (§2, §11)
+- FastAPI as a pure JSON API under `/api/*` from the start (no Jinja2->SPA refactor to do, unlike ratio-guardian)
+- SQLAlchemy + SQLite, first DB schema (disks/media_path/tracker/torrent_client/app_settings - matching entities arrive in Phase 4, upload ones in Phase 6)
+- Static YAML / dynamic DB config split (ratio-guardian §4, inherited)
+- Single container with supervisord (web + worker), even though the worker doesn't do anything meaningful yet
+- Minimal CI (lint + basic tests) - useful from day one given the open source goal
 
-**Definition of done**: dato un disco configurato con path media e torrent reali, l'app produce correttamente la lista di file con/senza hardlink, verificato contro un caso reale con librerie note.
-
----
-
-## Fase 2 — Pietra del Controllo (Viola)
-
-**Obiettivo**: adapter multi-client torrent, sezione §5.
-
-- Contratto `TorrentClientAdapter` (`add_torrent`/`get_torrent_status`, ereditati da ratio-guardian, più `list_torrents()` nuovo — enumera ogni torrent noto al client coi suoi file, non solo i path piatti ipotizzati in SPEC.md §5 originaria: serve a popolare `client_torrent`/`client_torrent_file`, non solo a sapere "è tracciato sì/no")
-- Adapter qBittorrent (`qbittorrent-api`) — implementato, **non validato contro un'istanza reale** (solo contro un client mockato nei test, stesso limite di ratio-guardian)
-- "qui" (punto aperto §15): risolto **pragmaticamente**, non verificato — trattato come N istanze qBittorrent indipendenti, ciascuna un proprio `TorrentClient` con `adapter_type="qbittorrent"`. Nessun adapter dedicato finché non si scopre, contro un'istanza reale, che espone invece una propria API di aggregazione
-- Un disco può avere più client abilitati contemporaneamente (tabella ponte `disk_torrent_client`, già in `app/models.py` dalla Fase 0) — `app/torrent_indexer.py` aggrega su tutti i dischi di un client in un solo giro
-- Calcolo completo di `orphan_torrent`/`ignored`/`seeding` in `app/library.py`, usando `client_torrent_file` (§3)
-- **Deferito**: adapter Deluge, Transmission, rutorrent — non implementati in questo passaggio (costo non banale: tre protocolli diversi, JSON-RPC/RPC/XML-RPC). `adapter_factory.build_torrent_client_adapter` solleva un errore esplicito e navigabile per questi `adapter_type`, mai un fallimento silenzioso — prossimo slice della stessa Fase quando servirà davvero un client reale oltre qBittorrent.
-
-**Definition of done**: raggiunta per qBittorrent (mockato) — `orphan_torrent`/`ignored`/`seeding` corretti su tutte le combinazioni hardlink/tracciamento (vedi `tests/test_library_states.py`). **Non ancora verificato contro un'istanza qBittorrent reale né contro un secondo client reale** (Deluge/Transmission/rutorrent deferiti, vedi sopra) — resta aperto prima di poter chiudere davvero questa fase.
+**Definition of done**: container starts, exposes `/api/health`, reads `config.yaml`, applies the initial DB schema. No user-facing features yet.
 
 ---
 
-## Fase 3 — Pietra della Conoscenza (Gialla)
+## Phase 1 - Stone of Bond (Blue)
 
-**Obiettivo**: identificazione contenuto e poster, sezione §6 (resolver).
+**Goal**: disk/hardlink model and unified per-file state, sections §3-4.
 
-- Contratto `MediaResolverAdapter`
-- Implementazione default: guessit (parsing filename) + lookup TMDB
-- Download e cache locale poster (`tmdb_poster_path` → `data/posters/{tmdb_id}.jpg`)
-- Adapter opzionale Sonarr/Radarr (mai assunto presente)
-- Popolamento `media_item` con `tmdb_id`/season/episode per ogni file scansionato; stato `unmatched` (§3) per chi non risolve
+- Disk entity (root_path, torrents_rel_path, cached st_dev) and MediaPath (content_type, relative_path) - already mapped in `app/models.py` since Phase 0
+- Scoped-per-disk File Browser API (ratio-guardian §5) - reused by every later configuration page
+- Filesystem scan: walks each disk's MediaPath and torrent folder, computes hardlinks via `(st_dev, st_ino)`
+- Populates `media_file` and `seed_file` (§4) on every scan - bulk upsert at the end of the pass, never a per-file query (see §4 for why)
+- Computes the unified per-file state (§3), **limited for now to states derivable from hardlinks/filesystem alone**: `seeding` (nlink>1, linked - `seed_file.media_file_id` set), `orphan_media`/`orphan_torrent` as a raw "no hardlink found" state (without yet knowing *what* it should link to - that arrives in Phase 4; `ignored` arrives in Phase 2, it needs to know whether a client is tracking the file)
+- Bulk import (one-off full scan) as the first execution mode, no scheduling yet (Phase 5)
 
-**Definition of done**: la libreria reale dell'utente viene identificata correttamente per la stragrande maggioranza dei file (percentuale concreta da misurare, non solo "sembra funzionare"); poster visibili per i contenuti noti a TMDB.
-
----
-
-## Fase 4 — Pietra della Reintegrazione (Rossa)
-
-**Obiettivo**: motore di matching e reseeding nelle due direzioni, sezioni §6-8. La fase più corposa — eredita quasi interamente il lavoro già fatto in ratio-guardian, adattato alle due direzioni.
-
-- Contratto `TrackerAdapter`, implementazione UNIT3D (`search_by_tmdb`, dettaglio torrent — dettagli API già verificati in ratio-guardian, da riusare senza ri-scoprirli)
-- Motore di matching: size match + mediainfo Unique ID match + **hash dei piece (BEP3)** come nuovo segnale (§6) — confidence esplicita e spiegabile
-- Coda di revisione (match sotto soglia → `pending`, approvazione/rifiuto manuale in UI)
-- Esecutore per la direzione **media→torrent** (hardlink con nome esatto atteso dal tracker + add al client + recheck forzato, mai skip)
-- Esecutore per la direzione **torrent→client** (nuova: il file esiste già, si scarica il `.torrent` e si aggiunge al client puntando al file — soglia di confidence da fissare, punto aperto §15)
-- Vista Libreria — **vista ad albero** (§7), che a questo punto ha tutti i dati necessari (stato unificato + match + poster)
-- Vista Libreria — **vista a griglia poster** (§7), stessa base dati, `?view=tree|grid`
-- Reverse lookup dal lato torrent (ispirato ad Auditorr)
-
-**Definition of done**: run completo su import massivo della libreria reale, con risultati corretti verificati a campione per entrambe le direzioni; nessun caso di recheck saltato; vista Libreria (albero e griglia) usabile con dati reali.
+**Definition of done**: given a disk configured with real media and torrent paths, the app correctly produces the list of files with/without a hardlink, verified against a real case with known libraries.
 
 ---
 
-## Fase 5 — Pietra del Tempo (Verde)
+## Phase 2 - Stone of Control (Purple)
 
-**Obiettivo**: scheduling e osservabilità nel tempo, sezioni §8, §10.
+**Goal**: multi-client torrent adapters, section §5.
 
-- APScheduler in-process, cron configurabile da UI
-- Run schedulato periodico (stesso motore della Fase 4, volume atteso minore)
-- `run_log` con contatori (scansionati, match trovati, auto-seedati, in review, errori)
-- Reconcile periodico dello stato recheck (async sul client)
-- Dashboard: gauge "salute libreria", KPI (in revisione, falliti, non risolti, `orphan_torrent`, `ignored`), feed "novità dall'ultimo run"
-- Snapshot periodico della percentuale "salute libreria" per il grafico storico (punto aperto §15/§17 — decidere schema qui)
+- `TorrentClientAdapter` contract (`add_torrent`/`get_torrent_status`, inherited from ratio-guardian, plus a new `list_torrents()` - enumerates every torrent known to the client along with its files, not just the flat paths originally sketched in SPEC.md §5: needed to populate `client_torrent`/`client_torrent_file`, not just to know "is it tracked, yes/no")
+- qBittorrent adapter (`qbittorrent-api`) - implemented, **not validated against a real instance** (only against a mocked client in tests, same limitation ratio-guardian states for itself)
+- "qui" (open point §15): resolved **pragmatically**, unverified - treated as N independent qBittorrent instances, each its own `TorrentClient` with `adapter_type="qbittorrent"`. No dedicated adapter unless a real instance turns out to expose its own aggregation API instead
+- A disk can have several clients enabled at once (`disk_torrent_client` bridge table, already in `app/models.py` since Phase 0) - `app/torrent_indexer.py` aggregates across all of a client's disks in a single pass
+- Full computation of `orphan_torrent`/`ignored`/`seeding` in `app/library.py`, using `client_torrent_file` (§3)
+- **Deferred**: Deluge, Transmission, rutorrent adapters - not implemented in this pass (non-trivial cost: three different protocols, JSON-RPC/RPC/XML-RPC). `adapter_factory.build_torrent_client_adapter` raises an explicit, actionable error for these `adapter_type` values, never a silent failure - next slice of this same phase once a real client beyond qBittorrent is actually needed.
 
-**Definition of done**: uno scheduled run reale gira senza intervento manuale per più cicli consecutivi; dashboard riflette lo stato corrente e uno storico di almeno qualche run.
-
----
-
-## Fase 6 — Pietra della Genesi (Arancione)
-
-**Obiettivo**: modulo Upload, sezione §9.
-
-- `torf` per la creazione del `.torrent`, `pymediainfo` esteso, `ffmpeg-python` per gli screenshot (v1 li include fin da subito)
-- Profili tracker bundlati (seed data in repo, copiati in DB alla creazione del tracker, editabili dopo)
-- Pipeline: selezione file → resolve → crea `.torrent` → mediainfo+screenshot → descrizione da template → dupe-check (`search_by_tmdb` al contrario) → **conferma umana obbligatoria** → upload → add al client
-- `ImageHostAdapter` (prima implementazione da scegliere, punto aperto §15/§17)
-- Entità `upload_job`, `tracker_upload_profile`
-
-**Definition of done**: upload reale completato con successo su almeno un tracker configurato, verificato che compaia correttamente pubblicato.
+**Definition of done**: reached for qBittorrent (mocked) - `orphan_torrent`/`ignored`/`seeding` correct across every hardlink/tracking combination (see `tests/test_library_states.py`). **Not yet verified against a real qBittorrent instance or a second real client** (Deluge/Transmission/rutorrent deferred, see above) - stays open before this phase can really be called closed.
 
 ---
 
-## Fase 7 — Rilascio open source
+## Phase 3 - Stone of Knowledge (Yellow)
 
-**Obiettivo**: il repo è pubblicabile e usabile da un utente terzo senza contesto pregresso, sezione §13.
+**Goal**: content identification and posters, section §6 (resolver).
 
-- README completo (setup, requisiti, esempio di configurazione, screenshot)
-- `config.example.yaml` / `.env.example` verificati privi di qualunque dato personale
-- LICENSE (già presente nel repo: GPL-3.0)
-- Verifica finale che nessun default assuma il setup specifico dell'utente originale (path, tracker, nomi disco)
-- Eventuali issue template / CONTRIBUTING se si vuole abilitare contributi esterni fin da subito (non bloccante per un primo rilascio)
+- `MediaResolverAdapter` contract
+- Default implementation: guessit (filename parsing) + TMDB lookup
+- Poster download and local cache (`tmdb_poster_path` -> `data/posters/{tmdb_id}.jpg`)
+- Optional Sonarr/Radarr adapter (never assumed present)
+- Populates `media_item` with `tmdb_id`/season/episode for every scanned file; `unmatched` state (§3) for anything that doesn't resolve
 
-**Definition of done**: un utente terzo, seguendo solo il README, riesce a configurare da zero un disco/tracker/client e a completare un primo scan.
+**Definition of done**: the user's real library resolves correctly for the vast majority of files (a concrete percentage to measure, not just "seems to work"); posters visible for content TMDB knows about.
 
 ---
 
-## Fuori dalle fasi (tracciati ma non pianificati)
+## Phase 4 - Stone of Reintegration (Red)
 
-Tutti i punti in `docs/SPEC.md` sezione 15 non hanno una fase assegnata perché richiedono una decisione prima di poter essere pianificati (es. libreria client Deluge/Transmission/rutorrent, superficie API di "qui", host immagini per upload). Vanno sciolti *dentro* la fase a cui appartengono (rispettivamente Fase 2 e Fase 6) appena si arriva a implementarli, non prima.
+**Goal**: the matching and reseeding engine for both directions, sections §6-8. The heaviest phase - inherits almost all the work already done in ratio-guardian, adapted to both directions.
+
+- `TrackerAdapter` contract, UNIT3D implementation (`search_by_tmdb`, torrent detail - API details already verified in ratio-guardian, to be reused rather than rediscovered)
+- Matching engine: size match + mediainfo Unique ID match + **piece hash (BEP3)** as a new signal (§6) - explicit, explainable confidence
+- Review queue (a match below threshold -> `pending`, manual approve/reject in the UI)
+- Executor for the **media->torrent** direction (hardlink with the exact name the tracker expects + add to client + forced recheck, never skipped)
+- Executor for the **torrent->client** direction (new: the file already exists, download the `.torrent` and add it to the client pointing at the file - confidence threshold still to be fixed, open point §15)
+- Library view - **tree view** (§7), which by this point has all the data it needs (unified state + match + poster)
+- Library view - **poster grid view** (§7), same underlying data, `?view=tree|grid`
+- Reverse lookup from the torrent side (inspired by Auditorr)
+
+**Definition of done**: a full bulk-import run over the real library, results spot-checked as correct for both directions; no recheck ever skipped; library view (tree and grid) usable with real data.
+
+---
+
+## Phase 5 - Stone of Time (Green)
+
+**Goal**: scheduling and observability over time, sections §8, §10.
+
+- In-process APScheduler, cron configurable from the UI
+- Periodic scheduled run (same engine as Phase 4, expected lower volume)
+- `run_log` with counters (scanned, matches found, auto-executed, pending review, errors)
+- Periodic reconciliation of recheck status (async on the client)
+- Dashboard: "library health" gauge, KPIs (pending review, failed, unresolved, `orphan_torrent`, `ignored`), "what's new since the last run" feed
+- Periodic snapshot of the "library health" percentage for the historical chart (open point §15/§17 - schema to decide here)
+
+**Definition of done**: a real scheduled run goes through several consecutive cycles with no manual intervention; the dashboard reflects the current state and at least a handful of runs of history.
+
+---
+
+## Phase 6 - Stone of Genesis (Orange)
+
+**Goal**: the Upload module, section §9.
+
+- `torf` to create the `.torrent`, extended `pymediainfo`, `ffmpeg-python` for screenshots (v1 includes them from the start)
+- Bundled tracker profiles (seed data in the repo, copied into the DB when a tracker is created, editable afterwards)
+- Pipeline: select file -> resolve -> create `.torrent` -> mediainfo+screenshots -> description from template -> dupe-check (`search_by_tmdb` run in reverse) -> **mandatory human confirmation** -> upload -> add to client
+- `ImageHostAdapter` (first implementation still to be chosen, open point §15/§17)
+- `upload_job`, `tracker_upload_profile` entities
+
+**Definition of done**: a real upload completes successfully on at least one configured tracker, verified to show up correctly published.
+
+---
+
+## Phase 7 - Open source release
+
+**Goal**: the repo is publishable and usable by a third-party user with no prior context, section §13.
+
+- Complete README (setup, requirements, config example, screenshots)
+- `config.example.yaml` / `.env.example` verified free of any personal data
+- LICENSE (already in the repo: GPL-3.0)
+- Final check that no default assumes the original user's specific setup (paths, trackers, disk names)
+- Issue templates / CONTRIBUTING if external contributions should be enabled from day one (not blocking for a first release)
+
+**Definition of done**: a third-party user, following only the README, manages to configure a disk/tracker/client from scratch and complete a first scan.
+
+---
+
+## Outside the phases (tracked but not scheduled)
+
+Every point in `docs/SPEC.md` section 15 has no phase assigned because it needs a decision before it can be scheduled (e.g. which client library for Deluge/Transmission/rutorrent, "qui"'s API surface, image host for uploads). They get resolved *inside* the phase they belong to (Phase 2 and Phase 6 respectively) once implementation actually reaches them, not before.

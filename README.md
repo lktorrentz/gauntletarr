@@ -1,13 +1,13 @@
 # The Media Gauntlet*rr
 
-Web app per gestire in un unico posto la libreria media, le cartelle di seeding torrent, la corrispondenza (hardlink) tra le due, lo stato reale sui client torrent configurati (multi-client, cross-seed incluso) e la pubblicazione di nuovi upload sui tracker.
+A web app to manage your media library, torrent seeding folders, the hardlink correspondence between them, the real state of your configured torrent clients (multi-client, cross-seed included), and publishing new uploads to trackers - all in one place.
 
-Progetto in fase iniziale — non ancora pronto per un utente terzo (arriverà con la Fase 7, vedi sotto). Il container è comunque installabile su Unraid per verificare le fasi implementate contro un'istanza reale (per ora: scan filesystem/hardlink + adapter qBittorrent, nessuna interfaccia grafica).
+Early-stage project - not yet ready for third-party use (that lands with Fase 7, see below). The container can still be installed on Unraid to verify the implemented phases against a real instance (so far: filesystem/hardlink scan + qBittorrent adapter, no web UI yet).
 
-- **Specifica funzionale/architetturale**: [`docs/SPEC.md`](docs/SPEC.md)
-- **Piano a fasi**: [`docs/ROADMAP.md`](docs/ROADMAP.md)
-- **Schema DB**: [`docs/schema.sql`](docs/schema.sql)
-- **Guida per sessioni Claude Code**: [`CLAUDE.md`](CLAUDE.md)
-- **Template Unraid**: [`unraid/gauntletarr.xml`](unraid/gauntletarr.xml) — immagine pubblicata su `ghcr.io/lktorrentz/gauntletarr` a ogni push su `main` ([workflow](.github/workflows/docker-publish.yml))
+- **Functional/architectural spec**: [`docs/SPEC.md`](docs/SPEC.md)
+- **Phased roadmap**: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- **DB schema**: [`docs/schema.sql`](docs/schema.sql)
+- **Guide for Claude Code sessions**: [`CLAUDE.md`](CLAUDE.md)
+- **Unraid template**: [`unraid/gauntletarr.xml`](unraid/gauntletarr.xml) - image published to `ghcr.io/lktorrentz/gauntletarr` on every push to `main` ([workflow](.github/workflows/docker-publish.yml))
 
-Licenza: GPL-3.0 (vedi [`LICENSE`](LICENSE)).
+License: GPL-3.0 (see [`LICENSE`](LICENSE)).

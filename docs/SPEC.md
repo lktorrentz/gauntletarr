@@ -1,283 +1,292 @@
-# The Media Gauntlet*rr — Spec funzionale e architetturale (v1)
+# The Media Gauntlet*rr — Functional and architectural spec (v1)
 
-Documento consolidato a partire da un flusso di idee dell'utente, riorganizzato e messo a terra confrontandolo con quattro progetti locali imparentati. Non è un brainstorming aperto: dove qualcosa è esplicitamente non deciso è segnalato come tale in fondo (sezione 15).
+A document consolidated from a user's stream of ideas, reorganized and grounded by comparing it against four related local projects. Not an open brainstorm: wherever something is explicitly undecided, it's flagged as such at the bottom (section 15).
 
-**Nome**: nome del progetto **"The Media Gauntlet*rr"**, repo/nome tecnico **`gauntletarr`** (stile *arr — gauntlet+arr, come Bazarr/Cleanuparr/Prowlarr — pur senza dipendere da Sonarr/Radarr, stesso "wink" stilistico già fatto da Auditorr). Richiamo volutamente giocoso all'Infinity Gauntlet: uno strumento solo che dà controllo completo su tutto l'ecosistema media/torrent/tracker, con un tocco (una "run" schedulata o un'azione manuale) che rimette a posto ciò che è rotto — da qui anche il tema delle **Media Stones** sotto, non un riferimento letterale ai nomi/loghi Marvel (evita quindi qualunque collisione di marchio: sono nomi e concetti originali, solo ispirati al genere).
+**Name**: project name **"The Media Gauntlet*rr"**, repo/technical name **`gauntletarr`** (*arr style — gauntlet+arr, like Bazarr/Cleanuparr/Prowlarr — without actually depending on Sonarr/Radarr, the same stylistic "wink" Auditorr already does). A deliberately playful nod to the Infinity Gauntlet: a single tool that gives you full control over your entire media/torrent/tracker ecosystem, with one touch (a scheduled "run" or a manual action) fixing what's broken — hence the **Media Stones** theme below, which is not a literal reference to Marvel names/logos (this deliberately avoids any trademark collision: the names and concepts here are original, only genre-inspired).
 
-## Tema: le Media Stones
+## Theme: the Media Stones
 
-Sei "pietre", una per ciascun dominio funzionale principale — usate come chiave di lettura per organizzare la spec e come base per l'identità visiva (icona/colore per modulo in dashboard e sidebar), non come rinomina dei concetti tecnici sottostanti (nel codice/API restano i nomi descrittivi normali: `media_item`, `TorrentClientAdapter`, ecc. — le Stones sono un livello di branding sopra, non una sostituzione).
+Six "stones," one per main functional domain — used as a reading key to organize the spec and as the basis for the visual identity (icon/color per module in dashboard and sidebar), not as a rename of the underlying technical concepts (the code/API keeps ordinary descriptive names: `media_item`, `TorrentClientAdapter`, etc. — the Stones are a branding layer on top, not a replacement).
 
-| Stone | Colore | Dominio | Sezione |
+| Stone | Color | Domain | Section |
 |---|---|---|---|
-| **Pietra del Legame** | Blu | Modello dischi/hardlink, stato unificato per file (orfani/ignorati) | §3-4 |
-| **Pietra del Controllo** | Viola | Adapter multi-client torrent, stato di presenza/seeding | §5 |
-| **Pietra della Conoscenza** | Gialla | Identificazione contenuto (TMDB), poster cache | §6 |
-| **Pietra della Reintegrazione** | Rossa | Motore di matching e reseeding (ripara i collegamenti rotti) | §6, 8 |
-| **Pietra del Tempo** | Verde | Scheduling, storico run, andamento nel tempo della dashboard | §8, 10 |
-| **Pietra della Genesi** | Arancione | Upload — dà "vita nuova" a un contenuto pubblicandolo su un tracker | §9 |
+| **Stone of Bond** | Blue | Disk/hardlink model, unified per-file state (orphaned/ignored) | §3-4 |
+| **Stone of Control** | Purple | Multi-client torrent adapters, presence/seeding state | §5 |
+| **Stone of Knowledge** | Yellow | Content identification (TMDB), poster cache | §6 |
+| **Stone of Reintegration** | Red | Matching and reseeding engine (repairs broken links) | §6, 8 |
+| **Stone of Time** | Green | Scheduling, run history, dashboard trends over time | §8, 10 |
+| **Stone of Genesis** | Orange | Upload — gives content "new life" by publishing it to a tracker | §9 |
 
-"Indossare il guanto" = avere tutte e sei le Stones configurate e attive (dischi mappati, client connessi, resolver funzionante, motore di matching attivo, scheduler configurato, upload pronto) — utile anche come metafora per un eventuale onboarding/setup wizard in UI: una checklist a sei voci, una per Stone, prima che il sistema sia "completo".
+"Wearing the gauntlet" = having all six Stones configured and active (disks mapped, clients connected, resolver working, matching engine active, scheduler configured, upload ready) — also useful as a metaphor for a future onboarding/setup wizard in the UI: a six-item checklist before the system is "complete."
 
-## 0. Provenienza — da dove nasce questo progetto
+## 0. Provenance — where this project comes from
 
-Questo non riparte da zero. Sintetizza:
+This doesn't start from scratch. It synthesizes:
 
-- **`ratio-guardian`** (`/Users/lucazonarelli/Projects/ratio-guardian/docs/SPEC.md`): l'analisi architetturale più matura e più vicina a questo scope — modello dischi/hardlink senza dipendenza da Unraid/FUSE, matching engine TMDB con confidence esplicita, motore di reseeding con recheck forzato, e — deciso nella sessione più recente di quel progetto — una seconda modalità "Upload" ispirata a Upload-Assistant. Gauntletarr **eredita l'intera architettura dati e il motore di matching/reseeding di ratio-guardian**, che va letta per i dettagli implementativi verificati (shape reale delle API UNIT3D, bug noti già risolti come il confronto size sui season pack, edge case mediainfo). Questo documento non ripete quei dettagli quando non cambiano, li richiama.
-- **Auditorr**: riferimento per l'esperienza di visualizzazione — vista ad albero della libreria, stato per-file (presenza/hardlink/seeding), dashboard con gauge "salute libreria", reverse hardlink lookup dal lato torrent.
-- **Upload-Assistant**: riferimento di dominio per il flusso di upload (mediainfo, screenshot, descrizione, dupe-check, ~90 tracker supportati). **In development freeze** dichiarato dal progetto stesso — va trattato come riferimento di dominio da reimplementare contro i propri contratti, mai come dipendenza viva.
-- **smartmediareseed**: riferimento per la verifica di identità file↔torrent tramite **hash dei piece** (BEP3) contro l'hash dichiarato nel `.torrent` — segnale di confidence più forte del solo mediainfo Unique ID (che non distingue tracce audio diverse a parità di video). Va integrato come segnale aggiuntivo nel matching engine (sezione 6), non come sostituto del recheck reale.
+- **`ratio-guardian`** (`/Users/lucazonarelli/Projects/ratio-guardian/docs/SPEC.md`): the most mature architectural analysis and the closest to this scope — a disk/hardlink model with no Unraid/FUSE dependency, a TMDB matching engine with explicit confidence, a reseeding engine with forced recheck, and — decided in that project's most recent session — a second "Upload" mode inspired by Upload-Assistant. Gauntletarr **inherits ratio-guardian's entire data architecture and matching/reseeding engine**, which should be read for the verified implementation details (the real shape of the UNIT3D API, already-fixed known bugs like the season pack size comparison, mediainfo edge cases). This document doesn't repeat those details where they haven't changed, it references them.
+- **Auditorr**: reference for the visualization experience — library tree view, per-file state (presence/hardlink/seeding), dashboard with a "library health" gauge, reverse hardlink lookup from the torrent side.
+- **Upload-Assistant**: domain reference for the upload flow (mediainfo, screenshots, description, dupe-check, ~90 supported trackers). **In development freeze** as declared by the project itself — to be treated as a domain reference to reimplement against our own contracts, never as a live dependency.
+- **smartmediareseed**: reference for verifying file↔torrent identity via **piece hashes** (BEP3) against the hash declared in the `.torrent` — a stronger confidence signal than mediainfo Unique ID alone (which doesn't distinguish different audio tracks on otherwise-identical video). To be integrated as an additional signal in the matching engine (section 6), never as a substitute for a real recheck.
 
-## 1. Visione e problema
+## 1. Vision and problem
 
-L'utente gestisce una libreria media (film/serie) e una o più cartelle di seeding torrent, spesso su dischi fisici separati senza RAID/FUSE. Con l'uso quotidiano si accumula disallineamento:
+The user manages a media library (movies/shows) and one or more torrent seeding folders, often on separate physical disks with no RAID/FUSE. Everyday use accumulates drift:
 
-- file spostati/rinominati nella libreria che rompono l'hardlink e quindi il seeding, senza che l'utente se ne accorga (il problema centrale di ratio-guardian);
-- file presenti nella cartella torrent ma che il client torrent non sta più tracciando (rimossi dal client, client reinstallato, migrazione mai completata);
-- file in seeding che non sono mai stati organizzati/collegati nella libreria media vera e propria;
-- file scaricati/organizzati che non sono mai stati identificati correttamente (nessun match TMDB), quindi invisibili a qualunque logica di matching.
+- files moved/renamed in the library that break the hardlink and therefore seeding, without the user noticing (ratio-guardian's core problem);
+- files present in the torrent folder that the torrent client no longer tracks (removed from the client, client reinstalled, a migration never completed);
+- files seeding that were never organized/linked into the actual media library;
+- downloaded/organized files that were never correctly identified (no TMDB match), and are therefore invisible to any matching logic.
 
-Gauntletarr deve dare **una singola vista coerente dello stato di ogni file**, sui due lati (media e torrent) e sul client torrent stesso, più gli strumenti per risolvere ogni tipo di disallineamento: reseeding, collegamento manuale, upload di contenuto nuovo.
+Gauntletarr has to give **a single, coherent view of every file's state**, on both sides (media and torrent) and on the torrent client itself, plus the tools to fix every kind of drift: reseeding, manual linking, uploading new content.
 
-## 2. Requisiti di genericità (vincolanti, ereditati da ratio-guardian §2)
+## 2. Genericity requirements (binding, inherited from ratio-guardian §2)
 
-- **Non deve assumere Unraid/FUSE.** N dischi fisici separati, ciascuno con propria porzione di libreria, senza filesystem unificante.
-- **Non deve assumere Sonarr/Radarr.** Integrazione opzionale come adapter aggiuntivo del media resolver, mai come dipendenza.
-- **Architettura ad adapter per tracker, client torrent e resolver media**, per permettere estensione futura senza riscritture (dettaglio in sezione 5).
-- Distribuzione: container Docker, Web UI per la configurazione.
-- **Progettato per rilascio pubblico/open source** (decisione esplicita, diversa dai tool sorgente che sono a uso personale): implica config di esempio senza dati personali, nessun segreto hardcoded, `.env.example`/`config.example.yaml` puliti, LICENSE, e attenzione a non assumere il setup specifico dell'utente (path, tracker, nomi disco) in nessun default.
+- **Must not assume Unraid/FUSE.** N separate physical disks, each potentially holding part of the library, with no unifying filesystem.
+- **Must not assume Sonarr/Radarr.** Optional integration as an additional media resolver adapter, never a dependency.
+- **Adapter architecture for trackers, torrent clients and media resolvers**, to allow future extension without rewrites (detail in section 5).
+- Distribution: Docker container, web UI for configuration.
+- **Designed for public/open source release** (an explicit decision, unlike the source tools which are for personal use): implies example config with no personal data, no hardcoded secrets, clean `.env.example`/`config.example.yaml`, a LICENSE, and care not to assume the original user's specific setup (paths, trackers, disk names) in any default.
 
-## 3. Le due direzioni del problema: orfani e ignorati
+## 3. The two directions of the problem: orphaned and ignored
 
-Punto centrale della richiesta originale, distinto (e complementare) al modello "media→torrent" già coperto da ratio-guardian. Vanno mantenute **entrambe le direzioni di scansione**, sullo stesso grafo di hardlink:
+The central point of the original request, distinct from (and complementary to) the "media→torrent" model ratio-guardian already covers. **Both scan directions** need to be maintained, on the same hardlink graph:
 
-### Direzione media → torrent (già coperta dal motore di ratio-guardian)
+### Media → torrent direction (already covered by ratio-guardian's engine)
 
-File nella media library **senza** hardlink valido verso la cartella torrent del disco → candidati al motore di matching/reseeding (sezione 6). Questo è il caso "ho spostato/rinominato il file e ho rotto il seeding".
+Files in the media library **without** a valid hardlink to the disk's torrent folder → candidates for the matching/reseeding engine (section 6). This is the "I moved/renamed the file and broke seeding" case.
 
-### Direzione torrent → client/media (nuovo requisito di Gauntletarr)
+### Torrent → client/media direction (new requirement for Gauntletarr)
 
-Per ogni file nella cartella torrent di un disco:
+For every file in a disk's torrent folder:
 
-- **File orfano**: presente sul filesystem (cartella torrent) ma **non tracciato da nessun client torrent configurato** (nessun torrent nel client il cui path risolto punta a quel file). Tipicamente: file rimasto dopo rimozione dal client, migrazione client mai completata, client riconfigurato. Azione naturale: stesso motore di reseeding di ratio-guardian ma innescato dal lato torrent — cerca sui tracker configurati un match per quel file (size + mediainfo + hash piece, sezione 6), e se il match è a confidence massima (100%, non la soglia 0.95 usata per il caso media→torrent — vedi nota sotto) **scarica il `.torrent` dal tracker e lo aggiunge al client puntando al file già presente**, senza dover ricreare l'hardlink (il file è già lì).
-- **File ignorato**: presente sul filesystem (cartella torrent) e tracciato correttamente dal client, ma **senza alcun hardlink corrispondente in nessuna `MediaPath` abilitata**. È un file in seeding "orfano dalla libreria": tecnicamente sano, ma invisibile all'organizzazione media dell'utente. Azione: solo segnalazione in UI (mai automatica) — l'utente valuta se vale la pena organizzarlo (hardlink manuale verso una MediaPath) o lasciarlo così (es. cross-seed di contenuto non suo).
+- **Orphaned file**: present on the filesystem (torrent folder) but **not tracked by any configured torrent client** (no torrent in the client whose resolved path points to that file). Typically: a file left behind after removal from the client, a migration that was never finished, a reconfigured client. The natural action: the same reseeding engine as ratio-guardian, but triggered from the torrent side — search the configured trackers for a match for that file (size + mediainfo + piece hash, section 6), and if the match reaches maximum confidence (100%, not the 0.95 threshold used for the media→torrent case — see note below) **download the `.torrent` from the tracker and add it to the client pointing at the file that's already there**, with no need to recreate the hardlink (the file is already in place).
+- **Ignored file**: present on the filesystem (torrent folder) and correctly tracked by the client, but **with no hardlink into any enabled `MediaPath`**. It's a seeding file "orphaned from the library": technically healthy, but invisible to the user's media organization. Action: flag only in the UI (never automatic) — the user decides whether it's worth organizing (manual hardlink into a MediaPath) or leaving it as-is (e.g. cross-seeded content that isn't theirs).
 
-**Nota sulla soglia per gli orfani lato torrent**: qui il rischio è diverso da quello discusso in ratio-guardian §9 (falso positivo che porta a seedare dati sbagliati). Aggiungere un torrent già presente localmente su un tracker in base a un match sbagliato è comunque rischioso (associa il file a un torrent che non è, il client lo recheck-a e nella peggiore ipotesi fallisce — meno grave di un falso hardlink ma non innocuo). Trattare quindi con la **stessa severità**: soglia alta configurabile, sotto soglia va in coda di revisione manuale come nel caso media→torrent, mai un bypass "perché il file esiste già".
+**Note on the threshold for torrent-side orphans**: the risk here differs from what's discussed in ratio-guardian §9 (a false positive that leads to seeding the wrong data). Adding a torrent that's already present locally based on a wrong match is still risky (it associates the file with a torrent that isn't a match; the client rechecks it and, worst case, fails — less severe than a false hardlink, but not harmless). So treat it with the **same severity**: a high, configurable threshold, and below it, the manual review queue, exactly as for the media→torrent case — never a bypass "because the file already exists."
 
-### Stato unificato per file
+### Unified per-file state
 
-Ogni file (sui due lati) deve esporre uno stato composito, ispirato alla pagina Libreria di ratio-guardian (§12) ma esteso:
+Every file (on either side) must expose a composite state, inspired by ratio-guardian's Library page (§12) but extended:
 
-| Stato | Significato |
+| State | Meaning |
 |---|---|
-| `seeding` | Hardlink valido + tracciato dal client, seeding attivo |
-| `orphan_media` | In libreria media, nessun hardlink valido (candidato reseeding — direzione media→torrent) |
-| `orphan_torrent` | In cartella torrent, non tracciato da alcun client (candidato reseeding — direzione torrent→client) |
-| `ignored` | In cartella torrent, tracciato dal client, nessun hardlink verso la libreria media |
-| `unmatched` | Nessun match TMDB risolto (filename non parsabile, o nessun candidato tracker), a prescindere dal lato |
-| `pending_review` | Match trovato ma sotto soglia di confidence, in coda di revisione manuale |
+| `seeding` | Valid hardlink + tracked by the client, actively seeding |
+| `orphan_media` | In the media library, no valid hardlink (reseeding candidate — media→torrent direction) |
+| `orphan_torrent` | In the torrent folder, not tracked by any client (reseeding candidate — torrent→client direction) |
+| `ignored` | In the torrent folder, tracked by the client, no hardlink into the media library |
+| `unmatched` | No TMDB match resolved (unparsable filename, or no tracker candidate), regardless of side |
+| `pending_review` | A match was found but below the confidence threshold, in the manual review queue |
 
-## 4. Architettura dati (eredita ratio-guardian §3-4, §13 — estesa qui)
+## 4. Data architecture (inherits ratio-guardian §3-4, §13 — extended here)
 
-Modello dischi/librerie invariato rispetto a ratio-guardian: entità **Disk** (root fisico, `st_dev` cachato per rilevare rimonti), **MediaPath** (una o più per disco, tipizzate `movie`/`tv`), path sempre relativi al disco (mai assoluti), validazione a doppio livello (file browser scoped in UI + confronto `st_dev` a runtime prima di ogni hardlink). Vedi ratio-guardian SPEC.md §3 per il ragionamento completo — non va rifatto qui. Schema DB completo, tabella per tabella: `docs/schema.sql`.
+Disk/library model unchanged from ratio-guardian: a **Disk** entity (physical root, cached `st_dev` to detect remounts), **MediaPath** (one or more per disk, typed `movie`/`tv`), paths always relative to the disk (never absolute), two-level validation (scoped file browser in the UI + `st_dev` comparison at runtime before every hardlink). See ratio-guardian SPEC.md §3 for the full reasoning — not repeated here. Full table-by-table DB schema: `docs/schema.sql`.
 
-### Perché non basta il modello di ratio-guardian così com'è
+### Two supported layouts: per-disk mounts or a single TrashGuide-style mount
 
-Ratio-guardian fonde identità logica e file fisico in un'unica riga (`media_item` ha sia `tmdb_id` che `file_path`/`inode`) e **non ha alcuna tabella per l'inventario dei client torrent** — verifica "è già in seeding" con un check live sul filesystem (`find -samefile`) più query al client solo al momento dell'esecuzione. Funziona per un solo client e senza bisogno di vedere il cross-seed, ma non regge i requisiti di Gauntletarr (multi-client, vista a griglia raggruppata per contenuto, visibilità esplicita di ogni claimant cross-seed — §3, §5, §7). Analizzato anche il modello di Auditorr come riferimento negativo: tiene tutto in blob JSON ricalcolati ad ogni run e, per il cross-seed, fonde tutti i claimant sullo stesso inode tenendo solo "il più sano" (`audit.py::_walk_directory`, righe 106-124) — scelta efficiente ma **con perdita di informazione**, esattamente il contrario di quello che serve qui.
+`disk_scan_root` (default `/data`, see `config.example.yaml`) supports two deployment styles without any code change:
 
-### Le entità (fisico separato da logico, come da discussione)
+- **Single mount (TrashGuide convention)**: mount one combined torrents+media folder at `/data` — the same host path shared with the download client and media manager, which is what makes hardlinks between them work. In this layout there's a single Disk, and it's registered with `root_path` equal to `disk_scan_root` itself (`create_disk()` explicitly allows this — the scoping check accepts `root_path == scan_root`, not just a subfolder of it).
+- **Per-disk mounts (classic Unraid layout)**: `disk_scan_root` points at a parent folder (e.g. `/mnt`) under which each physical disk is bind-mounted directly (`/mnt/disk1`, `/mnt/disk2`, ...), and each shows up as its own registerable Disk. This is the layout to use whenever a single share might span multiple physical disks in a way that could silently break a hardlink.
+
+Either way, the runtime `st_dev` check before every hardlink (§3, `create_disk`/`verify_disk`) is the actual safety net: even inside a single combined mount, individual files are tracked with their own `st_dev` (not just one value per Disk row) — see "The two FKs" below — so a hardlink attempted across two files that don't really share a device fails with an explicit error rather than silently corrupting anything, whichever layout is in use.
+
+### Why ratio-guardian's model isn't enough as-is
+
+Ratio-guardian merges logical identity and physical file into a single row (`media_item` has both `tmdb_id` and `file_path`/`inode`) and **has no table at all for the torrent client inventory** — it checks "is this already seeding" with a live filesystem check (`find -samefile`) plus a client query only at execution time. That works for a single client with no need to see cross-seeding, but it doesn't hold up against Gauntletarr's requirements (multi-client, a grid view grouped by content, explicit visibility of every cross-seed claimant — §3, §5, §7). Auditorr's model was also analyzed, as a negative reference: it keeps everything in JSON blobs recomputed on every run and, for cross-seeding, merges every claimant on the same inode down to just "the healthiest one" (`audit.py::_walk_directory`, lines 106-124) — an efficient choice, but one that **loses information**, exactly the opposite of what's needed here.
+
+### The entities (physical separated from logical, as discussed)
 
 ```
-media_item            -- identità logica risolta: tmdb_id, season, episode, poster
-  media_file           -- fisico, lato media: disk_id, relative_path, size, st_dev/inode
+media_item            -- resolved logical identity: tmdb_id, season, episode, poster
+  media_file           -- physical, media side: disk_id, relative_path, size, st_dev/inode
                         --   "as of last scan", media_item_id (FK)
 
-seed_file              -- fisico, lato torrent: disk_id, relative_path, size, st_dev/inode
-                        --   "as of last scan", media_file_id (FK, nullable — vedi sotto)
-                        --   un file per ogni hardlink sibling: 3 cross-seed = 3 righe
+seed_file              -- physical, torrent side: disk_id, relative_path, size, st_dev/inode
+                        --   "as of last scan", media_file_id (FK, nullable — see below)
+                        --   one row per hardlink sibling: 3-way cross-seed = 3 rows
 
-torrent_client          -- config (esiste già)
-  client_torrent          -- UN torrent per UNA istanza client: info_hash, name, save_path,
+torrent_client          -- config (already exists)
+  client_torrent          -- ONE torrent for ONE client instance: info_hash, name, save_path,
                           --   category, state, tracker_url — UNIQUE(torrent_client_id, info_hash)
-    client_torrent_file     -- UN file dentro un client_torrent: path_in_torrent, size,
+    client_torrent_file     -- ONE file inside a client_torrent: path_in_torrent, size,
                             --   seed_file_id (FK, nullable)
 ```
 
-`media_item` separato da `media_file` (a differenza di ratio-guardian, dove sono la stessa riga) perché la vista a griglia (§7) deve raggruppare più file fisici sotto un solo poster — caso comune per una stagione con più episodi, o un contenuto con più versioni/qualità in libreria.
+`media_item` is separate from `media_file` (unlike ratio-guardian, where they're the same row) because the grid view (§7) needs to group several physical files under one poster — a common case for a season with multiple episodes, or content with several versions/qualities in the library.
 
-### Le due FK e perché sono scritte in modo diverso
+### The two FKs, and why they're written differently
 
-- **`seed_file.media_file_id`** (collegamento via inode, cross-seed): **mai calcolata a runtime con un join live** su `(disk_id, st_dev, inode)` — su una libreria grande sarebbe ricalcolata ad ogni caricamento della tree/grid view. Va invece:
-  1. calcolata **una volta per scan**, in memoria, durante lo stesso `os.walk` già necessario per leggere `st_dev`/`inode`/`nlink` (stessa tecnica di Auditorr — un dict tenuto per la durata dello scan — ma qui **senza scartare i claimant "perdenti"**: ogni sibling resta una riga);
-  2. scritta con un **bulk upsert a fine scan** (batch insert/update, mai una query per file);
-  3. marcata con `last_scan_id` (FK a `run_log`) — un `seed_file` non ri-visto in uno scan successivo non va cancellato subito (la coda di revisione deve poterlo ancora mostrare come "sparito"), ma la sua `media_file_id` smette di essere attendibile per i calcoli di stato correnti finché non viene ri-confermato. Questo evita il rischio concreto di inode riassegnati dal filesystem tra uno scan e l'altro (stesso problema già segnalato come aperto in ratio-guardian §17 — qui reso esplicito e gestito).
-- **`client_torrent_file.seed_file_id`** (collegamento via path, non via inode): risolta confrontando `client_torrent.save_path + path_in_torrent` contro `disk.root_path + seed_file.relative_path` — non soffre di riassegnazione (un path non viene "riusato" per un file diverso nello stesso modo di un inode), quindi più stabile tra uno scan e l'altro, ma comunque riverificata ad ogni scan per coerenza.
+- **`seed_file.media_file_id`** (the inode link, cross-seed): **never computed at runtime with a live join** on `(disk_id, st_dev, inode)` — on a large library that would be recomputed every time the tree/grid view loads. Instead it is:
+  1. computed **once per scan**, in memory, during the same `os.walk` already needed to read `st_dev`/`inode`/`nlink` (the same technique Auditorr uses — a dict kept for the duration of the scan — but here **without discarding the "losing" claimants**: every sibling stays a row);
+  2. written with a **bulk upsert at the end of the scan** (batch insert/update, never a per-file query);
+  3. tagged with `last_scan_id` (a FK to `run_log`) — a `seed_file` not seen again in a later scan isn't deleted right away (the review queue still needs to be able to show it as "gone"), but its `media_file_id` stops being trusted for current-state computations until it's reconfirmed. This avoids the concrete risk of inodes being reassigned by the filesystem between one scan and the next (the same problem already flagged as open in ratio-guardian §17 — made explicit and handled here).
+- **`client_torrent_file.seed_file_id`** (the path link, not inode-based): resolved by comparing `client_torrent.save_path + path_in_torrent` against `disk.root_path + seed_file.relative_path` — doesn't suffer from reassignment (a path doesn't get "reused" for a different file the way an inode number does), so it's more stable across scans, though still reverified on every scan for consistency.
 
-In lettura, ogni query di stato (§3) e ogni conteggio dashboard (§10) è un JOIN indicizzato su queste FK — mai un calcolo su `st_dev`/`inode` a runtime, che restano colonne di **sola scrittura** per il processo di scan.
+On read, every state query (§3) and every dashboard count (§10) is an indexed JOIN on these FKs — never a computation on `st_dev`/`inode` at runtime, which stay **write-only** columns for the scan process.
 
-### Altre estensioni
+### Other extensions
 
-- **Poster cache**: `media_item.tmdb_poster_path` (path relativo TMDB) + cache locale delle immagini scaricate (filesystem, non blob in DB — path prevedibile tipo `data/posters/{tmdb_id}.jpg`, scaricato una sola volta e riusato). Necessaria per la vista a griglia (§7).
-- Configurazione split YAML statico (`disk_scan_root`, `data_dir`) / DB dinamico (dischi, media path, tracker, client, soglie) — invariato da ratio-guardian §4.
+- **Poster cache**: `media_item.tmdb_poster_path` (relative TMDB path) + a local cache of the downloaded images (filesystem, not a DB blob — a predictable path like `data/posters/{tmdb_id}.jpg`, downloaded once and reused). Needed for the grid view (§7).
+- Static YAML (`disk_scan_root`, `data_dir`) / dynamic DB (disks, media paths, trackers, clients, thresholds) config split — unchanged from ratio-guardian §4.
 
-Entità di matching/reseeding (`candidate`, `match_review`, `seed_job`) e le nuove entità upload (§9) restano come da ratio-guardian, adattate per riferirsi a `media_item`/`media_file` invece che alla riga fusa di ratio-guardian — dettaglio completo in `docs/schema.sql`.
+Matching/reseeding entities (`candidate`, `match_review`, `seed_job`) and the new upload entities (§9) stay as in ratio-guardian, adapted to reference `media_item`/`media_file` instead of ratio-guardian's merged row — full detail in `docs/schema.sql`.
 
-## 5. Client torrent: supporto multi-client fin dalla v1
+## 5. Torrent clients: multi-client support from v1
 
-Requisito esplicito, diverso da ratio-guardian (che parte da un solo adapter qBittorrent ed è genericamente estendibile ma senza impegno immediato su altri client). Priorità:
+An explicit requirement, unlike ratio-guardian (which starts with a single qBittorrent adapter and is generically extensible but with no immediate commitment to other clients). Priority:
 
-1. **qBittorrent** — via `qbittorrent-api`, primo adapter, implementato (`app/adapters/torrent_client/qbittorrent.py`). **Non validato contro un'istanza reale**, solo contro un client mockato nei test (stesso limite dichiarato da ratio-guardian per lo stesso adapter).
-2. **qui** (gestore multi-istanza per qBittorrent) — risolto **pragmaticamente** in Fase 2, non verificato contro un'istanza reale: trattato come N istanze qBittorrent indipendenti, ciascuna un proprio `TorrentClient` con `adapter_type="qbittorrent"` puntato al `base_url` che `qui` espone per quell'istanza. Nessun adapter dedicato, finché non si scopre il contrario contro un'installazione reale.
-3. **Deluge**, 4. **Transmission**, 5. **rutorrent** — **deferiti**, non implementati in Fase 2 (tre protocolli diversi — JSON-RPC/RPC/XML-RPC — costo non banale per un solo passaggio). `app/adapter_factory.py` solleva un errore esplicito per questi `adapter_type`, mai un fallimento silenzioso.
+1. **qBittorrent** — via `qbittorrent-api`, first adapter, implemented (`app/adapters/torrent_client/qbittorrent.py`). **Not validated against a real instance**, only against a mocked client in tests (the same limitation ratio-guardian states for the same adapter).
+2. **qui** (multi-instance manager for qBittorrent) — resolved **pragmatically** in Phase 2, unverified against a real instance: treated as N independent qBittorrent instances, each its own `TorrentClient` with `adapter_type="qbittorrent"` pointed at the `base_url` that `qui` exposes for that instance. No dedicated adapter unless a real installation proves otherwise.
+3. **Deluge**, 4. **Transmission**, 5. **rutorrent** — **deferred**, not implemented in Phase 2 (three different protocols — JSON-RPC/RPC/XML-RPC — non-trivial cost for a single pass). `app/adapter_factory.py` raises an explicit error for these `adapter_type` values, never a silent failure.
 
-Tutti dietro lo stesso contratto `TorrentClientAdapter` — `add_torrent`/`get_torrent_status` ereditati da ratio-guardian §14 invariati, **`list_torrents()` sostituisce l'ipotesi iniziale `list_tracked_paths()`** (implementato in `app/adapters/torrent_client/base.py`, diverso da questo primo abbozzo):
+All behind the same `TorrentClientAdapter` contract — `add_torrent`/`get_torrent_status` inherited unchanged from ratio-guardian §14, **`list_torrents()` replaces the original `list_tracked_paths()` sketch** (implemented in `app/adapters/torrent_client/base.py`, different from this early draft):
 
 ```python
 class TorrentClientAdapter(ABC):
     def add_torrent(self, torrent_file_or_url, save_path, force_recheck=True) -> str: ...
     def get_torrent_status(self, info_hash) -> TorrentStatus: ...
     def list_torrents(self) -> list[ClientTorrentInfo]:
-        """Ogni torrent noto al client, coi suoi file (path_in_torrent + size).
-        Serve a popolare client_torrent/client_torrent_file (sezione 4), non solo
-        a sapere se un path è tracciato sì/no — da cui poi si derivano
-        orphan_torrent/ignored/seeding, mai calcolati dall'adapter stesso."""
+        """Every torrent known to the client, with its files (path_in_torrent + size).
+        Needed to populate client_torrent/client_torrent_file (section 4), not just to
+        know whether a path is tracked yes/no — orphan_torrent/ignored/seeding are
+        derived from that afterwards, never computed by the adapter itself."""
 ```
 
-Un disco/torrents_rel_path può essere associato a più client configurati contemporaneamente (caso comune: qBittorrent per un gruppo di tracker, rutorrent per un altro, sullo stesso disco) — l'indicizzazione (`app/torrent_indexer.py`) aggrega quindi su tutti i client abilitati per quel disco, non assume mai 1:1.
+A disk/torrents_rel_path can be associated with several configured clients at once (a common case: qBittorrent for one group of trackers, rutorrent for another, on the same disk) — indexing (`app/torrent_indexer.py`) therefore aggregates across every client enabled for that disk, never assuming a 1:1 relationship.
 
-## 6. Identificazione contenuto (TMDB) e motore di matching
+## 6. Content identification (TMDB) and the matching engine
 
-### Resolver media (eredita ratio-guardian §6)
+### Media resolver (inherits ratio-guardian §6)
 
-Default: parsing filename (guessit) → lookup TMDB. Adapter opzionale Sonarr/Radarr per mapping più affidabile, mai assunto presente.
+Default: filename parsing (guessit) → TMDB lookup. Optional Sonarr/Radarr adapter for more reliable mapping, never assumed present.
 
-**Estensione per la vista a griglia**: al momento della risoluzione TMDB, scaricare e cachare il poster (`tmdb_poster_path` → immagine locale, sezione 4). Un `media_item` senza poster disponibile (contenuto molto di nicchia, o TMDB non lo ha) mostra un placeholder in UI, mai un errore bloccante.
+**Extension for the grid view**: at TMDB resolution time, download and cache the poster (`tmdb_poster_path` → local image, section 4). A `media_item` with no poster available (very niche content, or TMDB doesn't have it) shows a placeholder in the UI, never a blocking error.
 
-### Motore di matching (eredita ratio-guardian §7-8, integrato con smartmediareseed)
+### Matching engine (inherits ratio-guardian §7-8, integrated with smartmediareseed)
 
-Pipeline invariata nella struttura (storico personale se disponibile → ricerca per tmdb_id sul catalogo → size match → mediainfo Unique ID match → confidence esplicita e spiegabile, mai ML opaco). Vedi ratio-guardian SPEC.md §7-8 per tutti i dettagli verificati (shape API UNIT3D, gestione season pack, limiti dello storico personale via scraping).
+Pipeline unchanged in structure (personal history if available → catalog search by tmdb_id → size match → mediainfo Unique ID match → explicit, explainable confidence, never opaque ML). See ratio-guardian SPEC.md §7-8 for every verified detail (UNIT3D API shape, season pack handling, the limits of personal history via scraping).
 
-**Nuovo segnale di confidence**, raccomandazione già scritta nell'analisi di smartmediareseed e qui recepita come requisito: **verifica hash dei piece** (parsing bencode BEP3 del `.torrent` scaricato, confronto byte-esatto contro il contenuto locale) come segnale aggiuntivo, più forte del solo mediainfo Unique ID perché deterministico e non soggetto al limite noto (stesso video, audio diverso → stesso Unique ID a volte). Da usare per:
-- alzare la confidence quando size+mediainfo sono già concordanti ma non a certezza assoluta;
-- **unico segnale accettabile per l'auto-esecuzione della direzione torrent→client** (sezione 3) dove serve una soglia più alta che nel caso media→torrent, perché lì il file esiste già e un match sbagliato aggiunge un torrent non corrispondente in modo meno recuperabile con il solo recheck.
+**New confidence signal**, a recommendation already written up in smartmediareseed's analysis and adopted here as a requirement: **piece hash verification** (BEP3 bencode parsing of the downloaded `.torrent`, byte-exact comparison against the local content) as an additional signal, stronger than mediainfo Unique ID alone because it's deterministic and not subject to the known limitation (same video, different audio → sometimes the same Unique ID). To be used to:
+- raise confidence when size+mediainfo already agree but aren't absolutely certain;
+- **the only signal acceptable for auto-executing the torrent→client direction** (section 3), where a higher threshold than the media→torrent case is needed, because there the file already exists and a wrong match adds a non-matching torrent in a way that's less recoverable with just a recheck.
 
-Il **recheck forzato sul client rimane comunque sempre obbligatorio** in ogni caso di aggiunta al client (mai `skip_checking`) — l'hash dei piece è un segnale di matching più forte, non un sostituto della verifica del client stesso.
+**A forced recheck on the client remains mandatory in every case** when adding to the client (never `skip_checking`) — the piece hash is a stronger matching signal, not a substitute for the client's own verification.
 
-## 7. Vista Libreria: albero + griglia poster
+## 7. Library view: tree + poster grid
 
-Due modalità di visualizzazione della stessa base dati (stato unificato per file, sezione 3), selezionabili dall'utente, ispirate rispettivamente ad Auditorr (albero) e alla richiesta esplicita di griglia poster:
+Two display modes over the same underlying data (the unified per-file state, section 3), user-selectable, inspired respectively by Auditorr (tree) and the explicit request for a poster grid:
 
-- **Vista ad albero**: struttura cartelle reale della libreria media (per disco → per MediaPath → sottocartelle), ogni nodo file mostra badge di stato (pill colorata, stessi stati della sezione 3) e, se disponibile, mini-poster inline. Click su un file mostra il dettaglio: path media, path torrent (se hardlinkato), tracker + link diretto, stato client + deep-link, link TMDB — stesso set di colonne della pagina Libreria di ratio-guardian §12, qui presentato come pannello di dettaglio invece che come tabella.
-- **Vista a griglia**: card per ogni `media_item` con poster TMDB (fallback placeholder), titolo, anno, badge di stato. Pensata per la ricognizione visiva rapida ("cosa ho, cosa manca, cosa è rotto") più che per il dettaglio tecnico — quello resta a un click di distanza (stesso pannello di dettaglio dell'albero).
-- **Filtri condivisi tra le due viste**: per stato (tutti gli stati della sezione 3), per disco, per MediaPath/content_type, ricerca testuale per titolo.
-- **Reverse lookup dal lato torrent** (ispirato ad Auditorr): dato un torrent nel client, mostrare a quale/i file di libreria corrisponde (via hardlink) — utile per capire "perché questo è in seeding" senza dover cercare manualmente.
+- **Tree view**: the media library's real folder structure (per disk → per MediaPath → subfolders), every file node shows a status badge (colored pill, same states as section 3) and, if available, an inline mini-poster. Clicking a file shows the detail: media path, torrent path (if hardlinked), tracker + direct link, client state + deep link, TMDB link — the same set of columns as ratio-guardian's Library page §12, presented here as a detail panel instead of a table.
+- **Grid view**: a card per `media_item` with a TMDB poster (placeholder fallback), title, year, status badge. Meant for quick visual scanning ("what do I have, what's missing, what's broken") rather than technical detail — that stays one click away (the same detail panel as the tree view).
+- **Filters shared between both views**: by state (every state from section 3), by disk, by MediaPath/content_type, text search by title.
+- **Reverse lookup from the torrent side** (inspired by Auditorr): given a torrent in the client, show which library file(s) it corresponds to (via hardlink) — useful to understand "why is this seeding" without having to search manually.
 
-Le due viste condividono backend/API — è solo `?view=tree|grid` sulla stessa risorsa filtrata, mai due pipeline dati separate.
+Both views share the same backend/API — it's just `?view=tree|grid` over the same filtered resource, never two separate data pipelines.
 
-## 8. Motore di reseeding ed esecuzione
+## 8. Reseeding engine and execution
 
-Eredita interamente ratio-guardian §9-11:
-- Soglia di confidence configurabile (default 0.95) sopra la quale l'esecuzione è automatica, sotto la quale va in coda di revisione manuale — **stessa logica per entrambe le direzioni** (media→torrent e torrent→client, sezione 3), con soglie eventualmente diverse per le due (vedi nota in sezione 6).
-- Hardlink con nome esatto atteso dal tracker (solo direzione media→torrent — nella direzione torrent→client il file è già al posto giusto, si aggiunge solo il torrent al client).
-- Recheck forzato, mai skip.
-- Reconcile periodico dello stato recheck (async sul client).
-- Modalità import massivo (scan completo una tantum) + run schedulato (cron configurabile da UI), entrambe sullo stesso motore.
+Inherits ratio-guardian §9-11 in full:
+- A configurable confidence threshold (default 0.95) above which execution is automatic, below which it goes to the manual review queue — **same logic for both directions** (media→torrent and torrent→client, section 3), possibly with different thresholds for each (see the note in section 6).
+- Hardlink with the exact name the tracker expects (media→torrent direction only — in the torrent→client direction the file is already in the right place, only the torrent gets added to the client).
+- Forced recheck, never skipped.
+- Periodic reconciliation of recheck status (async on the client).
+- Bulk import mode (one-off full scan) + scheduled run (cron configurable from the UI), both on the same engine.
 
-## 9. Upload: creazione e pubblicazione di un nuovo torrent
+## 9. Upload: creating and publishing a new torrent
 
-Eredita interamente ratio-guardian §16, incluso il ragionamento su cosa riusare da Upload-Assistant (libreria `torf` per creare il `.torrent`, `pymediainfo` esteso, `ffmpeg-python` per gli screenshot, dupe-check via lo stesso `TrackerAdapter.search_by_tmdb`) e cosa non riusare (nessun codice diretto da Upload-Assistant, che è in development freeze — solo riferimento di dominio per la shape delle richieste UNIT3D e i profili tracker).
+Inherits ratio-guardian §16 in full, including the reasoning on what to reuse from Upload-Assistant (the `torf` library to create the `.torrent`, extended `pymediainfo`, `ffmpeg-python` for screenshots, dupe-check via the same `TrackerAdapter.search_by_tmdb`) and what not to reuse (no code taken directly from Upload-Assistant, which is in development freeze — only a domain reference for the shape of UNIT3D requests and tracker profiles).
 
-Punti che restano invariati:
-- Dominio dati separato (`upload_job`, `tracker_upload_profile`), non tocca mai le entità di reseeding.
-- Profili tracker bundlati come seed data versionato nel repo, copiati in DB alla creazione del tracker, editabili liberamente dopo senza mai essere riletti dal file.
-- Conferma umana obbligatoria prima dell'invio, non negoziabile quanto il recheck forzato del reseeding.
-- v1 include già mediainfo + screenshot (non rimandati).
+Points that stay unchanged:
+- Separate data domain (`upload_job`, `tracker_upload_profile`), never touches the reseeding entities.
+- Tracker profiles bundled as seed data versioned in the repo, copied into the DB when a tracker is created, freely editable afterwards and never re-read from the file.
+- Mandatory human confirmation before submission, as non-negotiable as the forced recheck in reseeding.
+- v1 already includes mediainfo + screenshots (not deferred).
 
-## 10. UI/UX — struttura generale
+## 10. UI/UX — general structure
 
 ```
-Libreria
-  Vista ad albero        (§7)
-  Vista a griglia         (§7)
-  Orfani e ignorati       [n]  (§3 — entrambe le direzioni, con azioni contestuali)
+Library
+  Tree view               (§7)
+  Grid view                (§7)
+  Orphaned and ignored     [n]  (§3 — both directions, with contextual actions)
 
 Reseeding
   Dashboard
-  Revisione          [n]  (match_review pending, entrambe le direzioni)
-  Verifica da .torrent
-  Run
+  Review              [n]  (pending match_review, both directions)
+  Verify from .torrent
+  Runs
 
 Upload
-  Nuovo upload
-  Coda upload        [n]
-  Template descrizione
+  New upload
+  Upload queue        [n]
+  Description templates
 
-Configurazione
-  Dischi
-  Client torrent          (multi-client, §5)
-  Tracker
-  Impostazioni
+Configuration
+  Disks
+  Torrent clients          (multi-client, §5)
+  Trackers
+  Settings
 ```
 
-Dashboard: eredita ratio-guardian §15 (gauge salute libreria, KPI in revisione/falliti/non risolti, feed novità) — **KPI aggiuntivi** per riflettere le due direzioni: count `orphan_torrent` e count `ignored` con link diretto ai rispettivi filtri in Libreria.
+Dashboard: inherits ratio-guardian §15 (library health gauge, pending review/failed/unresolved KPIs, novelty feed) — **additional KPIs** to reflect the two directions: an `orphan_torrent` count and an `ignored` count, each linking directly to the matching filter in Library.
 
-Stack frontend: **SPA React + shadcn/ui** (decisione già presa in ratio-guardian il 2026-09-21, qui ereditata fin dall'inizio invece che come refactor successivo — Gauntletarr parte già con backend FastAPI come API JSON pura sotto `/api/*`, nessuna fase Jinja2/HTMX da superare).
+Frontend stack: **React SPA + shadcn/ui** (a decision already made in ratio-guardian on 2026-09-21, inherited here from the start instead of as a later refactor — Gauntletarr already starts with a FastAPI backend as a pure JSON API under `/api/*`, no Jinja2/HTMX phase to outgrow).
 
-## 11. Stack tecnico
+## 11. Tech stack
 
-Eredita ratio-guardian (CLAUDE.md), con le aggiunte per multi-client e poster:
+Inherits ratio-guardian (CLAUDE.md), with additions for multi-client and posters:
 
-- **Python 3.12**, **FastAPI** (API JSON pura sotto `/api/*`)
-- **SQLite** via SQLAlchemy — sufficiente per questo carico
-- **APScheduler** in-process per lo scheduling
-- **httpx** per le chiamate a tracker/TMDB (async-friendly)
-- **qbittorrent-api**, più libreria/i client per Deluge/Transmission/rutorrent (da scegliere in fase di implementazione, sezione 5)
-- **pymediainfo** per mediainfo/Unique ID
-- **guessit** per il parsing filename
-- **torf** per la creazione dei `.torrent` in upload (puro Python)
-- **ffmpeg-python** per gli screenshot in upload (richiede `ffmpeg` nel container)
-- Parser bencode BEP3 minimale (già presente in ratio-guardian come `app/torrent_file.py`, riusabile) — usato sia per il fallback nome cartella (ratio-guardian §7) sia per l'hash dei piece (sezione 6)
-- **Frontend**: SPA **React + shadcn/ui**, build Vite, servita dal container FastAPI
-- **Container singolo con supervisord** (web + worker/scheduler), stesso pattern di ratio-guardian
+- **Python 3.12**, **FastAPI** (pure JSON API under `/api/*`)
+- **SQLite** via SQLAlchemy — enough for this load
+- **APScheduler** in-process for scheduling
+- **httpx** for tracker/TMDB calls (async-friendly)
+- **qbittorrent-api**, plus a client library/libraries for Deluge/Transmission/rutorrent (still to be chosen during implementation, section 5)
+- **pymediainfo** for mediainfo/Unique ID
+- **guessit** for filename parsing
+- **torf** to create `.torrent` files for uploads (pure Python)
+- **ffmpeg-python** for upload screenshots (needs `ffmpeg` in the container)
+- A minimal BEP3 bencode parser (already in ratio-guardian as `app/torrent_file.py`, reusable) — used both for the folder-name fallback (ratio-guardian §7) and for the piece hash (section 6)
+- **Frontend**: **React + shadcn/ui** SPA, Vite build, served by the FastAPI container
+- **Single container with supervisord** (web + worker/scheduler), same pattern as ratio-guardian
 
-## 12. Cosa riusare da ciascun progetto sorgente (riepilogo)
+## 12. What to reuse from each source project (summary)
 
-| Progetto | Riuso |
+| Project | Reuse |
 |---|---|
-| ratio-guardian | Architettura dati, motore matching/reseeding, contratti adapter — **base di partenza diretta**, non solo ispirazione. Codice Python riusabile quasi as-is dove lo scope coincide (torrent_file.py, mediainfo_util.py, adapters). |
-| Auditorr | Riferimento UX (vista ad albero, dashboard, reverse lookup) — nessun riuso di codice diretto (stack/linguaggio da verificare in fase di implementazione se compatibile, altrimenti solo riferimento di design). |
-| Upload-Assistant | Riferimento di dominio per upload (shape richieste tracker, profili, mediainfo/screenshot) — **nessun riuso di codice** (development freeze, stack incompatibile: web_ui Flask/SSE vs FastAPI+SPA). |
-| smartmediareseed | Tecnica di verifica hash piece (BEP3) da integrare come segnale di confidence aggiuntivo (sezione 6) — logica da reimplementare contro i propri contratti, non da importare (stack Postgres/Flask diverso). |
+| ratio-guardian | Data architecture, matching/reseeding engine, adapter contracts — **a direct starting point**, not just inspiration. Python code reusable almost as-is where scope overlaps (torrent_file.py, mediainfo_util.py, adapters). |
+| Auditorr | UX reference (tree view, dashboard, reverse lookup) — no direct code reuse (stack/language compatibility to verify during implementation, otherwise a design reference only). |
+| Upload-Assistant | Domain reference for upload (tracker request shape, profiles, mediainfo/screenshots) — **no code reuse** (development freeze, incompatible stack: Flask/SSE web_ui vs FastAPI+SPA). |
+| smartmediareseed | Piece-hash (BEP3) verification technique, to integrate as an additional confidence signal (section 6) — logic to reimplement against our own contracts, not to import (different Postgres/Flask stack). |
 
-## 13. Requisiti open source
+## 13. Open source requirements
 
-- Nessun dato personale (path, tracker, credenziali dell'utente) in nessun file versionato — `config.example.yaml`/`.env.example` con placeholder generici.
-- LICENSE esplicita (da scegliere — MIT/AGPL sono le scelte tipiche per questo tipo di self-hosted tool, AGPL se si vuole scoraggiare fork SaaS chiusi).
-- Profili tracker bundlati (sezione 9) contengono solo mapping/naming pubblicamente verificabili, mai credenziali.
-- Documentazione di setup (README) sufficiente per un utente terzo che non ha il contesto delle sessioni di design — non assumere che il lettore conosca ratio-guardian o gli altri progetti sorgente.
+- No personal data (paths, trackers, user credentials) in any versioned file — `config.example.yaml`/`.env.example` with generic placeholders.
+- An explicit LICENSE (still to choose — MIT/AGPL are the typical picks for this kind of self-hosted tool, AGPL if the goal is discouraging closed-SaaS forks).
+- Bundled tracker profiles (section 9) contain only publicly verifiable mapping/naming, never credentials.
+- Setup documentation (README) good enough for a third-party user with no context from the design sessions — never assume the reader knows ratio-guardian or the other source projects.
 
-## 14. Roadmap suggerita
+## 14. Suggested roadmap
 
-1. Bootstrap progetto (stack, struttura cartelle, requirements) — riusando struttura/config di ratio-guardian come riferimento.
-2. Schema DB (dischi/media path/torrent index/tracker/client/media_item con poster/candidate/match_review/seed_job) + modelli SQLAlchemy.
-3. File browser API scoped-per-disco (pattern riusabile as-is da ratio-guardian).
-4. Adapter torrent client: qBittorrent prima (riuso diretto), poi Deluge/Transmission/rutorrent/qui secondo priorità sezione 5.
-5. Resolver media (guessit + TMDB) + download/cache poster.
-6. Motore di matching (size + mediainfo + hash piece) nelle due direzioni (sezione 3), confidence esplicita.
-7. Coda di revisione UI.
-8. Esecutore: hardlink + add-to-client + recheck forzato, entrambe le direzioni.
-9. Vista Libreria (albero + griglia) sulla base dello stato unificato.
-10. Scheduler + storico run.
-11. Modulo Upload (torf, mediainfo/screenshot, profili tracker, dupe-check, conferma umana).
-12. Pulizia per rilascio open source (config esempio, LICENSE, README).
+1. Bootstrap the project (stack, folder structure, requirements) — reusing ratio-guardian's structure/config as a reference.
+2. DB schema (disks/media paths/torrent index/tracker/client/media_item with poster/candidate/match_review/seed_job) + SQLAlchemy models.
+3. Scoped-per-disk file browser API (a pattern reusable as-is from ratio-guardian).
+4. Torrent client adapters: qBittorrent first (direct reuse), then Deluge/Transmission/rutorrent/qui by the priority in section 5.
+5. Media resolver (guessit + TMDB) + poster download/cache.
+6. Matching engine (size + mediainfo + piece hash) for both directions (section 3), explicit confidence.
+7. Review queue UI.
+8. Executor: hardlink + add-to-client + forced recheck, both directions.
+9. Library view (tree + grid) built on the unified state.
+10. Scheduler + run history.
+11. Upload module (torf, mediainfo/screenshots, tracker profiles, dupe-check, human confirmation).
+12. Cleanup for open source release (example config, LICENSE, README).
 
-Non vincolante alla lettera, ma rispetta le dipendenze logiche (es. non ha senso costruire la vista Libreria prima che esista uno stato unificato da mostrare). Piano dettagliato a fasi (dipendenze, deliverable, definition of done per fase): `docs/ROADMAP.md`.
+Not binding to the letter, but respects the logical dependencies (e.g. there's no point building the Library view before a unified state exists to show). Detailed phased plan (dependencies, deliverables, definition of done per phase): `docs/ROADMAP.md`.
 
-**Repo**: `https://github.com/lktorrentz/gauntletarr` (pubblico, GPL-3.0). Progetto **separato da `ratio-guardian`** (decisione confermata: non lo sostituisce, non ne riusa il codice as-is — riusa architettura/pattern come descritto in questo documento, ma è un repo e una history proprie).
+**Repo**: `https://github.com/lktorrentz/gauntletarr` (public, GPL-3.0). A project **separate from `ratio-guardian`** (confirmed decision: doesn't replace it, doesn't reuse its code as-is — reuses architecture/patterns as described in this document, but has its own repo and history).
 
-## 15. Cose esplicitamente aperte (non decise in questa sessione)
+## 15. Things explicitly left open (not decided in this session)
 
-- **Superficie API di "qui"**: risolto per ora con l'assunzione pragmatica "basta l'adapter qBittorrent puntato a ogni istanza gestita" (sezione 5) — **non verificato** contro un'istanza reale di qui né di qBittorrent. Da confermare appena disponibile un'istanza reale.
-- **Adapter Deluge/Transmission/rutorrent**: deferiti in Fase 2 (sezione 5), non implementati — quale libreria Python usare per ciascuno resta da decidere quando si riprende quello slice.
-- **Soglia di confidence per la direzione torrent→client** (sezione 3, 6): se identica a 0.95 o più alta — da decidere, non ancora un numero fissato.
-- Tutti i punti già aperti in ratio-guardian SPEC.md §17 (scraping storico UNIT3D, cache persistente del match indipendente dal path fisico, host immagini per gli screenshot di upload, schema esatto profilo tracker, storico per il grafico dashboard) restano aperti anche qui, invariati.
+- **"qui"'s API surface**: resolved for now with the pragmatic assumption "the qBittorrent adapter pointed at each managed instance is enough" (section 5) — **unverified** against either a real qui instance or a real qBittorrent instance. To confirm once a real instance is available.
+- **Deluge/Transmission/rutorrent adapters**: deferred in Phase 2 (section 5), not implemented — which Python library to use for each is still to be decided when that slice is picked back up.
+- **Confidence threshold for the torrent→client direction** (sections 3, 6): whether it's the same 0.95 or higher — still to decide, no number fixed yet.
+- Every point already open in ratio-guardian SPEC.md §17 (UNIT3D history scraping, a match cache persisted independently of the physical path, image host for upload screenshots, the exact tracker profile schema, history for the dashboard chart) stays open here too, unchanged.

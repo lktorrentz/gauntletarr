@@ -1,48 +1,48 @@
-# The Media Gauntlet*rr (repo: gauntletarr) — guida per la sessione Claude Code
+# The Media Gauntlet*rr (repo: gauntletarr) - guide for the Claude Code session
 
-## Cos'è
+## What it is
 
-Web app (FastAPI + worker in background, distribuita come container Docker) per gestire in un unico posto: la libreria media, le cartelle di seeding torrent, la corrispondenza (hardlink) tra le due, lo stato reale sui client torrent configurati, e la pubblicazione di nuovi upload sui tracker.
+A web app (FastAPI + background worker, distributed as a Docker container) to manage in one place: the media library, torrent seeding folders, the hardlink correspondence between them, the real state of configured torrent clients, and publishing new uploads to trackers.
 
-Nasce dalla fusione di quattro progetti locali imparentati — **leggi `docs/SPEC.md` sezione 0 prima di scrivere codice**, spiega cosa viene ereditato da ciascuno:
+Born from merging four related local projects - **read `docs/SPEC.md` section 0 before writing code**, it explains what's inherited from each:
 
-- `ratio-guardian` (`/Users/lucazonarelli/Projects/ratio-guardian`) — architettura dati e motore di matching/reseeding, base di partenza diretta, non solo ispirazione.
-- Auditorr — riferimento UX (vista ad albero, dashboard, reverse lookup).
-- Upload-Assistant — riferimento di dominio per il flusso di upload (in development freeze, nessun riuso di codice).
-- smartmediareseed — tecnica di verifica hash dei piece, integrata come segnale di confidence aggiuntivo.
+- `ratio-guardian` (`/Users/lucazonarelli/Projects/ratio-guardian`) - data architecture and matching/reseeding engine, a direct starting point, not just inspiration.
+- Auditorr - UX reference (tree view, dashboard, reverse lookup).
+- Upload-Assistant - domain reference for the upload flow (in development freeze, no code reuse).
+- smartmediareseed - piece-hash verification technique, integrated as an additional confidence signal.
 
-**Non è specifico per Unraid né per arr-stack.** Deve girare con dischi separati senza FUSE/RAID e senza Sonarr/Radarr — adapter opzionali, mai dipendenze. Il nome è un wink stilistico allo stack *arr (gauntlet+arr, come Bazarr/Prowlarr), non una dipendenza funzionale. **Progettato per rilascio open source**: nessun dato personale in file versionati, config di esempio generici.
+**Not specific to Unraid or the *arr stack.** Must run with separate disks with no FUSE/RAID and no Sonarr/Radarr - optional adapters, never dependencies. The name is a stylistic wink to the *arr stack (gauntlet+arr, like Bazarr/Prowlarr), not a functional dependency. **Designed for open source release**: no personal data in versioned files, generic example config.
 
-**Tema "Media Stones"**: sei domini funzionali, ciascuno associato a una "pietra" (icona/colore in UI) — vedi `docs/SPEC.md` per la tabella completa. Riferimento giocoso all'Infinity Gauntlet, ma nomi e concetti originali (Legame, Controllo, Conoscenza, Reintegrazione, Tempo, Genesi) — nessun riferimento letterale a marchi Marvel, va mantenuto così anche nell'implementazione (naming di codice/UI originale, mai i nomi Marvel veri).
+**"Media Stones" theme**: six functional domains, each tied to a "stone" (icon/color in the UI) - see `docs/SPEC.md` for the full table. A playful nod to the Infinity Gauntlet, but with original names and concepts (Bond, Control, Knowledge, Reintegration, Time, Genesis) - no literal reference to Marvel trademarks, and that has to stay true in the implementation too (original code/UI naming, never the real Marvel names).
 
-Il documento completo è `docs/SPEC.md` — contiene tutte le decisioni prese (modello dischi/hardlink, le due direzioni "orfani"/"ignorati", multi-client torrent, matching TMDB + hash piece, vista libreria albero/griglia, motore di reseeding, upload). Non redecidere quelle cose da zero — se qualcosa sembra sbagliato o incompleto, fermati e chiedi prima di deviare.
+The full document is `docs/SPEC.md` - it contains every decision made so far (disk/hardlink model, the two "orphan"/"ignored" directions, multi-client torrent support, TMDB + piece-hash matching, tree/grid library view, reseeding engine, uploads). Don't re-decide those from scratch - if something looks wrong or incomplete, stop and ask before deviating.
 
-## Stack tecnico
+## Tech stack
 
-- **Python 3.12**, FastAPI come API JSON pura sotto `/api/*` fin dall'inizio (nessuna fase Jinja2/HTMX da superare, a differenza di ratio-guardian che l'ha introdotta come refactor successivo)
+- **Python 3.12**, FastAPI as a pure JSON API under `/api/*` from the start (no Jinja2/HTMX phase to outgrow, unlike ratio-guardian which introduced that as a later refactor)
 - **SQLite** via SQLAlchemy
-- **APScheduler** in-process per lo scheduling
-- **httpx** per tracker/TMDB
-- **qbittorrent-api** come primo adapter client torrent; Deluge/Transmission/rutorrent/qui a seguire (vedi `docs/SPEC.md` §5, priorità e librerie da scegliere ancora aperte)
-- **pymediainfo**, **guessit**, **torf** (creazione `.torrent` per upload), **ffmpeg-python** (screenshot upload)
-- Parser bencode BEP3 minimale — riusabile da `ratio-guardian/app/torrent_file.py`
-- **Frontend**: SPA React + shadcn/ui, build Vite, servita dal container
-- **Container singolo con supervisord** (web + worker/scheduler)
+- **APScheduler** in-process for scheduling
+- **httpx** for tracker/TMDB calls
+- **qbittorrent-api** as the first torrent client adapter; Deluge/Transmission/rutorrent/qui to follow (see `docs/SPEC.md` §5 - priority and libraries still open)
+- **pymediainfo**, **guessit**, **torf** (creates `.torrent` files for uploads), **ffmpeg-python** (upload screenshots)
+- Minimal BEP3 bencode parser - reusable from `ratio-guardian/app/torrent_file.py`
+- **Frontend**: React + shadcn/ui SPA, Vite build, served by the container
+- **Single container with supervisord** (web + worker/scheduler)
 
-## Convenzioni ereditate da ratio-guardian (non rinegoziabili)
+## Conventions inherited from ratio-guardian (non-negotiable)
 
-- **Adapter come contratti**, mai implementazioni fisse — tracker, media resolver, torrent client.
-- **Ogni azione distruttiva o irreversibile passa dalla coda di revisione se la confidence non è massima** — vale per entrambe le direzioni di matching (media→torrent e torrent→client, `docs/SPEC.md` §3), non solo per il caso storico di ratio-guardian.
-- **Mai `skip_checking` sul client torrent.** Recheck reale sempre, in ogni aggiunta al client.
-- **Path traversal**: ogni endpoint che tocca il filesystem passa dalla funzione di scoping condivisa (stesso pattern di ratio-guardian, `app/fs_scope.py` è riusabile as-is).
-- **Configurazione**: solo `disk_scan_root`/`data_dir` in YAML statico (richiede restart); tutto il resto (dischi, media path, tracker, client, soglie) nel DB, editabile da UI senza restart.
+- **Adapters are contracts**, never fixed implementations - tracker, media resolver, torrent client.
+- **Every destructive or irreversible action goes through the review queue unless confidence is maximal** - applies to both matching directions (media->torrent and torrent->client, `docs/SPEC.md` §3), not just ratio-guardian's original case.
+- **Never `skip_checking` on the torrent client.** Always a real recheck, on every add to the client.
+- **Path traversal**: every endpoint touching the filesystem goes through the shared scoping function (same pattern as ratio-guardian, `app/fs_scope.py` is reusable as-is).
+- **Configuration**: only `disk_scan_root`/`data_dir` in static YAML (requires a restart); everything else (disks, media paths, trackers, clients, thresholds) lives in the DB, editable from the UI without a restart.
 
-## Cose esplicitamente NON decise (chiedi all'utente, non assumere)
+## Things explicitly NOT decided (ask the user, don't assume)
 
-Vedi `docs/SPEC.md` sezione 15 per l'elenco completo.
+See `docs/SPEC.md` section 15 for the full list.
 
-**Confermato**: progetto separato da `ratio-guardian`, repo proprio (`https://github.com/lktorrentz/gauntletarr`, GPL-3.0), non lo sostituisce e non ne riusa il codice as-is — solo architettura/pattern.
+**Confirmed**: a project separate from `ratio-guardian`, its own repo (`https://github.com/lktorrentz/gauntletarr`, GPL-3.0) - doesn't replace it and doesn't reuse its code as-is, only its architecture/patterns.
 
-## Roadmap a fasi
+## Phased roadmap
 
-Piano completo con deliverable e definition of done per fase: **`docs/ROADMAP.md`**. Una fase = una o più Media Stone completate (vedi tema in `docs/SPEC.md`). Non saltare fasi né invertirne l'ordine senza motivo esplicito — le dipendenze sono reali (es. il motore di matching in Fase 4 richiede gli adapter client della Fase 2 e il resolver della Fase 3 già funzionanti).
+Full plan with deliverables and a definition of done per phase: **`docs/ROADMAP.md`**. One phase = one or more Media Stones completed (see the theme in `docs/SPEC.md`). Don't skip phases or reorder them without an explicit reason - the dependencies are real (e.g. the matching engine in Phase 4 needs the Phase 2 client adapters and the Phase 3 resolver already working).

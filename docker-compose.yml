@@ -1,18 +1,19 @@
-# Web e worker/scheduler girano nello stesso container, gestiti da
-# supervisord (vedi Dockerfile e docker/supervisord.conf) — un solo
-# servizio docker-compose.
+# Web and worker/scheduler run in the same container, managed by
+# supervisord (see Dockerfile and docker/supervisord.conf) - a single
+# docker-compose service.
 #
-# I mount dei dischi qui sotto sono un ESEMPIO — basta montare ogni disco
-# fisico come sottocartella diretta di /mnt (stesso path dentro al
-# container, es. /mnt/disk1 -> /mnt/disk1): Gauntletarr li rileva da
-# solo (scansiona /mnt, vedi config.yaml "disk_scan_root") e li propone
-# nella Web UI ("Dischi" -> "Aggiungi disco"), senza bisogno di elencarli
-# in nessun file di configurazione. Per aggiungere/rimuovere un disco
-# basta editare i volumes qui sotto e ricreare il container.
+# ./config is mounted as a DIRECTORY (not a file): if config/config.yaml
+# doesn't exist on first start, the container creates it from
+# config.example.yaml and starts anyway with default values. The app's
+# own persistent state (SQLite database, poster cache) lives under this
+# same mount by default (config.example.yaml's data_dir) - no separate
+# volume needed for it.
 #
-# ./config è montato come CARTELLA (non un file): se config/config.yaml
-# non esiste al primo avvio, il container lo crea da config.example.yaml
-# e parte comunque coi valori di default.
+# ./data below follows the TrashGuide convention: a single folder shared
+# with your download client and media manager (torrents/ and media/ both
+# under it), so hardlinks between them work. Point it at wherever your
+# actual library + torrents live on the host. See config.example.yaml
+# for disk_scan_root - it defaults to /data to match this layout.
 
 services:
   gauntletarr:
@@ -29,13 +30,4 @@ services:
       - .env
     volumes:
       - ./config:/app/config
-      - gauntletarr-data:/app/data
-      # Esempio dischi fisici — adattare ai mount reali dell'host, uno per
-      # disco fisico, ciascuno come sottocartella diretta di /mnt dentro
-      # al container
-      - /mnt/disk1:/mnt/disk1
-      - /mnt/disk2:/mnt/disk2
-      - /mnt/disk3:/mnt/disk3
-
-volumes:
-  gauntletarr-data:
+      - ./data:/data
