@@ -129,7 +129,7 @@ On read, every state query (§3) and every dashboard count (§10) is an indexed 
 - **Poster cache**: `media_item.tmdb_poster_path` (relative TMDB path) + a local cache of the downloaded images (filesystem, not a DB blob — a predictable path like `data/posters/{tmdb_id}.jpg`, downloaded once and reused). Needed for the grid view (§7).
 - Static YAML (`disk_scan_root`, `data_dir`) / dynamic DB (disks, media paths, trackers, clients, thresholds) config split — unchanged from ratio-guardian §4.
 
-Matching/reseeding entities (`candidate`, `match_review`, `seed_job`) and the new upload entities (§9) stay as in ratio-guardian, adapted to reference `media_item`/`media_file` instead of ratio-guardian's merged row — full detail in `docs/schema.sql`.
+Matching/reseeding entities (`candidate`, `match_review`, `seed_job`) and the new upload entities (§9) stay as in ratio-guardian, adapted to reference `media_item`/`media_file` instead of ratio-guardian's merged row — full detail in `docs/schema.sql`. One real gap found while building Fase 4: `candidate.media_item_id` alone isn't enough to know *which physical file* a match applies to when a `media_item` has more than one `media_file` (different quality versions of the same content) — never an issue in ratio-guardian, where a media_item *was* the physical file. Fixed by adding `match_review.media_file_id`/`match_review.seed_file_id` (whichever applies to the candidate's `direction`), so the decision — not just the search result — carries the physical file it's about.
 
 ## 5. Torrent clients: multi-client support from v1
 

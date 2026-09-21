@@ -1,0 +1,241 @@
+"""Esecutore: hardlink + aggiunta al client (direzione media_to_torrent)
+o solo aggiunta al client (direzione torrent_to_client, il file esiste
+già) — sempre con recheck forzato, mai skip_checking (docs/SPEC.md
+sezione 8). Ordine dei passi per media_to_torrent, mai bypassabile:
+1. verifica st_dev sorgente/destinazione (mai un cross-device silente)
+2. hardlink col nome esatto atteso dal tracker
+3. add_torrent sul client, sempre con force_recheck=True
+
+Season pack fuori scope in questa fase (vedi app/matching.py): un solo
+file video per seed_job. Porting/adattamento da ratio-guardian/app/executor.py,
+semplificato per il caso file singolo e per le due direzioni di
+docs/SPEC.md sezione 3.
+"""
+
+import json
+import logging
+import os
+from datetime import UTC, datetime
+
+from sqlalchemy.orm import Session
+
+from app.adapters.torrent_client.base import TorrentClientAdapter
+from app.fs_scope import ScopeViolation, resolve_scoped
+from app.models import Disk, MatchReview, SeedJob
+
+logger = logging.getLogger(__name__)
+
+
+class ExecutionError(Exception):
+    """Errore esplicito che impedisce l'esecuzione — mai un fallimento silente."""
+
+
+def _client_visible_path(disk: Disk, local_path: str) -> str:
+    """Traduce un path lato Gauntletarr nel path equivalente visto dal
+    client torrent, quando i due girano in container/mount diversi per lo
+    stesso disco fisico (disk.torrent_client_root_path configurato). Se
+    non configurato, assume che client e Gauntletarr vedano lo stesso path."""
+    if not disk.torrent_client_root_path:
+        return local_path
+    root_real = os.path.realpath(disk.root_path)
+    local_real = os.path.realpath(local_path)
+    if local_real != root_real and not local_real.startswith(root_real + os.sep):
+        return local_path  # fuori dal disco: non dovrebbe succedere, non tocchiamo nulla
+    relative = os.path.relpath(local_real, root_real)
+    return disk.torrent_client_root_path if relative == "." else os.path.join(disk.torrent_client_root_path, relative)
+
+
+def _check_same_filesystem(source_path: str, torrents_root: str) -> None:
+    source_dev = os.stat(source_path).st_dev
+    target_dev = os.stat(torrents_root).st_dev
+    if source_dev != target_dev:
+        raise ExecutionError(
+            f"Sorgente e destinazione su device diversi ({source_dev} != {target_dev}): "
+            "l'hardlink non può attraversare filesystem diversi, vedi docs/SPEC.md sezione 4"
+        )
+
+
+def execute_review(session: Session, review: MatchReview, adapter: TorrentClientAdapter) -> SeedJob:
+    candidate = review.candidate
+    if candidate.direction == "media_to_torrent":
+        return _execute_media_to_torrent(session, review, adapter)
+    return _execute_torrent_to_client(session, review, adapter)
+
+
+def _execute_media_to_torrent(session: Session, review: MatchReview, adapter: TorrentClientAdapter) -> SeedJob:
+    candidate = review.candidate
+    media_file = review.media_file
+    if media_file is None:
+        raise ExecutionError(f"MatchReview {review.id} (media_to_torrent) senza media_file collegato")
+    disk = media_file.disk
+    media_path = media_file.media_path
+
+    if not disk.torrents_rel_path:
+        raise ExecutionError(f"Disco '{disk.label}' non ha torrents_rel_path configurato")
+    try:
+        scan_root = resolve_scoped(disk.root_path, disk.torrents_rel_path)
+    except ScopeViolation as exc:
+        raise ExecutionError(str(exc)) from exc
+    if not os.path.isdir(scan_root):
+        raise ExecutionError(f"torrents_rel_path non esiste su disco: {scan_root}")
+
+    target_rel_path = media_path.effective_new_torrent_rel_path
+    try:
+        target_root = resolve_scoped(disk.root_path, target_rel_path)
+    except ScopeViolation as exc:
+        raise ExecutionError(str(exc)) from exc
+    if not os.path.isdir(target_root):
+        raise ExecutionError(f"Cartella di destinazione per i nuovi hardlink non trovata: {target_root}")
+
+    source_path = os.path.join(disk.root_path, media_file.relative_path)
+    if not os.path.isfile(source_path):
+        raise ExecutionError(f"File locale non trovato: {source_path}")
+
+    file_list = json.loads(candidate.file_list_json) if candidate.file_list_json else []
+    expected_filename = file_list[0] if file_list else os.path.basename(source_path)
+    # Un torrent a file singolo può comunque avere una cartella contenitore
+    # (candidate.folder) — molte release la usano anche per i film.
+    relative_target = os.path.join(candidate.folder, expected_filename) if candidate.folder else expected_filename
+    try:
+        target_path = resolve_scoped(target_root, relative_target)
+    except ScopeViolation as exc:
+        raise ExecutionError(str(exc)) from exc
+
+    _check_same_filesystem(source_path, target_root)
+    if os.path.exists(target_path):
+        raise ExecutionError(f"Il path di destinazione esiste già: {target_path}")
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+    seed_job = SeedJob(candidate_id=candidate.id, source_media_file_id=media_file.id, final_status="in_progress")
+    session.add(seed_job)
+    session.commit()
+
+    return _create_hardlink_then_seed(
+        session, seed_job, candidate, adapter, source_path, target_path, disk, target_root
+    )
+
+
+def _create_hardlink_then_seed(
+    session: Session,
+    seed_job: SeedJob,
+    candidate,
+    adapter: TorrentClientAdapter,
+    source_path: str,
+    target_path: str,
+    disk: Disk,
+    target_root: str,
+) -> SeedJob:
+    if not candidate.download_link:
+        seed_job.final_status = "failed"
+        seed_job.error_message = "Candidate senza download_link: impossibile aggiungere il torrent al client"
+        session.commit()
+        raise ExecutionError(seed_job.error_message)
+
+    try:
+        os.link(source_path, target_path)
+        seed_job.hardlink_created_at = datetime.now(UTC)
+        session.commit()
+        logger.info("Hardlink creato per candidate %s: %s", candidate.id, target_path)
+
+        client_save_path = _client_visible_path(disk, target_root)
+        info_hash = adapter.add_torrent(candidate.download_link, save_path=client_save_path, force_recheck=True)
+        seed_job.info_hash = info_hash
+        seed_job.torrent_added_at = datetime.now(UTC)
+        seed_job.recheck_status = "pending"
+        session.commit()
+        logger.info("Torrent aggiunto al client (info_hash=%s), recheck in corso", info_hash)
+    except Exception as exc:
+        seed_job.final_status = "failed"
+        seed_job.error_message = str(exc)
+        session.commit()
+        raise ExecutionError(str(exc)) from exc
+
+    return seed_job
+
+
+def _execute_torrent_to_client(session: Session, review: MatchReview, adapter: TorrentClientAdapter) -> SeedJob:
+    """Il file è già presente sul filesystem (docs/SPEC.md sezione 3): mai
+    un nuovo hardlink, solo l'aggiunta al client puntando alla cartella che
+    già lo contiene."""
+    candidate = review.candidate
+    seed_file = review.seed_file
+    if seed_file is None:
+        raise ExecutionError(f"MatchReview {review.id} (torrent_to_client) senza seed_file collegato")
+    disk = seed_file.disk
+
+    if not candidate.download_link:
+        raise ExecutionError("Candidate senza download_link: impossibile aggiungere il torrent al client")
+
+    source_path = os.path.join(disk.root_path, seed_file.relative_path)
+    if not os.path.isfile(source_path):
+        raise ExecutionError(f"File locale non trovato: {source_path}")
+
+    seed_job = SeedJob(candidate_id=candidate.id, source_seed_file_id=seed_file.id, final_status="in_progress")
+    session.add(seed_job)
+    session.commit()
+
+    save_path_local = os.path.dirname(source_path)
+    try:
+        client_save_path = _client_visible_path(disk, save_path_local)
+        info_hash = adapter.add_torrent(candidate.download_link, save_path=client_save_path, force_recheck=True)
+        seed_job.info_hash = info_hash
+        seed_job.torrent_added_at = datetime.now(UTC)
+        seed_job.recheck_status = "pending"
+        session.commit()
+        logger.info(
+            "Torrent aggiunto al client (info_hash=%s) per file già presente, recheck in corso", info_hash
+        )
+    except Exception as exc:
+        seed_job.final_status = "failed"
+        seed_job.error_message = str(exc)
+        session.commit()
+        raise ExecutionError(str(exc)) from exc
+
+    return seed_job
+
+
+def reconcile_seed_job(session: Session, seed_job: SeedJob, adapter: TorrentClientAdapter) -> SeedJob:
+    """Aggiorna recheck_status/final_status interrogando lo stato reale nel
+    client. Il recheck è asincrono lato client: va richiamata finché non
+    raggiunge uno stato definitivo (mai un'attesa bloccante qui dentro)."""
+    if seed_job.info_hash is None:
+        raise ExecutionError(f"SeedJob {seed_job.id} non ha ancora un info_hash")
+
+    status = adapter.get_torrent_status(seed_job.info_hash)
+    seed_job.recheck_status = status.recheck_status
+    if status.recheck_status == "ok":
+        seed_job.final_status = "seeding"
+        logger.info("Recheck ok, seed_job %s in seeding (info_hash=%s)", seed_job.id, seed_job.info_hash)
+    elif status.recheck_status == "failed":
+        seed_job.final_status = "failed"
+        seed_job.error_message = f"Recheck fallito, stato client: {status.state}"
+        logger.warning("Recheck fallito per seed_job %s: stato client %s", seed_job.id, status.state)
+    session.commit()
+    return seed_job
+
+
+def retry_seed_job(session: Session, seed_job: SeedJob, adapter: TorrentClientAdapter) -> SeedJob:
+    """Ritenta un seed_job failed. Se ha già un info_hash, il problema era
+    probabilmente solo il recheck mai confermato: si reinterroga il client
+    invece di ripartire da zero (che per torrent_to_client sarebbe comunque
+    un no-op, e per media_to_torrent fallirebbe su "il path esiste già")."""
+    if seed_job.final_status != "failed":
+        raise ExecutionError(f"SeedJob {seed_job.id} non è in stato failed (attuale: {seed_job.final_status})")
+    if seed_job.info_hash:
+        logger.info("Retry seed_job %s: info_hash già presente, reinterrogo il client", seed_job.id)
+        seed_job.final_status = "in_progress"
+        session.commit()
+        return reconcile_seed_job(session, seed_job, adapter)
+
+    review = (
+        session.query(MatchReview)
+        .filter(MatchReview.candidate_id == seed_job.candidate_id)
+        .filter(
+            (MatchReview.media_file_id == seed_job.source_media_file_id)
+            if seed_job.source_media_file_id is not None
+            else (MatchReview.seed_file_id == seed_job.source_seed_file_id)
+        )
+        .one()
+    )
+    logger.info("Retry seed_job %s: riparto da zero (nessun info_hash mai ottenuto)", seed_job.id)
+    return execute_review(session, review, adapter)

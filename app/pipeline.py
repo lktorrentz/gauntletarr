@@ -1,11 +1,19 @@
 """Orchestrazione di una run: scan filesystem (app/scanner.py), poi
 risoluzione TMDB (app/media_resolution.py), poi indicizzazione client
-torrent (app/torrent_indexer.py) — in questo ordine perché l'indexer
-collega client_torrent_file ai seed_file appena scritti dallo scan (in
-ordine inverso non troverebbe nulla a cui collegarsi, ogni file
-risulterebbe erroneamente orphan_torrent invece che seeding/ignored); la
-risoluzione TMDB non ha invece dipendenze rispetto all'indicizzazione,
-l'ordine tra le due non conta.
+torrent (app/torrent_indexer.py), poi matching (app/matching.py) ed
+esecuzione automatica delle review sopra soglia (app/review.py), infine
+reconcile dei seed_job ancora in corso.
+
+Ordine vincolante:
+- scan prima di indicizzazione: l'indexer collega client_torrent_file ai
+  seed_file appena scritti dallo scan (§4) — invertito, ogni file
+  risulterebbe erroneamente orphan_torrent invece che seeding/ignored.
+- indicizzazione prima di matching: orphan_media_files/
+  orphan_seed_files_with_identity (§3) dipendono dallo stato client
+  aggiornato per classificare correttamente cosa è davvero orfano.
+- risoluzione TMDB non ha dipendenze rispetto a indicizzazione/matching
+  sull'ordine relativo, ma deve comunque precedere il matching (serve
+  media_item_id risolto per cercare sul tracker).
 
 Import massivo e run schedulato (Fase 5) condivideranno questo stesso
 motore — la differenza è solo nel trigger, non nella pipeline.
@@ -17,9 +25,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from app import adapter_factory, media_resolution, scanner, torrent_indexer
+from app import adapter_factory, matching, media_resolution, review, scanner, torrent_indexer
 from app.adapter_factory import TmdbApiKeyMissingError
-from app.models import Disk, RunLog, TorrentClient
+from app.models import Disk, RunLog, TorrentClient, Tracker
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +54,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
         "media_files_scanned": 0, "seed_files_scanned": 0,
         "torrents_indexed": 0, "files_indexed": 0,
         "resolved": 0, "unresolved": 0,
+        "candidates_found": 0, "auto_executed": 0,
     }
     errors = 0
     try:
@@ -86,10 +95,37 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                 continue
             totals["torrents_indexed"] += counts["torrents_indexed"]
             totals["files_indexed"] += counts["files_indexed"]
+
+        for tracker_row in session.query(Tracker).filter_by(enabled=True).all():
+            try:
+                tracker_adapter = adapter_factory.build_tracker_adapter(tracker_row)
+                m2t = matching.run_media_to_torrent_matching(session, tracker_row, tracker_adapter)
+                t2c = matching.run_torrent_to_client_matching(session, tracker_row, tracker_adapter)
+            except Exception:
+                logger.exception("Matching fallito per il tracker %r", tracker_row.label)
+                errors += 1
+                continue
+            totals["candidates_found"] += m2t["candidates"] + t2c["candidates"]
+
+        try:
+            exec_counts = review.execute_auto_approved(session)
+            totals["auto_executed"] = exec_counts["executed"]
+        except Exception:
+            logger.exception("Esecuzione automatica delle review fallita")
+            errors += 1
+
+        try:
+            review.reconcile_pending_seed_jobs(session)
+        except Exception:
+            logger.exception("Reconcile dei seed_job in corso fallito")
+            errors += 1
     finally:
         run.current_phase = None
         run.finished_at = datetime.now(UTC)
         run.items_scanned = totals["media_files_scanned"] + totals["seed_files_scanned"]
+        run.matches_found = totals["candidates_found"]
+        run.auto_executed = totals["auto_executed"]
+        run.pending_review = len(review.list_ready_for_review(session))
         run.errors = errors
         session.commit()
     return run

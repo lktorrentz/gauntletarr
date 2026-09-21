@@ -13,7 +13,8 @@ from app.adapters.media_resolver.base import MediaResolverAdapter
 from app.adapters.media_resolver.filename_parser import FilenameParserResolver
 from app.adapters.torrent_client.base import TorrentClientAdapter
 from app.adapters.torrent_client.qbittorrent import QBittorrentAdapter
-from app.models import TorrentClient
+from app.adapters.tracker.base import TrackerAdapter, Unit3dTrackerAdapter
+from app.models import TorrentClient, Tracker
 from app.tmdb_client import TMDBClient
 
 
@@ -39,3 +40,13 @@ def build_media_resolver(session: Session) -> MediaResolverAdapter:
     if not tmdb_api_key:
         raise TmdbApiKeyMissingError("tmdb_api_key non configurata in app_settings (PUT /api/settings/tmdb_api_key)")
     return FilenameParserResolver(TMDBClient(api_key=tmdb_api_key))
+
+
+def build_tracker_adapter(tracker: Tracker) -> TrackerAdapter:
+    if tracker.adapter_type == "unit3d":
+        return Unit3dTrackerAdapter(
+            base_url=tracker.base_url,
+            api_token=tracker.api_token,
+            rate_limit_per_min=tracker.rate_limit_per_min or 30,
+        )
+    raise ValueError(f"adapter_type tracker non supportato: {tracker.adapter_type!r}")

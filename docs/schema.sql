@@ -251,6 +251,15 @@ CREATE TABLE IF NOT EXISTS candidate (
 CREATE TABLE IF NOT EXISTS match_review (
     id              INTEGER PRIMARY KEY,
     candidate_id    INTEGER NOT NULL REFERENCES candidate(id) ON DELETE CASCADE,
+    media_file_id   INTEGER REFERENCES media_file(id) ON DELETE CASCADE,
+        -- valorizzato per direction='media_to_torrent': QUALE file fisico orfano
+        -- questa decisione riguarda. Assente in ratio-guardian (dove media_item
+        -- ERA il file fisico, 1:1) — qui serve perché un media_item può avere più
+        -- media_file (versioni/qualità diverse), quindi candidate.media_item_id da
+        -- solo non basta a sapere quale file fisico collegare all'approvazione.
+    seed_file_id    INTEGER REFERENCES seed_file(id) ON DELETE CASCADE,
+        -- valorizzato per direction='torrent_to_client': QUALE seed_file orfano
+        -- (non tracciato da alcun client) ha innescato questa ricerca.
     status          TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending','approved','rejected','auto_approved')),
     decided_by      TEXT,                   -- "system" | username
@@ -269,6 +278,10 @@ CREATE TABLE IF NOT EXISTS seed_job (
         -- known only once execution succeeds, filled in by whichever scan next picks it up
     result_client_torrent_id    INTEGER REFERENCES client_torrent(id),
         -- known only after the add to the client and the next poll — never at add_torrent time
+    info_hash                   TEXT,
+        -- known as soon as add_torrent() succeeds (returned by the client adapter) — used by
+        -- reconcile_seed_job()/retry_seed_job() to query the client's real status. Missing from
+        -- the first draft of this table (found while implementing the executor in Fase 4).
     hardlink_created_at         TIMESTAMP,
     torrent_added_at            TIMESTAMP,
     recheck_status               TEXT CHECK (recheck_status IN ('pending','ok','failed')),
@@ -325,6 +338,8 @@ CREATE TABLE IF NOT EXISTS upload_job (
 CREATE INDEX IF NOT EXISTS idx_candidate_media_item_id ON candidate(media_item_id);
 CREATE INDEX IF NOT EXISTS idx_candidate_tracker_id ON candidate(tracker_id);
 CREATE INDEX IF NOT EXISTS idx_match_review_candidate_id ON match_review(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_match_review_media_file_id ON match_review(media_file_id);
+CREATE INDEX IF NOT EXISTS idx_match_review_seed_file_id ON match_review(seed_file_id);
 CREATE INDEX IF NOT EXISTS idx_seed_job_candidate_id ON seed_job(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_seed_job_source_media_file_id ON seed_job(source_media_file_id);
 CREATE INDEX IF NOT EXISTS idx_seed_job_source_seed_file_id ON seed_job(source_seed_file_id);

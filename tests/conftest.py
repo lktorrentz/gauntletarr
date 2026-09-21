@@ -9,7 +9,14 @@ from app import db as db_module
 
 
 @pytest.fixture
-def db_session(tmp_path):
+def db_session(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_SECRET_KEY", base64.urlsafe_b64encode(os.urandom(32)).decode())
+    # Stesso motivo del fixture `client` sotto: crypto._fernet() è cachata per
+    # processo, va pulita qui altrimenti un test precedente nella stessa
+    # sessione pytest "vince" la chiave per chi crea un Tracker/TorrentClient
+    # (api_token/password sono EncryptedString, vedi app/models.py).
+    crypto_module._fernet.cache_clear()
+
     engine = db_module.make_engine(str(tmp_path / "test.db"))
     db_module.apply_schema(engine)
     db_module.migrate_schema(engine)
@@ -19,6 +26,7 @@ def db_session(tmp_path):
         yield session
     finally:
         session.close()
+        crypto_module._fernet.cache_clear()
 
 
 @pytest.fixture

@@ -8,11 +8,11 @@ quest'ultimo cambia.
 Fase 0 (docs/ROADMAP.md): solo le tabelle di CONFIGURAZIONE. Fase 1
 aggiunge run_log e le tabelle FISICO (media_file/seed_file). Fase 2
 aggiunge CLIENT TORRENT (client_torrent/client_torrent_file). Fase 3
-aggiunge media_item (identità logica). Il resto del DOMINIO (candidate/
-match_review/seed_job) e upload arrivano nei rispettivi modelli man mano
-che le fasi 4-6 le usano davvero — esistono già come tabelle vuote in
-schema.sql, ma mapparle in ORM prima di avere codice che le usa sarebbe
-un'astrazione prematura.
+aggiunge media_item (identità logica). Fase 4 aggiunge DOMINIO (candidate/
+match_review/seed_job). Upload arriva nei rispettivi modelli quando la
+Fase 6 lo usa davvero — esiste già come tabelle vuote in schema.sql, ma
+mapparle in ORM prima di avere codice che le usa sarebbe un'astrazione
+prematura.
 """
 
 from datetime import datetime
@@ -234,6 +234,9 @@ class SeedFile(Base):
     last_scan_id: Mapped[int] = mapped_column(ForeignKey("run_log.id"), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(nullable=False)
 
+    media_file: Mapped["MediaFile | None"] = relationship()
+    disk: Mapped["Disk"] = relationship()
+
 
 # ============ CLIENT TORRENT (multi-istanza, scritto SOLO da app/torrent_indexer.py — Fase 2) ============
 
@@ -266,3 +269,88 @@ class ClientTorrentFile(Base):
     size_bytes: Mapped[int] = mapped_column(nullable=False)
     seed_file_id: Mapped[int | None] = mapped_column(ForeignKey("seed_file.id", ondelete="SET NULL"))
     last_scan_id: Mapped[int] = mapped_column(ForeignKey("run_log.id"), nullable=False)
+
+
+# ============ DOMINIO — matching e reseeding (Fase 4, docs/SPEC.md sezione 6-8) ============
+
+
+class Candidate(Base):
+    __tablename__ = "candidate"
+    __table_args__ = (
+        CheckConstraint("source IN ('history','catalog_search')", name="ck_candidate_source"),
+        CheckConstraint(
+            "direction IN ('media_to_torrent','torrent_to_client')", name="ck_candidate_direction"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    media_item_id: Mapped[int] = mapped_column(ForeignKey("media_item.id", ondelete="CASCADE"), nullable=False)
+    tracker_id: Mapped[int] = mapped_column(ForeignKey("tracker.id"), nullable=False)
+    torrent_id_remote: Mapped[str] = mapped_column(nullable=False)
+    info_hash: Mapped[str | None]
+    name: Mapped[str] = mapped_column(nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    file_list_json: Mapped[str | None]
+    folder: Mapped[str | None]
+    download_link: Mapped[str | None]
+    source: Mapped[str] = mapped_column(nullable=False)
+    direction: Mapped[str] = mapped_column(nullable=False)
+    size_match: Mapped[bool | None]
+    mediainfo_match: Mapped[bool | None]
+    piece_verified: Mapped[bool | None]
+    piece_boundary_count: Mapped[int | None]
+    confidence: Mapped[float] = mapped_column(nullable=False)
+    ambiguity_reason: Mapped[str | None]
+    created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
+
+    media_item: Mapped["MediaItem"] = relationship()
+    tracker: Mapped["Tracker"] = relationship()
+
+
+class MatchReview(Base):
+    __tablename__ = "match_review"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','approved','rejected','auto_approved')", name="ck_match_review_status"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("candidate.id", ondelete="CASCADE"), nullable=False)
+    media_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_file.id", ondelete="CASCADE"))
+    seed_file_id: Mapped[int | None] = mapped_column(ForeignKey("seed_file.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(nullable=False, server_default=text("'pending'"))
+    decided_by: Mapped[str | None]
+    decided_at: Mapped[datetime | None]
+
+    candidate: Mapped["Candidate"] = relationship()
+    media_file: Mapped["MediaFile | None"] = relationship()
+    seed_file: Mapped["SeedFile | None"] = relationship()
+
+
+class SeedJob(Base):
+    __tablename__ = "seed_job"
+    __table_args__ = (
+        CheckConstraint(
+            "recheck_status IS NULL OR recheck_status IN ('pending','ok','failed')",
+            name="ck_seed_job_recheck_status",
+        ),
+        CheckConstraint(
+            "final_status IN ('in_progress','seeding','failed','rolled_back')", name="ck_seed_job_final_status"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("candidate.id", ondelete="CASCADE"), nullable=False)
+    source_media_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_file.id"))
+    source_seed_file_id: Mapped[int | None] = mapped_column(ForeignKey("seed_file.id"))
+    result_seed_file_id: Mapped[int | None] = mapped_column(ForeignKey("seed_file.id"))
+    result_client_torrent_id: Mapped[int | None] = mapped_column(ForeignKey("client_torrent.id"))
+    info_hash: Mapped[str | None]
+    hardlink_created_at: Mapped[datetime | None]
+    torrent_added_at: Mapped[datetime | None]
+    recheck_status: Mapped[str | None]
+    final_status: Mapped[str] = mapped_column(nullable=False, server_default=text("'in_progress'"))
+    error_message: Mapped[str | None]
+
+    candidate: Mapped["Candidate"] = relationship()
