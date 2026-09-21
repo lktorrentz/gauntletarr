@@ -202,6 +202,8 @@ Points that stay unchanged:
 - Mandatory human confirmation before submission, as non-negotiable as the forced recheck in reseeding.
 - v1 already includes mediainfo + screenshots (not deferred).
 
+Implemented in Fase 6. Two things found while implementing, not in the original design: `tracker.announce_url` was missing from the schema entirely (`base_url` is the API host, `torf` needs the distinct personal announce URL to create a valid `.torrent`) — added as a nullable column, same additive-migration pattern as every other schema gap found mid-implementation. And `type_id` resolution from a filename is reliable only for `category_id`/`resolution_id` (content type, `screen_size`) — the REMUX/ENCODE/WEBDL/BDMUX distinction is too convention-dependent for a generic guess, so it stays an explicit best-effort default, always editable on the `upload_job` before confirmation, exactly as this section already specified ("resolved, editable before submission").
+
 ## 10. UI/UX — general structure
 
 ```
@@ -289,4 +291,5 @@ Not binding to the letter, but respects the logical dependencies (e.g. there's n
 - **"qui"'s API surface**: resolved for now with the pragmatic assumption "the qBittorrent adapter pointed at each managed instance is enough" (section 5) — the qBittorrent adapter itself is now validated against a real instance, but not specifically through qui. To confirm once a qui-managed instance is available.
 - **Deluge/Transmission/rutorrent adapters**: deferred in Phase 2 (section 5), not implemented — which Python library to use for each is still to be decided when that slice is picked back up.
 - **Confidence threshold for the torrent→client direction** (sections 3, 6): whether it's the same 0.95 or higher — still to decide, no number fixed yet.
-- Every point already open in ratio-guardian SPEC.md §17 (UNIT3D history scraping, a match cache persisted independently of the physical path, image host for upload screenshots, the exact tracker profile schema, history for the dashboard chart) stays open here too, unchanged.
+- Every point already open in ratio-guardian SPEC.md §17 (UNIT3D history scraping, a match cache persisted independently of the physical path, the exact tracker profile schema) stays open here too, unchanged. **Resolved since**: history for the dashboard chart (Fase 5, `run_log.health_snapshot` + `GET /api/dashboard/history`) and the image host for upload screenshots (Fase 6, below).
+- **Image host for upload screenshots — resolved in Fase 6**: rather than picking one, wired all three realistic options (PTPImg, ImgBB, Imgbox) as a priority-ordered fallback chain (`ImageHostChain`, `app/adapter_factory.py::build_image_host_chain`) — user's explicit choice over picking a single adapter.

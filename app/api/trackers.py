@@ -1,11 +1,15 @@
-"""API di configurazione per i tracker (docs/SPEC.md sezione 6)."""
+"""API di configurazione per i tracker (docs/SPEC.md sezione 6) e per il
+loro profilo di upload opzionale 1:1 (docs/SPEC.md sezione 9, Fase 6)."""
+
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app import upload_profiles
 from app.deps import get_session
-from app.models import Tracker
+from app.models import Tracker, TrackerUploadProfile
 
 router = APIRouter(prefix="/api/trackers", tags=["trackers"])
 
@@ -17,6 +21,7 @@ class TrackerCreateRequest(BaseModel):
     adapter_type: str
     base_url: str
     api_token: str
+    announce_url: str | None = None  # necessario solo per creare un nuovo .torrent da caricare (Fase 6, §9)
     rate_limit_per_min: int | None = None
 
 
@@ -24,6 +29,7 @@ class TrackerUpdateRequest(BaseModel):
     label: str | None = None
     base_url: str | None = None
     api_token: str | None = None
+    announce_url: str | None = None
     rate_limit_per_min: int | None = None
     enabled: bool | None = None
 
@@ -33,6 +39,7 @@ class TrackerResponse(BaseModel):
     label: str
     adapter_type: str
     base_url: str
+    announce_url: str | None
     rate_limit_per_min: int | None
     enabled: bool
 
@@ -40,7 +47,7 @@ class TrackerResponse(BaseModel):
     def from_model(cls, t: Tracker) -> "TrackerResponse":
         return cls(
             id=t.id, label=t.label, adapter_type=t.adapter_type, base_url=t.base_url,
-            rate_limit_per_min=t.rate_limit_per_min, enabled=t.enabled,
+            announce_url=t.announce_url, rate_limit_per_min=t.rate_limit_per_min, enabled=t.enabled,
         )
 
 
@@ -66,7 +73,8 @@ def create_tracker(body: TrackerCreateRequest, session: Session = Depends(get_se
         )
     tracker = Tracker(
         label=body.label, adapter_type=body.adapter_type, base_url=body.base_url,
-        api_token=body.api_token, rate_limit_per_min=body.rate_limit_per_min or 30,
+        api_token=body.api_token, announce_url=body.announce_url,
+        rate_limit_per_min=body.rate_limit_per_min or 30,
     )
     session.add(tracker)
     session.commit()
@@ -82,6 +90,8 @@ def update_tracker(tracker_id: int, body: TrackerUpdateRequest, session: Session
         tracker.base_url = body.base_url
     if body.api_token is not None:
         tracker.api_token = body.api_token
+    if body.announce_url is not None:
+        tracker.announce_url = body.announce_url
     if body.rate_limit_per_min is not None:
         tracker.rate_limit_per_min = body.rate_limit_per_min
     if body.enabled is not None:
@@ -94,4 +104,105 @@ def update_tracker(tracker_id: int, body: TrackerUpdateRequest, session: Session
 def delete_tracker(tracker_id: int, session: Session = Depends(get_session)):
     tracker = _get_tracker_or_404(session, tracker_id)
     session.delete(tracker)
+    session.commit()
+
+
+class UploadProfileCreateRequest(BaseModel):
+    profile_key: str | None = None  # None = profilo custom vuoto (docs/SPEC.md §9)
+
+
+class UploadProfileUpdateRequest(BaseModel):
+    category_id_map: dict[str, int] | None = None
+    type_id_map: dict[str, int] | None = None
+    resolution_id_map: dict[str, int] | None = None
+    naming_convention: str | None = None
+    description_template: str | None = None
+    default_anonymous: bool | None = None
+    default_personal_release: bool | None = None
+
+
+class UploadProfileResponse(BaseModel):
+    tracker_id: int
+    category_id_map: dict
+    type_id_map: dict
+    resolution_id_map: dict
+    naming_convention: str | None
+    description_template: str | None
+    default_anonymous: bool
+    default_personal_release: bool
+    source_profile_key: str | None
+
+    @classmethod
+    def from_model(cls, p: TrackerUploadProfile) -> "UploadProfileResponse":
+        return cls(
+            tracker_id=p.tracker_id,
+            category_id_map=json.loads(p.category_id_map_json) if p.category_id_map_json else {},
+            type_id_map=json.loads(p.type_id_map_json) if p.type_id_map_json else {},
+            resolution_id_map=json.loads(p.resolution_id_map_json) if p.resolution_id_map_json else {},
+            naming_convention=p.naming_convention,
+            description_template=p.description_template,
+            default_anonymous=p.default_anonymous,
+            default_personal_release=p.default_personal_release,
+            source_profile_key=p.source_profile_key,
+        )
+
+
+@router.get("/upload-profiles/bundled")
+def list_bundled_upload_profiles():
+    return upload_profiles.list_bundled_profiles()
+
+
+def _get_upload_profile_or_404(session: Session, tracker_id: int) -> TrackerUploadProfile:
+    profile = session.get(TrackerUploadProfile, tracker_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"Tracker {tracker_id} non ha un profilo di upload")
+    return profile
+
+
+@router.post("/{tracker_id}/upload-profile", response_model=UploadProfileResponse, status_code=201)
+def create_upload_profile(
+    tracker_id: int, body: UploadProfileCreateRequest, session: Session = Depends(get_session)
+):
+    tracker = _get_tracker_or_404(session, tracker_id)
+    if session.get(TrackerUploadProfile, tracker_id) is not None:
+        raise HTTPException(status_code=409, detail=f"Tracker {tracker_id} ha già un profilo di upload")
+    try:
+        profile = upload_profiles.create_upload_profile(session, tracker, body.profile_key)
+    except upload_profiles.ProfileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return UploadProfileResponse.from_model(profile)
+
+
+@router.get("/{tracker_id}/upload-profile", response_model=UploadProfileResponse)
+def get_upload_profile(tracker_id: int, session: Session = Depends(get_session)):
+    return UploadProfileResponse.from_model(_get_upload_profile_or_404(session, tracker_id))
+
+
+@router.patch("/{tracker_id}/upload-profile", response_model=UploadProfileResponse)
+def update_upload_profile(
+    tracker_id: int, body: UploadProfileUpdateRequest, session: Session = Depends(get_session)
+):
+    profile = _get_upload_profile_or_404(session, tracker_id)
+    if body.category_id_map is not None:
+        profile.category_id_map_json = json.dumps(body.category_id_map)
+    if body.type_id_map is not None:
+        profile.type_id_map_json = json.dumps(body.type_id_map)
+    if body.resolution_id_map is not None:
+        profile.resolution_id_map_json = json.dumps(body.resolution_id_map)
+    if body.naming_convention is not None:
+        profile.naming_convention = body.naming_convention
+    if body.description_template is not None:
+        profile.description_template = body.description_template
+    if body.default_anonymous is not None:
+        profile.default_anonymous = body.default_anonymous
+    if body.default_personal_release is not None:
+        profile.default_personal_release = body.default_personal_release
+    session.commit()
+    return UploadProfileResponse.from_model(profile)
+
+
+@router.delete("/{tracker_id}/upload-profile", status_code=204)
+def delete_upload_profile(tracker_id: int, session: Session = Depends(get_session)):
+    profile = _get_upload_profile_or_404(session, tracker_id)
+    session.delete(profile)
     session.commit()

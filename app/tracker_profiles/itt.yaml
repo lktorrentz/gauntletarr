@@ -1,0 +1,56 @@
+# Profilo bundlato per ItaTorrents (ITT), tracker UNIT3D (docs/SPEC.md §9).
+#
+# category_id/resolution_id: default standard UNIT3D, ITT non li sovrascrive.
+# type_id: mapping specifico ITT.
+# Entrambi verificati contro il codice tracker reale e funzionante di
+# Upload-Assistant (src/trackers/ITT.py, src/trackers/UNIT3D.py — riferimento
+# di dominio, nessun codice riusato, solo le tabelle id/nome), non
+# inventati — ma vanno comunque riverificati dall'utente contro il proprio
+# account ITT prima del primo upload reale: un tracker può cambiare questi
+# id nel tempo, e questo file non viene mai riletto dopo che il profilo è
+# stato copiato nel DB (tracker_upload_profile), quindi un aggiornamento
+# futuro dell'app non tocca un'istanza già configurata.
+key: itt
+label: "ITT (ItaTorrents)"
+adapter_type: unit3d
+upload:
+  category_id:
+    movie: 1
+    tv: 2
+  type_id:
+    DISC: 1
+    REMUX: 2
+    ENCODE: 3
+    WEBDL: 4
+    WEBRIP: 5
+    HDTV: 6
+    DVDRIP: 24
+    BRRIP: 25
+    WEBMUX: 26
+    DLMUX: 27
+    BDMUX: 29
+    DVDMUX: 39
+  resolution_id:
+    "8640p": 10
+    "4320p": 1
+    "2160p": 2
+    "1440p": 3
+    "1080p": 3
+    "1080i": 4
+    "720p": 5
+    "576p": 6
+    "576i": 7
+    "480p": 8
+    "480i": 9
+  naming_convention: "{title} ({year}) {resolution} {source} {video_codec} {audio_codec} {group}"
+  description_template: |
+    [mediainfo]{{ mediainfo }}[/mediainfo]
+
+    {% for url in screenshot_urls %}[img]{{ url }}[/img]
+    {% endfor %}
+    {% if notes %}
+    {{ notes }}
+    {% endif %}
+  default_flags:
+    anonymous: false
+    personal_release: false

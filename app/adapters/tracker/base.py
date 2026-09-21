@@ -25,6 +25,43 @@ class NotSupportedError(Exception):
     personale non disponibile via API per questo tracker/istanza)."""
 
 
+class UploadError(Exception):
+    """Upload fallito lato tracker (API ha risposto ma con esito negativo,
+    o risposta in un formato inatteso) — mai silenziato: la conferma umana
+    obbligatoria (docs/SPEC.md §9) resta l'ultimo passo prima di questa
+    chiamata, ma se il tracker stesso rifiuta va segnalato esplicitamente."""
+
+
+@dataclass
+class UploadFields:
+    """Campi risolti per una singola richiesta di upload (docs/SPEC.md §9
+    punto 9). Shape verificata contro il codice tracker reale e funzionante
+    di Upload-Assistant (src/trackers/UNIT3D.py get_data(), riferimento di
+    dominio, nessun codice riusato) — sottoinsieme rilevante per questo
+    progetto: i campi UNIT3D non gestiti qui (bdinfo, mal, igdb, region_id,
+    distributor_id, featured/free/doubleup/sticky/internal) sono sempre
+    inviati con il default "non impostato"/"0" dell'API, mai omessi (un
+    campo mancante non è equivalente al suo default esplicito per ogni
+    installazione UNIT3D)."""
+
+    name: str
+    description: str
+    mediainfo: str
+    category_id: int
+    type_id: int
+    resolution_id: int
+    tmdb_id: int
+    imdb_id: str = "0"
+    tvdb_id: int = 0
+    season_number: int | None = None
+    episode_number: int | None = None
+    anonymous: bool = False
+    personal_release: bool = False
+    stream: bool = False
+    sd: bool = False
+    keywords: str = ""
+
+
 @dataclass
 class TorrentCandidate:
     torrent_id_remote: str
@@ -70,6 +107,12 @@ class TrackerAdapter(ABC):
         deve gestire questo caso degradando al motore di matching generale,
         mai trattarlo come errore fatale."""
         raise NotSupportedError(f"{self.__class__.__name__} non supporta get_own_history()")
+
+    def upload_torrent(self, fields: UploadFields, torrent_path: str) -> str:
+        """Pubblica un nuovo upload (docs/SPEC.md §9). Ritorna
+        torrent_id_remote. NotSupportedError se l'adapter non lo implementa,
+        UploadError se il tracker rifiuta la richiesta."""
+        raise NotSupportedError(f"{self.__class__.__name__} non supporta upload_torrent()")
 
 
 class _RateLimiter:
@@ -162,6 +205,71 @@ class Unit3dTrackerAdapter(TrackerAdapter):
             "Storico personale non esposto via API pubblica su UNIT3D; "
             "richiede scraper HTML dedicato, non implementato."
         )
+
+    _TORRENT_ID_RE = re.compile(r"/(\d+)\.")
+
+    def upload_torrent(self, fields: UploadFields, torrent_path: str) -> str:
+        """POST /api/torrents/upload, multipart (file "torrent" + campi
+        form). Risposta {"success": bool, "message": str, "data": <URL di
+        download tipo "https://tracker/torrents/download/12345.<token>">}
+        — l'id numerico si estrae dall'URL stesso, non è un campo a parte
+        (shape verificata contro Upload-Assistant, vedi UploadFields)."""
+        data = {
+            "name": fields.name,
+            "description": fields.description,
+            "mediainfo": fields.mediainfo,
+            "bdinfo": "",
+            "category_id": str(fields.category_id),
+            "type_id": str(fields.type_id),
+            "resolution_id": str(fields.resolution_id),
+            "tmdb": str(fields.tmdb_id),
+            "imdb": str(fields.imdb_id),
+            "tvdb": str(fields.tvdb_id),
+            "mal": "0",
+            "igdb": "0",
+            "anonymous": "1" if fields.anonymous else "0",
+            "stream": "1" if fields.stream else "0",
+            "sd": "1" if fields.sd else "0",
+            "keywords": fields.keywords,
+            "personal_release": "1" if fields.personal_release else "0",
+            "internal": "0",
+            "featured": "0",
+            "free": "0",
+            "doubleup": "0",
+            "sticky": "0",
+        }
+        if fields.season_number is not None:
+            data["season_number"] = str(fields.season_number)
+        if fields.episode_number is not None:
+            data["episode_number"] = str(fields.episode_number)
+
+        try:
+            with open(torrent_path, "rb") as f:
+                torrent_bytes = f.read()
+        except OSError as exc:
+            raise UploadError(f"Impossibile leggere il .torrent da caricare: {exc}") from exc
+        files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}
+
+        self._rate_limiter.wait()
+        try:
+            response = self._client.post(
+                "/api/torrents/upload",
+                data=data,
+                files=files,
+                headers={"Authorization": f"Bearer {self.api_token}", "Accept": "application/json"},
+            )
+            response.raise_for_status()
+            response_data = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise UploadError(f"Upload UNIT3D fallito: {exc}") from exc
+
+        if not response_data.get("success"):
+            raise UploadError(f"Upload UNIT3D rifiutato dal tracker: {response_data.get('message', response_data)}")
+
+        match = self._TORRENT_ID_RE.search(response_data.get("data", ""))
+        if not match:
+            raise UploadError(f"Risposta upload UNIT3D senza id torrent riconoscibile: {response_data!r}")
+        return match.group(1)
 
     def _get(self, path: str, params: dict | None = None) -> httpx.Response:
         self._rate_limiter.wait()

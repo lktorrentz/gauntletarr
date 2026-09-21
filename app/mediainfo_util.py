@@ -34,3 +34,19 @@ def compute_unique_id(file_path: str) -> str | None:
             match = _LEADING_TOKEN_RE.match(str(raw).strip())
             return match.group(1) if match else str(raw).strip()
     return None
+
+
+def extract_full_text(file_path: str) -> str | None:
+    """Report mediainfo testuale completo (lo stesso formato del comando
+    CLI `mediainfo`), per la sezione Mediainfo della descrizione di upload
+    (docs/SPEC.md §9). output='STRING'/full=False riproduce esattamente il
+    formato usato da Upload-Assistant per lo stesso scopo (verificato
+    contro la sua src/exportmi.py come riferimento di dominio, nessun
+    codice riusato). None solo se mediainfo non riesce proprio a leggere il
+    file — mai un'eccezione che blocchi la pipeline di upload."""
+    try:
+        text = MediaInfo.parse(file_path, output="STRING", full=False)
+    except Exception:
+        logger.exception("mediainfo (testo completo) fallito su %r", file_path)
+        return None
+    return text or None

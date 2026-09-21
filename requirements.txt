@@ -8,6 +8,8 @@ pymediainfo
 guessit
 torf
 ffmpeg-python
+pyimgbox
+jinja2
 python-multipart
 pyyaml
 cryptography

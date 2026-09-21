@@ -44,6 +44,12 @@ CREATE TABLE IF NOT EXISTS tracker (
     adapter_type            TEXT NOT NULL,          -- "unit3d", future: "gazelle", etc.
     base_url                TEXT NOT NULL,
     api_token               TEXT NOT NULL,          -- encrypted at rest
+    announce_url            TEXT,                   -- personal announce URL, needed only for creating a NEW
+                                                      -- .torrent to upload (SPEC.md §9) — distinct from base_url
+                                                      -- (the API host). Null for a tracker only used for
+                                                      -- matching/reseeding, never upload. Missing from the
+                                                      -- original Phase 0 draft (found while implementing
+                                                      -- Fase 6's torrent_create.create_torrent()).
     history_mode            TEXT NOT NULL DEFAULT 'unsupported'
                             CHECK (history_mode IN ('api','scrape','unsupported')),
     history_session_cookie  TEXT,                   -- if history_mode='scrape'

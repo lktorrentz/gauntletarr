@@ -9,10 +9,9 @@ Fase 0 (docs/ROADMAP.md): solo le tabelle di CONFIGURAZIONE. Fase 1
 aggiunge run_log e le tabelle FISICO (media_file/seed_file). Fase 2
 aggiunge CLIENT TORRENT (client_torrent/client_torrent_file). Fase 3
 aggiunge media_item (identità logica). Fase 4 aggiunge DOMINIO (candidate/
-match_review/seed_job). Upload arriva nei rispettivi modelli quando la
-Fase 6 lo usa davvero — esiste già come tabelle vuote in schema.sql, ma
-mapparle in ORM prima di avere codice che le usa sarebbe un'astrazione
-prematura.
+match_review/seed_job). Fase 6 aggiunge UPLOAD (tracker_upload_profile/
+upload_job) — esistevano come tabelle vuote in schema.sql fin dalla Fase
+0, mappate in ORM solo ora che c'è codice che le usa davvero.
 """
 
 from datetime import datetime
@@ -105,6 +104,7 @@ class Tracker(Base):
     adapter_type: Mapped[str] = mapped_column(nullable=False)
     base_url: Mapped[str] = mapped_column(nullable=False)
     api_token: Mapped[str] = mapped_column(EncryptedString, nullable=False)
+    announce_url: Mapped[str | None]
     history_mode: Mapped[str] = mapped_column(nullable=False, server_default=text("'unsupported'"))
     history_session_cookie: Mapped[str | None]
     rate_limit_per_min: Mapped[int | None] = mapped_column(server_default=text("30"))
@@ -305,6 +305,57 @@ class Candidate(Base):
 
     media_item: Mapped["MediaItem"] = relationship()
     tracker: Mapped["Tracker"] = relationship()
+
+
+class TrackerUploadProfile(Base):
+    """1:1 con tracker (PK = FK, non un id proprio) — presenza della riga =
+    quel tracker fa upload. Copiata da un profilo bundlato (app/tracker_profiles/*.yaml)
+    alla creazione del Tracker, poi mai più riletta dal file (docs/SPEC.md §9)."""
+
+    __tablename__ = "tracker_upload_profile"
+
+    tracker_id: Mapped[int] = mapped_column(ForeignKey("tracker.id", ondelete="CASCADE"), primary_key=True)
+    category_id_map_json: Mapped[str | None]
+    type_id_map_json: Mapped[str | None]
+    resolution_id_map_json: Mapped[str | None]
+    naming_convention: Mapped[str | None]
+    description_template: Mapped[str | None]
+    default_anonymous: Mapped[bool] = mapped_column(nullable=False, server_default=text("0"))
+    default_personal_release: Mapped[bool] = mapped_column(nullable=False, server_default=text("0"))
+    source_profile_key: Mapped[str | None]
+
+    tracker: Mapped["Tracker"] = relationship()
+
+
+class UploadJob(Base):
+    __tablename__ = "upload_job"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft','ready','uploading','uploaded','failed')", name="ck_upload_job_status"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    media_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_file.id"))
+    source_path: Mapped[str] = mapped_column(nullable=False)
+    tracker_id: Mapped[int] = mapped_column(ForeignKey("tracker.id"), nullable=False)
+    status: Mapped[str] = mapped_column(nullable=False, server_default=text("'draft'"))
+    torrent_path: Mapped[str | None]
+    info_hash: Mapped[str | None]
+    mediainfo_text: Mapped[str | None]
+    screenshot_urls_json: Mapped[str | None]
+    description_rendered: Mapped[str | None]
+    tmdb_id: Mapped[int | None]
+    imdb_id: Mapped[str | None]
+    category_id: Mapped[int | None]
+    type_id: Mapped[int | None]
+    resolution_id: Mapped[int | None]
+    torrent_id_remote: Mapped[str | None]
+    error_message: Mapped[str | None]
+    created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
+
+    tracker: Mapped["Tracker"] = relationship()
+    media_file: Mapped["MediaFile | None"] = relationship()
 
 
 class MatchReview(Base):
