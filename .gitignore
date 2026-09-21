@@ -10,3 +10,8 @@ data/
 *.db
 *.db-journal
 .DS_Store
+
+# Local-only planning/agent-guidance docs — kept on disk for Claude Code
+# sessions, deliberately not published in this public repo.
+/CLAUDE.md
+/docs/ROADMAP.md
