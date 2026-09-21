@@ -5,12 +5,13 @@ modelli non generano schema (niente Base.metadata.create_all): servono solo
 per l'accesso ORM, e vanno tenuti manualmente in sync con schema.sql quando
 quest'ultimo cambia.
 
-Fase 0 (docs/ROADMAP.md): solo le tabelle di CONFIGURAZIONE. Le entità
-fisiche (media_file/seed_file), client torrent (client_torrent/
-client_torrent_file), dominio (media_item/candidate/match_review/seed_job)
-e upload arrivano nei rispettivi modelli man mano che le fasi 1-6 le usano
-davvero — esistono già come tabelle vuote in schema.sql, ma mapparle in ORM
-prima di avere codice che le usa sarebbe un'astrazione prematura.
+Fase 0 (docs/ROADMAP.md): solo le tabelle di CONFIGURAZIONE. Fase 1
+aggiunge run_log e le tabelle FISICO (media_file/seed_file). Client
+torrent (client_torrent/client_torrent_file), dominio (media_item/
+candidate/match_review/seed_job) e upload arrivano nei rispettivi modelli
+man mano che le fasi 2-6 le usano davvero — esistono già come tabelle
+vuote in schema.sql, ma mapparle in ORM prima di avere codice che le usa
+sarebbe un'astrazione prematura.
 """
 
 from datetime import datetime
@@ -142,3 +143,71 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(primary_key=True)
     value: Mapped[str] = mapped_column(nullable=False)
+
+
+# ============ RUN LOG ============
+
+
+class RunLog(Base):
+    __tablename__ = "run_log"
+    __table_args__ = (
+        CheckConstraint("run_type IN ('scheduled','manual','bulk_import')", name="ck_run_log_run_type"),
+        CheckConstraint(
+            "current_phase IS NULL OR current_phase IN ('scanning','matching','executing')",
+            name="ck_run_log_current_phase",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_type: Mapped[str] = mapped_column(nullable=False)
+    started_at: Mapped[datetime] = mapped_column(nullable=False)
+    finished_at: Mapped[datetime | None]
+    current_phase: Mapped[str | None]
+    phase_total: Mapped[int | None]
+    phase_done: Mapped[int | None]
+    items_total: Mapped[int | None]
+    items_scanned: Mapped[int] = mapped_column(server_default=text("0"))
+    matches_found: Mapped[int] = mapped_column(server_default=text("0"))
+    auto_executed: Mapped[int] = mapped_column(server_default=text("0"))
+    pending_review: Mapped[int] = mapped_column(server_default=text("0"))
+    orphan_torrent_count: Mapped[int] = mapped_column(server_default=text("0"))
+    ignored_count: Mapped[int] = mapped_column(server_default=text("0"))
+    health_snapshot: Mapped[float | None]
+    errors: Mapped[int] = mapped_column(server_default=text("0"))
+
+
+# ============ FISICO (scritto SOLO dal processo di scan, app/scanner.py — Fase 1) ============
+
+
+class MediaFile(Base):
+    __tablename__ = "media_file"
+    __table_args__ = (UniqueConstraint("disk_id", "relative_path"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    media_path_id: Mapped[int] = mapped_column(ForeignKey("media_path.id", ondelete="CASCADE"), nullable=False)
+    disk_id: Mapped[int] = mapped_column(ForeignKey("disk.id", ondelete="CASCADE"), nullable=False)
+    relative_path: Mapped[str] = mapped_column(nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    st_dev: Mapped[int] = mapped_column(nullable=False)
+    inode: Mapped[int] = mapped_column(nullable=False)
+    nlink: Mapped[int | None]
+    media_item_id: Mapped[int | None]  # FK a media_item(id) — mappata dalla Fase 3, colonna già in schema.sql
+    resolver_source: Mapped[str | None]
+    mediainfo_unique_id: Mapped[str | None]
+    last_scan_id: Mapped[int] = mapped_column(ForeignKey("run_log.id"), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class SeedFile(Base):
+    __tablename__ = "seed_file"
+    __table_args__ = (UniqueConstraint("disk_id", "relative_path"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    disk_id: Mapped[int] = mapped_column(ForeignKey("disk.id", ondelete="CASCADE"), nullable=False)
+    relative_path: Mapped[str] = mapped_column(nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    st_dev: Mapped[int] = mapped_column(nullable=False)
+    inode: Mapped[int] = mapped_column(nullable=False)
+    media_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_file.id", ondelete="SET NULL"))
+    last_scan_id: Mapped[int] = mapped_column(ForeignKey("run_log.id"), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(nullable=False)

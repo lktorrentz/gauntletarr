@@ -1,0 +1,48 @@
+import time
+
+
+def _create_disk_with_hardlinked_file(client):
+    root = client.scan_root / "disk1"
+    (root / "media" / "movies").mkdir(parents=True)
+    (root / "torrents").mkdir(parents=True)
+
+    disk_id = client.post("/api/disks", json={"label": "Disk 1", "root_path": str(root)}).json()["id"]
+    client.patch(f"/api/disks/{disk_id}", json={"torrents_rel_path": "torrents"})
+    client.post(
+        f"/api/disks/{disk_id}/media-paths",
+        json={"relative_path": "media/movies", "content_type": "movie"},
+    )
+
+    media_file = root / "media" / "movies" / "Movie.2024.mkv"
+    media_file.write_bytes(b"content")
+    import os
+
+    os.link(media_file, root / "torrents" / "Movie.2024.mkv")
+    return disk_id
+
+
+def test_trigger_bulk_import_and_poll_until_finished(client):
+    _create_disk_with_hardlinked_file(client)
+
+    trigger = client.post("/api/runs")
+    assert trigger.status_code == 202
+    run_id = trigger.json()["id"]
+
+    # BackgroundTasks in TestClient viene eseguito prima che la response
+    # torni al chiamante (starlette lo esegue in-process, sincrono rispetto
+    # al `with` del TestClient) — niente polling reale necessario, ma
+    # verifichiamo comunque lo stato finale via GET.
+    for _ in range(20):
+        run = client.get(f"/api/runs/{run_id}").json()
+        if run["finished_at"] is not None:
+            break
+        time.sleep(0.05)
+
+    assert run["finished_at"] is not None
+    assert run["errors"] == 0
+    assert run["items_scanned"] == 2
+
+    media_files = client.get("/api/media-files").json()
+    seed_files = client.get("/api/seed-files").json()
+    assert media_files[0]["state"] == "seeding"
+    assert seed_files[0]["state"] == "seeding"

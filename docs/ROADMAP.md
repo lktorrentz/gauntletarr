@@ -25,11 +25,11 @@ Riferimenti di sezione sempre a `docs/SPEC.md`.
 
 **Obiettivo**: modello dischi/hardlink e stato unificato per file, sezioni §3-4.
 
-- Entità Disk (root_path, torrents_rel_path, st_dev cachato) e MediaPath (content_type, relative_path)
+- Entità Disk (root_path, torrents_rel_path, st_dev cachato) e MediaPath (content_type, relative_path) — già mappate in `app/models.py` dalla Fase 0
 - File Browser API scoped-per-disco (§5 di ratio-guardian) — riusata da ogni pagina di configurazione successiva
 - Scansione filesystem: cammina MediaPath e cartella torrent di ogni disco, calcola hardlink via `(st_dev, st_ino)`
-- Indice `torrent_path_file` (nuova entità Seedloom/Gauntletarr, §4)
-- Calcolo dello stato unificato per file (§3), **limitato per ora ai soli stati derivabili da hardlink/filesystem**: `seeding` (nlink>1, collegato), `orphan_media`/`orphan_torrent` come stato grezzo "nessun hardlink trovato" (senza ancora sapere *a cosa* dovrebbe collegarsi — quello arriva in Fase 4)
+- Popolamento di `media_file` e `seed_file` (§4) a ogni scan — bulk upsert a fine giro, mai query per file (vedi §4 per il perché)
+- Calcolo dello stato unificato per file (§3), **limitato per ora ai soli stati derivabili da hardlink/filesystem**: `seeding` (nlink>1, collegato — `seed_file.media_file_id` valorizzato), `orphan_media`/`orphan_torrent` come stato grezzo "nessun hardlink trovato" (senza ancora sapere *a cosa* dovrebbe collegarsi — quello arriva in Fase 4; `ignored` arriva in Fase 2, richiede sapere se un client traccia il file)
 - Import massivo (scan completo una tantum) come prima modalità di esecuzione, senza ancora scheduling (Fase 5)
 
 **Definition of done**: dato un disco configurato con path media e torrent reali, l'app produce correttamente la lista di file con/senza hardlink, verificato contro un caso reale con librerie note.
