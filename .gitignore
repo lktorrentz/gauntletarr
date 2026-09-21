@@ -15,7 +15,3 @@ data/
 # sessions, deliberately not published in this public repo.
 /CLAUDE.md
 /docs/ROADMAP.md
-
-# Unraid template — kept locally for iteration ahead of a final Community
-# Applications submission, deliberately not published in this repo yet.
-/unraid/
