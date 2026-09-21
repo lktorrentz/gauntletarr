@@ -280,7 +280,7 @@ Inherits ratio-guardian (CLAUDE.md), with additions for multi-client and posters
 11. Upload module (torf, mediainfo/screenshots, tracker profiles, dupe-check, human confirmation).
 12. Cleanup for open source release (example config, LICENSE, README).
 
-Not binding to the letter, but respects the logical dependencies (e.g. there's no point building the Library view before a unified state exists to show). Detailed phased plan (dependencies, deliverables, definition of done per phase): `docs/ROADMAP.md`.
+Not binding to the letter, but respects the logical dependencies (e.g. there's no point building the Library view before a unified state exists to show).
 
 **Repo**: `https://github.com/lktorrentz/gauntletarr` (public, GPL-3.0). A project **separate from `ratio-guardian`** (confirmed decision: doesn't replace it, doesn't reuse its code as-is — reuses architecture/patterns as described in this document, but has its own repo and history).
 
