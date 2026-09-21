@@ -80,6 +80,29 @@ CREATE TABLE IF NOT EXISTS app_settings (
     --     schedule_cron="0 4 * * *"
 );
 
+-- ============ RUN LOG (prima del FISICO: media_file/seed_file/client_torrent_file
+--   referenziano run_log.id in last_scan_id) ============
+
+CREATE TABLE IF NOT EXISTS run_log (
+    id                  INTEGER PRIMARY KEY,
+    run_type            TEXT NOT NULL CHECK (run_type IN ('scheduled','manual','bulk_import')),
+    started_at          TIMESTAMP NOT NULL,
+    finished_at         TIMESTAMP,
+    current_phase       TEXT CHECK (current_phase IN ('scanning','matching','executing')),  -- null = non in corso
+    phase_total         INTEGER,          -- totale della fase corrente, per lo stato live (X/Y)
+    phase_done          INTEGER,          -- fatti nella fase corrente
+    items_total         INTEGER,          -- precontato all'avvio del run (totale scan)
+    items_scanned       INTEGER DEFAULT 0,
+    matches_found        INTEGER DEFAULT 0,
+    auto_executed        INTEGER DEFAULT 0,   -- rinominato da auto_seeded: copre entrambe le direzioni
+    pending_review       INTEGER DEFAULT 0,
+    orphan_torrent_count  INTEGER DEFAULT 0,   -- nuovo KPI dashboard, SPEC.md §10
+    ignored_count         INTEGER DEFAULT 0,   -- idem
+    health_snapshot       REAL,                -- % "salute libreria" a fine run, per lo storico dashboard
+                                                -- (SPEC.md §17, punto aperto — schema qui indicativo)
+    errors                INTEGER DEFAULT 0
+);
+
 -- ============ FISICO (scritto SOLO dal processo di scan — mai a mano, mai da altre tabelle in lettura) ============
 
 -- Identità logica del contenuto — separata dal file fisico (a differenza di
@@ -285,28 +308,6 @@ CREATE TABLE IF NOT EXISTS upload_job (
     torrent_id_remote          TEXT,           -- esito, noto solo a upload riuscito
     error_message               TEXT,
     created_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- ============ RUN LOG ============
-
-CREATE TABLE IF NOT EXISTS run_log (
-    id                  INTEGER PRIMARY KEY,
-    run_type            TEXT NOT NULL CHECK (run_type IN ('scheduled','manual','bulk_import')),
-    started_at          TIMESTAMP NOT NULL,
-    finished_at         TIMESTAMP,
-    current_phase       TEXT CHECK (current_phase IN ('scanning','matching','executing')),  -- null = non in corso
-    phase_total         INTEGER,          -- totale della fase corrente, per lo stato live (X/Y)
-    phase_done          INTEGER,          -- fatti nella fase corrente
-    items_total         INTEGER,          -- precontato all'avvio del run (totale scan)
-    items_scanned       INTEGER DEFAULT 0,
-    matches_found        INTEGER DEFAULT 0,
-    auto_executed        INTEGER DEFAULT 0,   -- rinominato da auto_seeded: copre entrambe le direzioni
-    pending_review       INTEGER DEFAULT 0,
-    orphan_torrent_count  INTEGER DEFAULT 0,   -- nuovo KPI dashboard, SPEC.md §10
-    ignored_count         INTEGER DEFAULT 0,   -- idem
-    health_snapshot       REAL,                -- % "salute libreria" a fine run, per lo storico dashboard
-                                                -- (SPEC.md §17, punto aperto — schema qui indicativo)
-    errors                INTEGER DEFAULT 0
 );
 
 -- Indici sulle foreign key più interrogate (SQLite non le indicizza da

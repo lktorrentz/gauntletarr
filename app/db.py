@@ -1,0 +1,78 @@
+"""Engine SQLAlchemy + applicazione dello schema.
+
+Convenzione del progetto (docs/ROADMAP.md, Fase 0): docs/schema.sql è la
+fonte di verità per la DDL. Non usiamo Base.metadata.create_all() per non
+duplicare/divergere dallo schema: allo startup eseguiamo schema.sql
+direttamente (le CREATE TABLE sono idempotenti, IF NOT EXISTS) — comprese
+le tabelle non ancora usate dall'app in questa fase (matching/upload
+arrivano rispettivamente in Fase 4 e Fase 6, ma le loro tabelle esistono
+già da subito, vuote, senza bisogno di un secondo schema). I modelli in
+app/models.py mappano via ORM solo le tabelle già rilevanti per la fase
+corrente, e crescono di pari passo con le fasi successive.
+
+CREATE TABLE IF NOT EXISTS crea le tabelle mancanti ma non tocca quelle
+già esistenti: una colonna additiva aggiunta a un modello dopo che un
+utente ha già un DB reale non comparirebbe mai sul suo DB solo con
+apply_schema(). migrate_schema() colma questo gap confrontando le colonne
+attese (dai modelli SQLAlchemy) con quelle realmente presenti e
+aggiungendo quelle mancanti via ALTER TABLE — va chiamata sempre, ad ogni
+avvio, dopo apply_schema(). Stesso pattern di ratio-guardian/app/db.py.
+"""
+
+from pathlib import Path
+
+from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker
+
+SCHEMA_PATH = Path(__file__).resolve().parent.parent / "docs" / "schema.sql"
+
+
+@event.listens_for(Engine, "connect")
+def _configure_sqlite(dbapi_connection, _connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    # WAL invece del rollback journal di default: i lettori (es. il
+    # polling dello stato live di una run, a partire dalla Fase 5) non
+    # vengono bloccati da uno scrittore concorrente (lo scan in corso).
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.close()
+
+
+def make_engine(db_path: str) -> Engine:
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    return create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+
+
+def apply_schema(engine: Engine, schema_path: Path = SCHEMA_PATH) -> None:
+    schema_sql = schema_path.read_text()
+    raw_conn = engine.raw_connection()
+    try:
+        raw_conn.executescript(schema_sql)
+        raw_conn.commit()
+    finally:
+        raw_conn.close()
+
+
+def migrate_schema(engine: Engine) -> None:
+    """Aggiunge alle tabelle già esistenti le colonne presenti nei modelli
+    ma non ancora nel DB reale (vedi nota in cima al file). Gestisce solo
+    aggiunte additive di colonne nullable senza server_default — l'unico
+    tipo di modifica che questo progetto si è finora impegnato a fare."""
+    from app.models import Base  # import qui: evita un ciclo db<->models
+
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not inspector.has_table(table.name):
+                continue  # tabella nuova: apply_schema l'ha già creata per intero
+            existing_columns = {col["name"] for col in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in existing_columns:
+                    continue
+                col_type = column.type.compile(dialect=conn.dialect)
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}'))
+
+
+def make_session_factory(engine: Engine) -> sessionmaker:
+    return sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)

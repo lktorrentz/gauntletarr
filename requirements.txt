@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+apscheduler
+httpx
+qbittorrent-api
+pymediainfo
+guessit
+torf
+ffmpeg-python
+python-multipart
+pyyaml
+cryptography
+supervisor

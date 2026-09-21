@@ -1,0 +1,41 @@
+# Web e worker/scheduler girano nello stesso container, gestiti da
+# supervisord (vedi Dockerfile e docker/supervisord.conf) — un solo
+# servizio docker-compose.
+#
+# I mount dei dischi qui sotto sono un ESEMPIO — basta montare ogni disco
+# fisico come sottocartella diretta di /mnt (stesso path dentro al
+# container, es. /mnt/disk1 -> /mnt/disk1): Gauntletarr li rileva da
+# solo (scansiona /mnt, vedi config.yaml "disk_scan_root") e li propone
+# nella Web UI ("Dischi" -> "Aggiungi disco"), senza bisogno di elencarli
+# in nessun file di configurazione. Per aggiungere/rimuovere un disco
+# basta editare i volumes qui sotto e ricreare il container.
+#
+# ./config è montato come CARTELLA (non un file): se config/config.yaml
+# non esiste al primo avvio, il container lo crea da config.example.yaml
+# e parte comunque coi valori di default.
+
+services:
+  gauntletarr:
+    build: .
+    container_name: gauntletarr
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Rome
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config
+      - gauntletarr-data:/app/data
+      # Esempio dischi fisici — adattare ai mount reali dell'host, uno per
+      # disco fisico, ciascuno come sottocartella diretta di /mnt dentro
+      # al container
+      - /mnt/disk1:/mnt/disk1
+      - /mnt/disk2:/mnt/disk2
+      - /mnt/disk3:/mnt/disk3
+
+volumes:
+  gauntletarr-data:

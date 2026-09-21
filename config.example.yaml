@@ -1,0 +1,15 @@
+# The Media Gauntlet*rr — configurazione statica
+#
+# I dischi fisici NON si elencano qui: basta montarli nel container sotto
+# disk_scan_root (di default /mnt, vedi docker-compose.yml), e compariranno
+# da soli nella Web UI ("Dischi" -> "Aggiungi disco") pronti da aggiungere
+# con un click, senza toccare questo file né riavviare (vedi docs/SPEC.md §4).
+#
+# disk_scan_root: opzionale, default "/mnt". Cambialo solo se i tuoi bind
+# mount dei dischi vivono sotto un'altra radice dentro il container.
+#
+# data_dir: dati persistenti dell'app (database SQLite, cache poster).
+
+disk_scan_root: /mnt
+
+data_dir: /app/data
