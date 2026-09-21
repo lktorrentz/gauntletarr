@@ -1,6 +1,10 @@
+import base64
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
+from app import crypto as crypto_module
 from app import db as db_module
 
 
@@ -25,9 +29,17 @@ def client(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(f"disk_scan_root: {scan_root}\ndata_dir: {data_dir}\n")
     monkeypatch.setenv("CONFIG_PATH", str(config_path))
+    monkeypatch.setenv("APP_SECRET_KEY", base64.urlsafe_b64encode(os.urandom(32)).decode())
+    # crypto._fernet() è cachata per processo (lru_cache): senza pulirla qui,
+    # il primo test che gira nella sessione pytest "vince" per tutti i test
+    # successivi, anche se ciascuno imposta una APP_SECRET_KEY diversa —
+    # nel container reale non serve, perché lì un processo = un avvio solo.
+    crypto_module._fernet.cache_clear()
 
     from app.main import app
 
     with TestClient(app) as test_client:
         test_client.scan_root = scan_root  # comodo per i test: root disponibile senza rileggere il config
         yield test_client
+
+    crypto_module._fernet.cache_clear()

@@ -1,0 +1,51 @@
+import base64
+import os
+
+import pytest
+
+from app import crypto as crypto_module
+from app import startup_checks
+
+
+def _random_key() -> str:
+    return base64.urlsafe_b64encode(os.urandom(32)).decode()
+
+
+@pytest.fixture(autouse=True)
+def _clear_fernet_cache():
+    # Stesso motivo di tests/conftest.py::client — crypto._fernet() è cachata
+    # per processo, va pulita tra un test e l'altro qui dentro.
+    crypto_module._fernet.cache_clear()
+    yield
+    crypto_module._fernet.cache_clear()
+
+
+def test_first_boot_writes_the_canary(db_session, monkeypatch):
+    monkeypatch.setenv("APP_SECRET_KEY", _random_key())
+
+    startup_checks.verify_secret_key(db_session)  # non deve sollevare
+
+    from app.models import AppSetting
+
+    row = db_session.get(AppSetting, startup_checks._CANARY_KEY)
+    assert row is not None
+
+
+def test_same_key_on_second_boot_succeeds(db_session, monkeypatch):
+    key = _random_key()
+    monkeypatch.setenv("APP_SECRET_KEY", key)
+    startup_checks.verify_secret_key(db_session)
+
+    crypto_module._fernet.cache_clear()  # simula un nuovo avvio del processo
+    startup_checks.verify_secret_key(db_session)  # non deve sollevare
+
+
+def test_changed_key_on_second_boot_raises(db_session, monkeypatch):
+    monkeypatch.setenv("APP_SECRET_KEY", _random_key())
+    startup_checks.verify_secret_key(db_session)
+
+    crypto_module._fernet.cache_clear()
+    monkeypatch.setenv("APP_SECRET_KEY", _random_key())  # chiave diversa
+
+    with pytest.raises(startup_checks.SecretKeyMismatchError):
+        startup_checks.verify_secret_key(db_session)
