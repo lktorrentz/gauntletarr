@@ -77,17 +77,50 @@ Ogni file (sui due lati) deve esporre uno stato composito, ispirato alla pagina 
 | `unmatched` | Nessun match TMDB risolto (filename non parsabile, o nessun candidato tracker), a prescindere dal lato |
 | `pending_review` | Match trovato ma sotto soglia di confidence, in coda di revisione manuale |
 
-## 4. Architettura dati (eredita ratio-guardian §3-4, §13)
+## 4. Architettura dati (eredita ratio-guardian §3-4, §13 — estesa qui)
 
-Modello dischi/librerie invariato rispetto a ratio-guardian: entità **Disk** (root fisico, `st_dev` cachato per rilevare rimonti), **MediaPath** (una o più per disco, tipizzate `movie`/`tv`), path sempre relativi al disco (mai assoluti), validazione a doppio livello (file browser scoped in UI + confronto `st_dev` a runtime prima di ogni hardlink). Vedi ratio-guardian SPEC.md §3 per il ragionamento completo — non va rifatto qui.
+Modello dischi/librerie invariato rispetto a ratio-guardian: entità **Disk** (root fisico, `st_dev` cachato per rilevare rimonti), **MediaPath** (una o più per disco, tipizzate `movie`/`tv`), path sempre relativi al disco (mai assoluti), validazione a doppio livello (file browser scoped in UI + confronto `st_dev` a runtime prima di ogni hardlink). Vedi ratio-guardian SPEC.md §3 per il ragionamento completo — non va rifatto qui. Schema DB completo, tabella per tabella: `docs/schema.sql`.
 
-Estensioni necessarie per Gauntletarr:
+### Perché non basta il modello di ratio-guardian così com'è
 
-- **Indice file lato torrent come entità di prima classe**, non solo un side-effect dello scan media. Serve per calcolare `orphan_torrent`/`ignored` senza dover ripartire ogni volta da un giro completo del motore di matching — una tabella (o vista materializzata) tipo `torrent_path_file` (path relativo al disco, size, mtime, `nlink`, `matched_media_item_id` nullable, `tracked_by_client_id` nullable) aggiornata a ogni scan.
-- **Poster cache**: nuova entità `media_item` estesa con `tmdb_poster_path` (path relativo TMDB) + cache locale delle immagini scaricate (filesystem, non blob in DB — path prevedibile tipo `data/posters/{tmdb_id}.jpg`, scaricato una sola volta e riusato). Necessaria per la vista a griglia (sezione 7).
+Ratio-guardian fonde identità logica e file fisico in un'unica riga (`media_item` ha sia `tmdb_id` che `file_path`/`inode`) e **non ha alcuna tabella per l'inventario dei client torrent** — verifica "è già in seeding" con un check live sul filesystem (`find -samefile`) più query al client solo al momento dell'esecuzione. Funziona per un solo client e senza bisogno di vedere il cross-seed, ma non regge i requisiti di Gauntletarr (multi-client, vista a griglia raggruppata per contenuto, visibilità esplicita di ogni claimant cross-seed — §3, §5, §7). Analizzato anche il modello di Auditorr come riferimento negativo: tiene tutto in blob JSON ricalcolati ad ogni run e, per il cross-seed, fonde tutti i claimant sullo stesso inode tenendo solo "il più sano" (`audit.py::_walk_directory`, righe 106-124) — scelta efficiente ma **con perdita di informazione**, esattamente il contrario di quello che serve qui.
+
+### Le entità (fisico separato da logico, come da discussione)
+
+```
+media_item            -- identità logica risolta: tmdb_id, season, episode, poster
+  media_file           -- fisico, lato media: disk_id, relative_path, size, st_dev/inode
+                        --   "as of last scan", media_item_id (FK)
+
+seed_file              -- fisico, lato torrent: disk_id, relative_path, size, st_dev/inode
+                        --   "as of last scan", media_file_id (FK, nullable — vedi sotto)
+                        --   un file per ogni hardlink sibling: 3 cross-seed = 3 righe
+
+torrent_client          -- config (esiste già)
+  client_torrent          -- UN torrent per UNA istanza client: info_hash, name, save_path,
+                          --   category, state, tracker_url — UNIQUE(torrent_client_id, info_hash)
+    client_torrent_file     -- UN file dentro un client_torrent: path_in_torrent, size,
+                            --   seed_file_id (FK, nullable)
+```
+
+`media_item` separato da `media_file` (a differenza di ratio-guardian, dove sono la stessa riga) perché la vista a griglia (§7) deve raggruppare più file fisici sotto un solo poster — caso comune per una stagione con più episodi, o un contenuto con più versioni/qualità in libreria.
+
+### Le due FK e perché sono scritte in modo diverso
+
+- **`seed_file.media_file_id`** (collegamento via inode, cross-seed): **mai calcolata a runtime con un join live** su `(disk_id, st_dev, inode)` — su una libreria grande sarebbe ricalcolata ad ogni caricamento della tree/grid view. Va invece:
+  1. calcolata **una volta per scan**, in memoria, durante lo stesso `os.walk` già necessario per leggere `st_dev`/`inode`/`nlink` (stessa tecnica di Auditorr — un dict tenuto per la durata dello scan — ma qui **senza scartare i claimant "perdenti"**: ogni sibling resta una riga);
+  2. scritta con un **bulk upsert a fine scan** (batch insert/update, mai una query per file);
+  3. marcata con `last_scan_id` (FK a `run_log`) — un `seed_file` non ri-visto in uno scan successivo non va cancellato subito (la coda di revisione deve poterlo ancora mostrare come "sparito"), ma la sua `media_file_id` smette di essere attendibile per i calcoli di stato correnti finché non viene ri-confermato. Questo evita il rischio concreto di inode riassegnati dal filesystem tra uno scan e l'altro (stesso problema già segnalato come aperto in ratio-guardian §17 — qui reso esplicito e gestito).
+- **`client_torrent_file.seed_file_id`** (collegamento via path, non via inode): risolta confrontando `client_torrent.save_path + path_in_torrent` contro `disk.root_path + seed_file.relative_path` — non soffre di riassegnazione (un path non viene "riusato" per un file diverso nello stesso modo di un inode), quindi più stabile tra uno scan e l'altro, ma comunque riverificata ad ogni scan per coerenza.
+
+In lettura, ogni query di stato (§3) e ogni conteggio dashboard (§10) è un JOIN indicizzato su queste FK — mai un calcolo su `st_dev`/`inode` a runtime, che restano colonne di **sola scrittura** per il processo di scan.
+
+### Altre estensioni
+
+- **Poster cache**: `media_item.tmdb_poster_path` (path relativo TMDB) + cache locale delle immagini scaricate (filesystem, non blob in DB — path prevedibile tipo `data/posters/{tmdb_id}.jpg`, scaricato una sola volta e riusato). Necessaria per la vista a griglia (§7).
 - Configurazione split YAML statico (`disk_scan_root`, `data_dir`) / DB dinamico (dischi, media path, tracker, client, soglie) — invariato da ratio-guardian §4.
 
-Schema DB completo da derivare in fase di implementazione da `ratio-guardian/docs/schema.sql` + le estensioni sopra + le nuove entità upload (sezione 9).
+Entità di matching/reseeding (`candidate`, `match_review`, `seed_job`) e le nuove entità upload (§9) restano come da ratio-guardian, adattate per riferirsi a `media_item`/`media_file` invece che alla riga fusa di ratio-guardian — dettaglio completo in `docs/schema.sql`.
 
 ## 5. Client torrent: supporto multi-client fin dalla v1
 
