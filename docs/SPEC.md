@@ -135,8 +135,8 @@ Matching/reseeding entities (`candidate`, `match_review`, `seed_job`) and the ne
 
 An explicit requirement, unlike ratio-guardian (which starts with a single qBittorrent adapter and is generically extensible but with no immediate commitment to other clients). Priority:
 
-1. **qBittorrent** — via `qbittorrent-api`, first adapter, implemented (`app/adapters/torrent_client/qbittorrent.py`). **Not validated against a real instance**, only against a mocked client in tests (the same limitation ratio-guardian states for the same adapter).
-2. **qui** (multi-instance manager for qBittorrent) — resolved **pragmatically** in Phase 2, unverified against a real instance: treated as N independent qBittorrent instances, each its own `TorrentClient` with `adapter_type="qbittorrent"` pointed at the `base_url` that `qui` exposes for that instance. No dedicated adapter unless a real installation proves otherwise.
+1. **qBittorrent** — via `qbittorrent-api`, first adapter, implemented (`app/adapters/torrent_client/qbittorrent.py`). **Validated against a real instance** (deployed on Unraid, `POST /api/torrent-clients/{id}/test` confirmed a working connection) — tests still use a mocked client, the real-instance check was manual.
+2. **qui** (multi-instance manager for qBittorrent) — resolved **pragmatically** in Phase 2, still unverified against a real instance (the real-instance test above used direct qBittorrent, not through qui): treated as N independent qBittorrent instances, each its own `TorrentClient` with `adapter_type="qbittorrent"` pointed at the `base_url` that `qui` exposes for that instance. No dedicated adapter unless a real installation proves otherwise.
 3. **Deluge**, 4. **Transmission**, 5. **rutorrent** — **deferred**, not implemented in Phase 2 (three different protocols — JSON-RPC/RPC/XML-RPC — non-trivial cost for a single pass). `app/adapter_factory.py` raises an explicit error for these `adapter_type` values, never a silent failure.
 
 All behind the same `TorrentClientAdapter` contract — `add_torrent`/`get_torrent_status` inherited unchanged from ratio-guardian §14, **`list_torrents()` replaces the original `list_tracked_paths()` sketch** (implemented in `app/adapters/torrent_client/base.py`, different from this early draft):
@@ -286,7 +286,7 @@ Not binding to the letter, but respects the logical dependencies (e.g. there's n
 
 ## 15. Things explicitly left open (not decided in this session)
 
-- **"qui"'s API surface**: resolved for now with the pragmatic assumption "the qBittorrent adapter pointed at each managed instance is enough" (section 5) — **unverified** against either a real qui instance or a real qBittorrent instance. To confirm once a real instance is available.
+- **"qui"'s API surface**: resolved for now with the pragmatic assumption "the qBittorrent adapter pointed at each managed instance is enough" (section 5) — the qBittorrent adapter itself is now validated against a real instance, but not specifically through qui. To confirm once a qui-managed instance is available.
 - **Deluge/Transmission/rutorrent adapters**: deferred in Phase 2 (section 5), not implemented — which Python library to use for each is still to be decided when that slice is picked back up.
 - **Confidence threshold for the torrent→client direction** (sections 3, 6): whether it's the same 0.95 or higher — still to decide, no number fixed yet.
 - Every point already open in ratio-guardian SPEC.md §17 (UNIT3D history scraping, a match cache persisted independently of the physical path, image host for upload screenshots, the exact tracker profile schema, history for the dashboard chart) stays open here too, unchanged.
