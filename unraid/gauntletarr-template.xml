@@ -9,11 +9,11 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/lktorrentz/gauntletarr/issues</Support>
   <Project>https://github.com/lktorrentz/gauntletarr</Project>
-  <Overview>The Media Gauntlet*rr manages your media library, torrent seeding folders, the hardlink correspondence between them, and the real state of your configured torrent clients (multi-client, cross-seed included) in one place.&#13;
+  <Overview>The Media Gauntlet*rr manages your media library, torrent seeding folders, the hardlink correspondence between them, the real state of your configured torrent clients (multi-client, cross-seed included), and publishing new uploads to trackers - all in one place.&#13;
 &#13;
-WARNING - early development build (Phase 2 of docs/ROADMAP.md): only the filesystem/hardlink scan and the qBittorrent adapter are implemented so far. TMDB identification, the library view, the reseeding engine and uploads land in later phases - this container currently only exposes a JSON API (no web UI yet). Useful mainly to verify the qBittorrent adapter against a real instance.&#13;
+The backend is complete: filesystem/hardlink scan, multi-client torrent indexing (qBittorrent), TMDB content identification, the matching/reseeding engine for both directions, scheduling, and the upload module. There is NO web UI yet - this container exposes a JSON API under /api/*, driven by curl/a REST client for now. See the project's README for a full walkthrough and http://[IP]:[PORT:8080]/docs for interactive API docs once running.&#13;
 &#13;
-Follows the TrashGuide layout: mount your combined torrents+media folder at /data, same as your download client and media manager - this is what makes hardlinks between them work. Only two paths are needed: Config (appdata) and Data (your library). No need to edit any file: once /data is mounted, register it as a disk via the API (POST /api/disks) - no web UI for this yet.&#13;
+Follows the TrashGuide layout: mount your combined torrents+media folder at /data, same as your download client and media manager - this is what makes hardlinks between them work. Only two paths are needed: Config (appdata) and Data (your library). No need to edit any file: once /data is mounted, register it as a disk via the API (POST /api/disks).&#13;
 &#13;
 On first start, if config/config.yaml doesn't exist yet in the "Config" folder below, the container creates it from config.example.yaml with default values.</Overview>
   <Category>Tools: Downloaders:</Category>
