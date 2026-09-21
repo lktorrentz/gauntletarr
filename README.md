@@ -4,7 +4,7 @@ A self-hosted tool that manages, in one place: your media library, your torrent 
 
 Not specific to Unraid or the \*arr stack — it works with any layout of separate disks (no FUSE/RAID required), and Sonarr/Radarr/qBittorrent-style tools are optional integrations, never dependencies. The name is a stylistic nod to the \*arr naming convention (gauntlet + arr, like Bazarr/Prowlarr), nothing more.
 
-**Current status**: the backend is complete and tested (filesystem/hardlink scan, multi-client torrent indexing, TMDB content identification, the matching/reseeding engine for both directions, scheduling, and the upload module) and exposed as a JSON API under `/api/*`. **There is no web UI yet** — everything below is driven through the API directly (`curl`, a REST client, or your own scripts). See [`docs/SPEC.md`](docs/SPEC.md) for the full design, in particular §10 for the UI that hasn't been built yet.
+**Current status**: the backend is complete and tested (filesystem/hardlink scan, multi-client torrent indexing, TMDB content identification, the matching/reseeding engine for both directions, scheduling, and the upload module) and exposed as a JSON API under `/api/*`. **The web UI (React + shadcn/ui, [`frontend/`](frontend/)) is under active development** — the navigation shell is in place but most pages are still placeholders. Until it's further along, the walkthrough below drives the API directly (`curl`, a REST client, or your own scripts) — it works identically whether or not you're also using the UI. See [`docs/SPEC.md`](docs/SPEC.md) §10 for the intended UI design.
 
 - **Functional/architectural spec**: [`docs/SPEC.md`](docs/SPEC.md)
 - **DB schema**: [`docs/schema.sql`](docs/schema.sql)
@@ -146,6 +146,16 @@ Lint and tests (same checks as CI):
 ./.venv/bin/ruff check .
 ./.venv/bin/pytest -q
 ```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev   # http://localhost:5173, proxies /api to the backend above (see vite.config.ts)
+```
+
+See [`frontend/README.md`](frontend/README.md) for details (type generation from the backend's OpenAPI schema, build, structure). In production the built frontend is served by FastAPI itself from the same container — no separate Node process (see the Dockerfile's `frontend-build` stage and `app/frontend.py`).
 
 ## Contributing
 

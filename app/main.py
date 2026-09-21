@@ -15,6 +15,7 @@ from app.api.torrent_clients import router as torrent_clients_router
 from app.api.trackers import router as trackers_router
 from app.api.uploads import router as uploads_router
 from app.config import load_settings
+from app.frontend import mount_frontend
 from app.logging_config import configure_logging
 
 configure_logging()
@@ -60,3 +61,8 @@ app.include_router(uploads_router)
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# Sempre per ultimo: il catch-all del frontend (app/frontend.py) non deve
+# mai avere la possibilità di intercettare le route /api/* sopra.
+mount_frontend(app)

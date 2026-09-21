@@ -1,0 +1,33 @@
+# Frontend — The Media Gauntlet\*rr
+
+React + TypeScript + Vite + Tailwind CSS + shadcn/ui. Vedi `docs/SPEC.md` §10-11 per le decisioni di design e il [README principale](../README.md) per il quadro generale del progetto.
+
+## Sviluppo
+
+```bash
+npm install
+npm run dev
+```
+
+Il dev server (`http://localhost:5173`) fa da proxy per `/api/*` verso `http://localhost:8080` (vedi `vite.config.ts`) — avvia il backend separatamente (`uvicorn app.main:app --reload --port 8080` dalla root del repo, vedi il README principale).
+
+Dopo ogni modifica agli endpoint del backend, rigenera i tipi TypeScript dallo schema OpenAPI (il backend deve essere in esecuzione):
+
+```bash
+npm run gen-types
+```
+
+## Build
+
+```bash
+npm run build   # type-check (tsc) + build di produzione in dist/
+```
+
+In produzione `dist/` viene servito direttamente da FastAPI (`app/frontend.py`) — un solo container, nessun server Node separato (vedi il Dockerfile, stage `frontend-build`).
+
+## Struttura
+
+- `src/api/` — client tipizzato (`openapi-fetch`) sullo schema generato da `openapi-typescript` (`schema.ts`, non modificare a mano — rigenerato da `npm run gen-types`)
+- `src/components/ui/` — componenti shadcn/ui (copiati nel repo dal CLI, non una dipendenza runtime)
+- `src/components/layout/` — shell dell'app (sidebar, layout)
+- `src/pages/` — una pagina per voce di navigazione (`src/lib/nav.ts`, struttura da `docs/SPEC.md` §10)

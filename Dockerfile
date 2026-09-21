@@ -1,3 +1,18 @@
+# Stage 1: build del frontend (Fase 8, docs/SPEC.md §10-11) - Node resta
+# solo in questo stage, mai nell'immagine finale (nessun runtime Node in
+# produzione, solo i file statici prodotti da `vite build`).
+FROM node:20-slim AS frontend-build
+
+WORKDIR /frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend .
+RUN npm run build
+
+# Stage 2: backend Python + frontend statico servito dallo stesso
+# container (app/frontend.py) - un solo container con supervisord (CLAUDE.md).
 FROM python:3.12-slim
 
 # mediainfo: fornisce sia la CLI che libmediainfo, usate per calcolare
@@ -16,6 +31,7 @@ COPY app app
 COPY docs docs
 COPY docker docker
 COPY config.example.yaml .
+COPY --from=frontend-build /frontend/dist frontend/dist
 RUN chmod +x docker/entrypoint.sh
 
 # /app/config va montato come cartella (mai un file), vedi docker/entrypoint.sh:
