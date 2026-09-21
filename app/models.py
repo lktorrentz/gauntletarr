@@ -7,11 +7,12 @@ quest'ultimo cambia.
 
 Fase 0 (docs/ROADMAP.md): solo le tabelle di CONFIGURAZIONE. Fase 1
 aggiunge run_log e le tabelle FISICO (media_file/seed_file). Fase 2
-aggiunge CLIENT TORRENT (client_torrent/client_torrent_file). Dominio
-(media_item/candidate/match_review/seed_job) e upload arrivano nei
-rispettivi modelli man mano che le fasi 3-6 le usano davvero — esistono
-già come tabelle vuote in schema.sql, ma mapparle in ORM prima di avere
-codice che le usa sarebbe un'astrazione prematura.
+aggiunge CLIENT TORRENT (client_torrent/client_torrent_file). Fase 3
+aggiunge media_item (identità logica). Il resto del DOMINIO (candidate/
+match_review/seed_job) e upload arrivano nei rispettivi modelli man mano
+che le fasi 4-6 le usano davvero — esistono già come tabelle vuote in
+schema.sql, ma mapparle in ORM prima di avere codice che le usa sarebbe
+un'astrazione prematura.
 """
 
 from datetime import datetime
@@ -179,6 +180,23 @@ class RunLog(Base):
 # ============ FISICO (scritto SOLO dal processo di scan, app/scanner.py) ============
 
 
+class MediaItem(Base):
+    """Identità logica risolta — separata dal file fisico (MediaFile)
+    perché la vista a griglia (Fase 4) deve raggruppare più file fisici
+    (episodi di una stagione, più versioni) sotto un solo poster."""
+
+    __tablename__ = "media_item"
+    __table_args__ = (CheckConstraint("content_type IN ('movie','tv')", name="ck_media_item_content_type"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    content_type: Mapped[str] = mapped_column(nullable=False)
+    tmdb_id: Mapped[int] = mapped_column(nullable=False)
+    season_number: Mapped[int | None]
+    episode_number: Mapped[int | None]
+    tmdb_poster_path: Mapped[str | None]
+    created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
+
+
 class MediaFile(Base):
     __tablename__ = "media_file"
     __table_args__ = (UniqueConstraint("disk_id", "relative_path"),)
@@ -191,11 +209,15 @@ class MediaFile(Base):
     st_dev: Mapped[int] = mapped_column(nullable=False)
     inode: Mapped[int] = mapped_column(nullable=False)
     nlink: Mapped[int | None]
-    media_item_id: Mapped[int | None]  # FK a media_item(id) — mappata dalla Fase 3, colonna già in schema.sql
+    media_item_id: Mapped[int | None] = mapped_column(ForeignKey("media_item.id", ondelete="SET NULL"))
     resolver_source: Mapped[str | None]
     mediainfo_unique_id: Mapped[str | None]
     last_scan_id: Mapped[int] = mapped_column(ForeignKey("run_log.id"), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    media_path: Mapped["MediaPath"] = relationship()
+    disk: Mapped["Disk"] = relationship()
+    media_item: Mapped["MediaItem | None"] = relationship()
 
 
 class SeedFile(Base):

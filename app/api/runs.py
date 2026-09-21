@@ -38,11 +38,11 @@ class RunResponse(BaseModel):
         )
 
 
-def _run_bulk_import_bg(session_factory: sessionmaker, run_id: int) -> None:
+def _run_bulk_import_bg(session_factory: sessionmaker, run_id: int, data_dir: str) -> None:
     session = session_factory()
     try:
         run = session.get(RunLog, run_id)
-        pipeline.run_bulk_import(session, run)
+        pipeline.run_bulk_import(session, run, data_dir)
     finally:
         session.close()
 
@@ -52,7 +52,9 @@ def trigger_bulk_import(
     request: Request, background_tasks: BackgroundTasks, session: Session = Depends(get_session)
 ):
     run = pipeline.start_run(session, run_type="bulk_import")
-    background_tasks.add_task(_run_bulk_import_bg, request.app.state.session_factory, run.id)
+    background_tasks.add_task(
+        _run_bulk_import_bg, request.app.state.session_factory, run.id, request.app.state.settings.data_dir
+    )
     return RunResponse.from_model(run)
 
 

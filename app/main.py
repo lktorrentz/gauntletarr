@@ -7,6 +7,7 @@ from app.api.disks import router as disks_router
 from app.api.library import router as library_router
 from app.api.media_paths import router as media_paths_router
 from app.api.runs import router as runs_router
+from app.api.settings import router as settings_router
 from app.api.torrent_clients import router as torrent_clients_router
 from app.config import load_settings
 from app.logging_config import configure_logging
@@ -39,6 +40,7 @@ app.include_router(media_paths_router)
 app.include_router(runs_router)
 app.include_router(library_router)
 app.include_router(torrent_clients_router)
+app.include_router(settings_router)
 
 
 @app.get("/api/health")
