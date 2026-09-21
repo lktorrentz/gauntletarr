@@ -1,0 +1,17 @@
+"""Helper SQL condivisi. Vedi docs/SPEC.md sezione 4: ogni scrittura di
+massa (scan filesystem, indicizzazione client torrent, e le fasi
+successive che ne avranno bisogno) usa un bulk upsert, mai una query per
+riga — qui per evitare di duplicare la stessa costruzione dello statement
+in ogni modulo che scrive."""
+
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.orm import Session
+
+
+def bulk_upsert(session: Session, table, rows: list[dict], conflict_cols: list[str], update_cols: list[str]) -> None:
+    if not rows:
+        return
+    stmt = sqlite_insert(table).values(rows)
+    update_dict = {col: getattr(stmt.excluded, col) for col in update_cols}
+    stmt = stmt.on_conflict_do_update(index_elements=conflict_cols, set_=update_dict)
+    session.execute(stmt)

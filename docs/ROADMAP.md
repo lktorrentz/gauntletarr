@@ -40,14 +40,14 @@ Riferimenti di sezione sempre a `docs/SPEC.md`.
 
 **Obiettivo**: adapter multi-client torrent, sezione §5.
 
-- Contratto `TorrentClientAdapter` (incluso `list_tracked_paths`)
-- Adapter qBittorrent (`qbittorrent-api`) — primo, riuso diretto del pattern di ratio-guardian
-- Verifica superficie API di "qui" (punto aperto §15) e implementazione conseguente (probabile: stesso adapter qBittorrent puntato a ogni istanza gestita)
-- Adapter Deluge, Transmission, rutorrent (ordine di priorità da confermare in base a cosa usa davvero l'utente per primo)
-- Un disco può avere più client abilitati contemporaneamente — aggregazione di `list_tracked_paths` su tutti
-- Con l'indice client disponibile, completare il calcolo di `orphan_torrent` (file su filesystem non tracciato da nessun client) e `ignored` (tracciato dal client ma senza hardlink lato media) della sezione §3
+- Contratto `TorrentClientAdapter` (`add_torrent`/`get_torrent_status`, ereditati da ratio-guardian, più `list_torrents()` nuovo — enumera ogni torrent noto al client coi suoi file, non solo i path piatti ipotizzati in SPEC.md §5 originaria: serve a popolare `client_torrent`/`client_torrent_file`, non solo a sapere "è tracciato sì/no")
+- Adapter qBittorrent (`qbittorrent-api`) — implementato, **non validato contro un'istanza reale** (solo contro un client mockato nei test, stesso limite di ratio-guardian)
+- "qui" (punto aperto §15): risolto **pragmaticamente**, non verificato — trattato come N istanze qBittorrent indipendenti, ciascuna un proprio `TorrentClient` con `adapter_type="qbittorrent"`. Nessun adapter dedicato finché non si scopre, contro un'istanza reale, che espone invece una propria API di aggregazione
+- Un disco può avere più client abilitati contemporaneamente (tabella ponte `disk_torrent_client`, già in `app/models.py` dalla Fase 0) — `app/torrent_indexer.py` aggrega su tutti i dischi di un client in un solo giro
+- Calcolo completo di `orphan_torrent`/`ignored`/`seeding` in `app/library.py`, usando `client_torrent_file` (§3)
+- **Deferito**: adapter Deluge, Transmission, rutorrent — non implementati in questo passaggio (costo non banale: tre protocolli diversi, JSON-RPC/RPC/XML-RPC). `adapter_factory.build_torrent_client_adapter` solleva un errore esplicito e navigabile per questi `adapter_type`, mai un fallimento silenzioso — prossimo slice della stessa Fase quando servirà davvero un client reale oltre qBittorrent.
 
-**Definition of done**: per almeno qBittorrent + un secondo client reale dell'utente, lo stato `orphan_torrent`/`ignored`/`seeding` è corretto e verificato contro l'istanza reale.
+**Definition of done**: raggiunta per qBittorrent (mockato) — `orphan_torrent`/`ignored`/`seeding` corretti su tutte le combinazioni hardlink/tracciamento (vedi `tests/test_library_states.py`). **Non ancora verificato contro un'istanza qBittorrent reale né contro un secondo client reale** (Deluge/Transmission/rutorrent deferiti, vedi sopra) — resta aperto prima di poter chiudere davvero questa fase.
 
 ---
 

@@ -126,24 +126,24 @@ Entità di matching/reseeding (`candidate`, `match_review`, `seed_job`) e le nuo
 
 Requisito esplicito, diverso da ratio-guardian (che parte da un solo adapter qBittorrent ed è genericamente estendibile ma senza impegno immediato su altri client). Priorità:
 
-1. **qBittorrent** — via `qbittorrent-api`, primo adapter, stesso pattern di ratio-guardian.
-2. **qui** (gestore multi-istanza per qBittorrent) — **da verificare in fase di implementazione** quale superficie API espone: se è un semplice proxy/aggregatore che inoltra alla WebUI API di ciascuna istanza qBittorrent sottostante, potrebbe bastare l'adapter qBittorrent puntato a ciascuna istanza via `qui`, senza un adapter dedicato — se invece espone una propria API di aggregazione, serve un `TorrentClientAdapter` a parte. Aperto, non bloccante per iniziare (sezione 15).
-3. **Deluge** — via il suo JSON-RPC (libreria `deluge-client` o equivalente).
-4. **Transmission** — via RPC (`transmission-rpc`).
-5. **rutorrent** — via XML-RPC (protocollo rTorrent sottostante).
+1. **qBittorrent** — via `qbittorrent-api`, primo adapter, implementato (`app/adapters/torrent_client/qbittorrent.py`). **Non validato contro un'istanza reale**, solo contro un client mockato nei test (stesso limite dichiarato da ratio-guardian per lo stesso adapter).
+2. **qui** (gestore multi-istanza per qBittorrent) — risolto **pragmaticamente** in Fase 2, non verificato contro un'istanza reale: trattato come N istanze qBittorrent indipendenti, ciascuna un proprio `TorrentClient` con `adapter_type="qbittorrent"` puntato al `base_url` che `qui` espone per quell'istanza. Nessun adapter dedicato, finché non si scopre il contrario contro un'installazione reale.
+3. **Deluge**, 4. **Transmission**, 5. **rutorrent** — **deferiti**, non implementati in Fase 2 (tre protocolli diversi — JSON-RPC/RPC/XML-RPC — costo non banale per un solo passaggio). `app/adapter_factory.py` solleva un errore esplicito per questi `adapter_type`, mai un fallimento silenzioso.
 
-Tutti dietro lo stesso contratto `TorrentClientAdapter` già definito in ratio-guardian §14 (`add_torrent(torrent_file_or_url, save_path, force_recheck=True)`, `get_torrent_status(info_hash)`) — **esteso** con un metodo per l'indicizzazione necessaria alla direzione torrent→client (sezione 3):
+Tutti dietro lo stesso contratto `TorrentClientAdapter` — `add_torrent`/`get_torrent_status` ereditati da ratio-guardian §14 invariati, **`list_torrents()` sostituisce l'ipotesi iniziale `list_tracked_paths()`** (implementato in `app/adapters/torrent_client/base.py`, diverso da questo primo abbozzo):
 
 ```python
 class TorrentClientAdapter(ABC):
     def add_torrent(self, torrent_file_or_url, save_path, force_recheck=True) -> str: ...
     def get_torrent_status(self, info_hash) -> TorrentStatus: ...
-    def list_tracked_paths(self) -> list[str]:
-        """Path assoluti (o risolvibili) di ogni file tracciato da questo client.
-        Usato per calcolare orphan_torrent/ignored senza query per-file."""
+    def list_torrents(self) -> list[ClientTorrentInfo]:
+        """Ogni torrent noto al client, coi suoi file (path_in_torrent + size).
+        Serve a popolare client_torrent/client_torrent_file (sezione 4), non solo
+        a sapere se un path è tracciato sì/no — da cui poi si derivano
+        orphan_torrent/ignored/seeding, mai calcolati dall'adapter stesso."""
 ```
 
-Un disco/torrents_rel_path può essere associato a più client configurati contemporaneamente (caso comune: qBittorrent per un gruppo di tracker, rutorrent per un altro, sullo stesso disco) — l'indicizzazione (`list_tracked_paths`) va quindi aggregata su tutti i client abilitati per quel disco, non assunta 1:1.
+Un disco/torrents_rel_path può essere associato a più client configurati contemporaneamente (caso comune: qBittorrent per un gruppo di tracker, rutorrent per un altro, sullo stesso disco) — l'indicizzazione (`app/torrent_indexer.py`) aggrega quindi su tutti i client abilitati per quel disco, non assume mai 1:1.
 
 ## 6. Identificazione contenuto (TMDB) e motore di matching
 
@@ -277,7 +277,7 @@ Non vincolante alla lettera, ma rispetta le dipendenze logiche (es. non ha senso
 
 ## 15. Cose esplicitamente aperte (non decise in questa sessione)
 
-- **Superficie API di "qui"**: se basta l'adapter qBittorrent puntato a ogni istanza gestita, o serve un adapter dedicato (sezione 5).
-- **Libreria client per Deluge/Transmission/rutorrent**: quale libreria Python usare per ciascuno, da verificare in fase di implementazione.
+- **Superficie API di "qui"**: risolto per ora con l'assunzione pragmatica "basta l'adapter qBittorrent puntato a ogni istanza gestita" (sezione 5) — **non verificato** contro un'istanza reale di qui né di qBittorrent. Da confermare appena disponibile un'istanza reale.
+- **Adapter Deluge/Transmission/rutorrent**: deferiti in Fase 2 (sezione 5), non implementati — quale libreria Python usare per ciascuno resta da decidere quando si riprende quello slice.
 - **Soglia di confidence per la direzione torrent→client** (sezione 3, 6): se identica a 0.95 o più alta — da decidere, non ancora un numero fissato.
 - Tutti i punti già aperti in ratio-guardian SPEC.md §17 (scraping storico UNIT3D, cache persistente del match indipendente dal path fisico, host immagini per gli screenshot di upload, schema esatto profilo tracker, storico per il grafico dashboard) restano aperti anche qui, invariati.

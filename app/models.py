@@ -6,12 +6,12 @@ per l'accesso ORM, e vanno tenuti manualmente in sync con schema.sql quando
 quest'ultimo cambia.
 
 Fase 0 (docs/ROADMAP.md): solo le tabelle di CONFIGURAZIONE. Fase 1
-aggiunge run_log e le tabelle FISICO (media_file/seed_file). Client
-torrent (client_torrent/client_torrent_file), dominio (media_item/
-candidate/match_review/seed_job) e upload arrivano nei rispettivi modelli
-man mano che le fasi 2-6 le usano davvero — esistono già come tabelle
-vuote in schema.sql, ma mapparle in ORM prima di avere codice che le usa
-sarebbe un'astrazione prematura.
+aggiunge run_log e le tabelle FISICO (media_file/seed_file). Fase 2
+aggiunge CLIENT TORRENT (client_torrent/client_torrent_file). Dominio
+(media_item/candidate/match_review/seed_job) e upload arrivano nei
+rispettivi modelli man mano che le fasi 3-6 le usano davvero — esistono
+già come tabelle vuote in schema.sql, ma mapparle in ORM prima di avere
+codice che le usa sarebbe un'astrazione prematura.
 """
 
 from datetime import datetime
@@ -176,7 +176,7 @@ class RunLog(Base):
     errors: Mapped[int] = mapped_column(server_default=text("0"))
 
 
-# ============ FISICO (scritto SOLO dal processo di scan, app/scanner.py — Fase 1) ============
+# ============ FISICO (scritto SOLO dal processo di scan, app/scanner.py) ============
 
 
 class MediaFile(Base):
@@ -211,3 +211,36 @@ class SeedFile(Base):
     media_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_file.id", ondelete="SET NULL"))
     last_scan_id: Mapped[int] = mapped_column(ForeignKey("run_log.id"), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+# ============ CLIENT TORRENT (multi-istanza, scritto SOLO da app/torrent_indexer.py — Fase 2) ============
+
+
+class ClientTorrent(Base):
+    __tablename__ = "client_torrent"
+    __table_args__ = (UniqueConstraint("torrent_client_id", "info_hash"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    torrent_client_id: Mapped[int] = mapped_column(ForeignKey("torrent_client.id", ondelete="CASCADE"), nullable=False)
+    info_hash: Mapped[str] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False)
+    save_path: Mapped[str] = mapped_column(nullable=False)
+    category: Mapped[str | None]
+    tracker_url: Mapped[str | None]
+    state: Mapped[str] = mapped_column(nullable=False)  # valore nativo del client, non normalizzato qui
+    added_at: Mapped[datetime | None]
+    last_polled_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class ClientTorrentFile(Base):
+    __tablename__ = "client_torrent_file"
+    __table_args__ = (UniqueConstraint("client_torrent_id", "path_in_torrent"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    client_torrent_id: Mapped[int] = mapped_column(
+        ForeignKey("client_torrent.id", ondelete="CASCADE"), nullable=False
+    )
+    path_in_torrent: Mapped[str] = mapped_column(nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    seed_file_id: Mapped[int | None] = mapped_column(ForeignKey("seed_file.id", ondelete="SET NULL"))
+    last_scan_id: Mapped[int] = mapped_column(ForeignKey("run_log.id"), nullable=False)

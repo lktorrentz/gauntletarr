@@ -1,9 +1,10 @@
-"""Trigger e stato delle run di scan (docs/SPEC.md sezione 11).
+"""Trigger e stato delle run (docs/SPEC.md sezione 11) — scan filesystem
++ indicizzazione client torrent, orchestrati da app/pipeline.py.
 
-Fase 1: solo import massivo, innescato manualmente via API e mandato in
+Solo import massivo per ora, innescato manualmente via API e mandato in
 background (FastAPI BackgroundTasks — niente scheduler vero, quello
 arriva in Fase 5 con APScheduler) così la richiesta HTTP non resta
-bloccata per la durata di uno scan su una libreria grande.
+bloccata per la durata di una run su una libreria grande.
 """
 
 from datetime import datetime
@@ -12,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
-from app import scanner
+from app import pipeline
 from app.deps import get_session
 from app.models import RunLog
 
@@ -41,7 +42,7 @@ def _run_bulk_import_bg(session_factory: sessionmaker, run_id: int) -> None:
     session = session_factory()
     try:
         run = session.get(RunLog, run_id)
-        scanner.run_bulk_import(session, run)
+        pipeline.run_bulk_import(session, run)
     finally:
         session.close()
 
@@ -50,7 +51,7 @@ def _run_bulk_import_bg(session_factory: sessionmaker, run_id: int) -> None:
 def trigger_bulk_import(
     request: Request, background_tasks: BackgroundTasks, session: Session = Depends(get_session)
 ):
-    run = scanner.start_run(session, run_type="bulk_import")
+    run = pipeline.start_run(session, run_type="bulk_import")
     background_tasks.add_task(_run_bulk_import_bg, request.app.state.session_factory, run.id)
     return RunResponse.from_model(run)
 

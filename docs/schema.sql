@@ -209,7 +209,12 @@ CREATE TABLE IF NOT EXISTS client_torrent_file (
         -- FK risolta per PATH (save_path + path_in_torrent confrontato contro disk.root_path +
         -- seed_file.relative_path), non per inode — più stabile di seed_file.media_file_id, ma
         -- comunque riverificata ad ogni scan (stesso last_scan_id) per coerenza.
-    last_scan_id        INTEGER NOT NULL REFERENCES run_log(id)
+    last_scan_id        INTEGER NOT NULL REFERENCES run_log(id),
+    UNIQUE(client_torrent_id, path_in_torrent)
+        -- aggiunto in Fase 2 (assente nella prima stesura): senza un vincolo unico,
+        -- l'indexer (app/torrent_indexer.py) non potrebbe fare un upsert idempotente
+        -- ad ogni poll come per media_file/seed_file/client_torrent — dovrebbe invece
+        -- cancellare e ricreare le righe a ogni giro, rompendo la coerenza di pattern.
 );
 CREATE INDEX IF NOT EXISTS idx_ctf_seed_file_id ON client_torrent_file(seed_file_id);
 CREATE INDEX IF NOT EXISTS idx_ctf_client_torrent_id ON client_torrent_file(client_torrent_id);

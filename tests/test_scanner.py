@@ -5,7 +5,7 @@ con/senza hardlink.
 
 import os
 
-from app import library, scanner
+from app import library, pipeline, scanner
 from app.models import Disk, MediaPath
 
 
@@ -26,12 +26,15 @@ def _make_disk(db_session, tmp_path, torrents_rel_path="torrents"):
 
 
 def _run_scan(db_session, disk):
-    run = scanner.start_run(db_session, run_type="bulk_import")
+    run = pipeline.start_run(db_session, run_type="bulk_import")
     counts = scanner.scan_disk(db_session, disk, run)
     return run, counts
 
 
-def test_hardlinked_file_is_seeding(db_session, tmp_path):
+def test_hardlinked_file_is_linked(db_session, tmp_path):
+    # Lo scanner rileva solo l'hardlink (seed_file.media_file_id) — lo stato
+    # "seeding" completo richiede anche il tracciamento del client (Fase 2,
+    # vedi tests/test_library_states.py), qui deliberatamente non configurato.
     disk, _media_path, root = _make_disk(db_session, tmp_path)
 
     media_file_path = root / "media" / "movies" / "Movie.2024.mkv"
@@ -45,10 +48,11 @@ def test_hardlinked_file_is_seeding(db_session, tmp_path):
     seed_states = library.seed_file_states(db_session)
 
     assert len(media_states) == 1
-    assert media_states[0]["state"] == "seeding"
     assert len(seed_states) == 1
-    assert seed_states[0]["state"] == "seeding"
     assert seed_states[0]["media_file_id"] == media_states[0]["id"]
+    # Senza un client configurato, nessun file può essere "seeding" a tutti gli effetti.
+    assert media_states[0]["state"] == "orphan_media"
+    assert seed_states[0]["state"] == "orphan_torrent"
 
 
 def test_media_file_without_hardlink_is_orphan(db_session, tmp_path):
@@ -114,7 +118,7 @@ def test_rescanning_does_not_duplicate_rows(db_session, tmp_path):
     seed_states = library.seed_file_states(db_session)
     assert len(media_states) == 1
     assert len(seed_states) == 1
-    assert seed_states[0]["state"] == "seeding"
+    assert seed_states[0]["media_file_id"] == media_states[0]["id"]
     # 1 media_file + 1 seed_file ri-scansionati, non duplicati (upsert su disk_id+relative_path)
     assert second_counts == {"media_files_scanned": 1, "seed_files_scanned": 1}
 

@@ -42,7 +42,10 @@ def test_trigger_bulk_import_and_poll_until_finished(client):
     assert run["errors"] == 0
     assert run["items_scanned"] == 2
 
+    # Nessun client torrent configurato in questo test (copre solo il
+    # trigger/poll della run) — l'hardlink è comunque rilevato, ma senza
+    # tracciamento client lo stato "seeding" pieno richiede Fase 2
+    # (vedi tests/test_library_states.py per la copertura completa).
     media_files = client.get("/api/media-files").json()
     seed_files = client.get("/api/seed-files").json()
-    assert media_files[0]["state"] == "seeding"
-    assert seed_files[0]["state"] == "seeding"
+    assert seed_files[0]["media_file_id"] == media_files[0]["id"]
