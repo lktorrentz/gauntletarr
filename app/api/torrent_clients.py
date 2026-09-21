@@ -45,12 +45,14 @@ class TorrentClientResponse(BaseModel):
     base_url: str
     username: str | None
     enabled: bool
+    disk_ids: list[int]  # dischi abilitati per questo client (Fase 8: la UI deve poterli mostrare)
 
     @classmethod
     def from_model(cls, tc: TorrentClient) -> "TorrentClientResponse":
         return cls(
             id=tc.id, label=tc.label, adapter_type=tc.adapter_type,
             base_url=tc.base_url, username=tc.username, enabled=tc.enabled,
+            disk_ids=[d.id for d in tc.disks],
         )
 
 

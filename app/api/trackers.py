@@ -123,9 +123,9 @@ class UploadProfileUpdateRequest(BaseModel):
 
 class UploadProfileResponse(BaseModel):
     tracker_id: int
-    category_id_map: dict
-    type_id_map: dict
-    resolution_id_map: dict
+    category_id_map: dict[str, int]
+    type_id_map: dict[str, int]
+    resolution_id_map: dict[str, int]
     naming_convention: str | None
     description_template: str | None
     default_anonymous: bool
@@ -147,7 +147,13 @@ class UploadProfileResponse(BaseModel):
         )
 
 
-@router.get("/upload-profiles/bundled")
+class BundledUploadProfileResponse(BaseModel):
+    key: str
+    label: str
+    adapter_type: str
+
+
+@router.get("/upload-profiles/bundled", response_model=list[BundledUploadProfileResponse])
 def list_bundled_upload_profiles():
     return upload_profiles.list_bundled_profiles()
 

@@ -717,6 +717,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/{full_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Serve Spa */
+        get: operations["serve_spa__full_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -741,6 +758,15 @@ export interface components {
             current_path: string;
             /** Entries */
             entries: components["schemas"]["BrowseEntry"][];
+        };
+        /** BundledUploadProfileResponse */
+        BundledUploadProfileResponse: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Adapter Type */
+            adapter_type: string;
         };
         /** DashboardResponse */
         DashboardResponse: {
@@ -1036,6 +1062,8 @@ export interface components {
             username: string | null;
             /** Enabled */
             enabled: boolean;
+            /** Disk Ids */
+            disk_ids: number[];
         };
         /** TorrentClientTestResponse */
         TorrentClientTestResponse: {
@@ -1146,15 +1174,15 @@ export interface components {
             tracker_id: number;
             /** Category Id Map */
             category_id_map: {
-                [key: string]: unknown;
+                [key: string]: number;
             };
             /** Type Id Map */
             type_id_map: {
-                [key: string]: unknown;
+                [key: string]: number;
             };
             /** Resolution Id Map */
             resolution_id_map: {
-                [key: string]: unknown;
+                [key: string]: number;
             };
             /** Naming Convention */
             naming_convention: string | null;
@@ -2267,7 +2295,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BundledUploadProfileResponse"][];
                 };
             };
         };
@@ -2944,6 +2972,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    serve_spa__full_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                full_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

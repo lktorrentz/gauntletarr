@@ -70,10 +70,13 @@ def test_associate_and_dissociate_disk(client):
 
     associate = client.post(f"/api/torrent-clients/{tc_id}/disks/{disk_id}")
     assert associate.status_code == 204
+    assert client.get("/api/torrent-clients").json()[0]["disk_ids"] == [disk_id]
 
     # idempotente: associare due volte non deve fallire né duplicare
     again = client.post(f"/api/torrent-clients/{tc_id}/disks/{disk_id}")
     assert again.status_code == 204
+    assert client.get("/api/torrent-clients").json()[0]["disk_ids"] == [disk_id]
 
     dissociate = client.delete(f"/api/torrent-clients/{tc_id}/disks/{disk_id}")
     assert dissociate.status_code == 204
+    assert client.get("/api/torrent-clients").json()[0]["disk_ids"] == []
