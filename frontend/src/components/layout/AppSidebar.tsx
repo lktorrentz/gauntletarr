@@ -1,5 +1,10 @@
+import { ChevronRightIcon } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
+import { useDashboard } from '@/api/hooks/dashboard'
+import { useHealth } from '@/api/hooks/health'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Sidebar,
   SidebarContent,
@@ -12,10 +17,79 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { NAV_GROUPS } from '@/lib/nav'
+import { cn } from '@/lib/utils'
+import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
+
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return 'mai'
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
+  if (minutes < 1) return 'adesso'
+  if (minutes < 60) return `${minutes} min fa`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours} h fa`
+  return `${Math.round(hours / 24)} g fa`
+}
+
+function StatBox({ dotClassName, label, value }: { dotClassName: string; label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-sidebar-accent/40 px-2 py-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className={cn('size-1.5 shrink-0 rounded-full', dotClassName)} />
+        <span className="truncate text-[11px] font-medium text-muted-foreground">{label}</span>
+      </div>
+      <p className="mt-0.5 font-mono text-sm font-semibold">{value}</p>
+    </div>
+  )
+}
+
+// Ispirato al footer sidebar di Auditorr (progetto di provenienza, vedi
+// docs/SPEC.md §0): due box di statistiche affiancati + orario
+// dell'ultima scansione, sempre visibili senza dover aprire la
+// Dashboard. Auditorr non mostra una versione in UI; qui aggiunta su
+// richiesta esplicita (GET /api/health, app/version.py).
+function AppSidebarFooter() {
+  const { data: dashboard } = useDashboard()
+  const { data: health } = useHealth()
+
+  return (
+    <SidebarFooter className="gap-2 border-t px-3 py-3">
+      <div className="grid grid-cols-2 gap-1.5">
+        <StatBox
+          dotClassName="bg-emerald-500"
+          label="Salute"
+          value={dashboard ? `${Math.round(dashboard.health_pct)}/100` : '—'}
+        />
+        <StatBox
+          dotClassName="bg-amber-500"
+          label="Da rivedere"
+          value={dashboard ? String(dashboard.pending_review) : '—'}
+        />
+      </div>
+      <p className="font-mono text-[11px] text-muted-foreground">
+        ultima run {relativeTime(dashboard?.last_run?.finished_at)}
+      </p>
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <a href="/docs" target="_blank" rel="noreferrer" className="hover:underline">
+          API docs
+        </a>
+        <span>v{health?.version ?? '…'}</span>
+      </div>
+    </SidebarFooter>
+  )
+}
 
 export function AppSidebar() {
   const location = useLocation()
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(NAV_GROUPS.map((g) => g.title)))
+
+  function toggleGroup(title: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(title)) next.delete(title)
+      else next.add(title)
+      return next
+    })
+  }
 
   return (
     <Sidebar>
@@ -23,34 +97,53 @@ export function AppSidebar() {
         <span className="text-sm font-semibold tracking-tight">The Media Gauntlet*rr</span>
       </SidebarHeader>
       <SidebarContent>
-        {NAV_GROUPS.map((group) => (
-          <SidebarGroup key={group.title}>
-            <SidebarGroupLabel>
-              <group.icon className="size-4" />
-              <span>{group.title}</span>
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton
-                      render={<Link to={item.to} />}
-                      isActive={location.pathname === item.to}
-                    >
-                      {item.title}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton render={<Link to={NAV_DASHBOARD.to} />} isActive={location.pathname === NAV_DASHBOARD.to}>
+                  <NAV_DASHBOARD.icon className="size-4" />
+                  {NAV_DASHBOARD.title}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {NAV_GROUPS.map((group) => {
+          const open = openGroups.has(group.title)
+          return (
+            <Collapsible key={group.title} open={open} onOpenChange={() => toggleGroup(group.title)}>
+              <SidebarGroup>
+                <SidebarGroupLabel render={<CollapsibleTrigger className="w-full cursor-pointer justify-between" />}>
+                  <span className="flex items-center gap-2">
+                    <group.icon className="size-4" />
+                    <span>{group.title}</span>
+                  </span>
+                  <ChevronRightIcon className={cn('size-4 transition-transform', open && 'rotate-90')} />
+                </SidebarGroupLabel>
+                <CollapsibleContent>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {group.items.map((item) => (
+                        <SidebarMenuItem key={item.to}>
+                          <SidebarMenuButton
+                            render={<Link to={item.to} />}
+                            isActive={location.pathname === item.to}
+                          >
+                            {item.title}
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </SidebarGroup>
+            </Collapsible>
+          )
+        })}
       </SidebarContent>
-      <SidebarFooter className="px-3 py-2 text-xs text-muted-foreground">
-        <a href="/docs" target="_blank" rel="noreferrer" className="hover:underline">
-          API docs (Swagger)
-        </a>
-      </SidebarFooter>
+      <AppSidebarFooter />
     </Sidebar>
   )
 }

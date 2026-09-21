@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ImageHostPriorityField } from '@/pages/config/ImageHostPriorityField'
 
 function SettingField({
   settingKey,
@@ -87,12 +88,7 @@ export function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <SettingField
-            settingKey="image_host_priority"
-            label="Ordine di priorità"
-            description="CSV, es. ptpimg,imgbox,imgbb — default se vuoto: ptpimg,imgbox,imgbb"
-            placeholder="ptpimg,imgbox,imgbb"
-          />
+          <ImageHostPriorityField />
           <SettingField
             settingKey="image_host_ptpimg_api_key"
             label="PTPImg API key"

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from pydantic import BaseModel
 
 from app import db, scheduler, startup_checks
 from app.api.dashboard import router as dashboard_router
@@ -17,6 +18,7 @@ from app.api.uploads import router as uploads_router
 from app.config import load_settings
 from app.frontend import mount_frontend
 from app.logging_config import configure_logging
+from app.version import __version__
 
 configure_logging()
 
@@ -58,9 +60,14 @@ app.include_router(dashboard_router)
 app.include_router(uploads_router)
 
 
-@app.get("/api/health")
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+
+
+@app.get("/api/health", response_model=HealthResponse)
 def health():
-    return {"status": "ok"}
+    return HealthResponse(status="ok", version=__version__)
 
 
 # Sempre per ultimo: il catch-all del frontend (app/frontend.py) non deve
