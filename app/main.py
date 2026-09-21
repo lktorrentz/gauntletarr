@@ -2,12 +2,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app import db, startup_checks
+from app import db, scheduler, startup_checks
+from app.api.dashboard import router as dashboard_router
 from app.api.disks import router as disks_router
 from app.api.library import router as library_router
 from app.api.media_paths import router as media_paths_router
 from app.api.reviews import router as reviews_router
 from app.api.runs import router as runs_router
+from app.api.schedule import router as schedule_router
 from app.api.settings import router as settings_router
 from app.api.torrent_clients import router as torrent_clients_router
 from app.api.trackers import router as trackers_router
@@ -29,7 +31,13 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = session_factory
-    yield
+
+    app.state.scheduler = scheduler.build_scheduler(session_factory, settings.data_dir)
+    app.state.scheduler.start()
+    try:
+        yield
+    finally:
+        app.state.scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title="The Media Gauntlet*rr", lifespan=lifespan)
@@ -44,6 +52,8 @@ app.include_router(torrent_clients_router)
 app.include_router(settings_router)
 app.include_router(trackers_router)
 app.include_router(reviews_router)
+app.include_router(schedule_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/api/health")

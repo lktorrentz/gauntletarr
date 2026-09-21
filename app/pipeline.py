@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from app import adapter_factory, matching, media_resolution, review, scanner, torrent_indexer
+from app import adapter_factory, health, matching, media_resolution, review, scanner, torrent_indexer
 from app.adapter_factory import TmdbApiKeyMissingError
 from app.models import Disk, RunLog, TorrentClient, Tracker
 
@@ -125,7 +125,16 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
         run.items_scanned = totals["media_files_scanned"] + totals["seed_files_scanned"]
         run.matches_found = totals["candidates_found"]
         run.auto_executed = totals["auto_executed"]
-        run.pending_review = len(review.list_ready_for_review(session))
+        try:
+            snapshot = health.compute_snapshot(session)
+            run.pending_review = snapshot["pending_review"]
+            run.orphan_torrent_count = snapshot["orphan_torrent_count"]
+            run.ignored_count = snapshot["ignored_count"]
+            run.health_snapshot = snapshot["health_pct"]
+        except Exception:
+            logger.exception("Calcolo dello snapshot di salute fallito")
+            errors += 1
+            run.pending_review = len(review.list_ready_for_review(session))
         run.errors = errors
         session.commit()
     return run

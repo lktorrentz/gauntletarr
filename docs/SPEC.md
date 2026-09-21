@@ -228,7 +228,7 @@ Configuration
   Settings
 ```
 
-Dashboard: inherits ratio-guardian §15 (library health gauge, pending review/failed/unresolved KPIs, novelty feed) — **additional KPIs** to reflect the two directions: an `orphan_torrent` count and an `ignored` count, each linking directly to the matching filter in Library.
+Dashboard: inherits ratio-guardian §15 (library health gauge, pending review/failed/unresolved KPIs, novelty feed) — **additional KPIs** to reflect the two directions: an `orphan_torrent` count and an `ignored` count, each linking directly to the matching filter in Library. Health gauge formula settled in Fase 5 (`app/health.py`): a single explicit, size-weighted ratio (seeding media size / total media size), not Auditorr's multi-factor weighted score (hardlink/orphan/not-imported/duplicates, each independently weighted) — the other KPIs already surface those signals individually and clickably, so folding them again into one composite number would lose clarity rather than add it. "Novelty feed" resolved as the most recent `candidate` rows by `created_at` (`GET /api/dashboard/whats-new`), reusing the timestamp the matching engine already writes rather than a dedicated activity-log table.
 
 Frontend stack: **React SPA + shadcn/ui** (a decision already made in ratio-guardian on 2026-09-21, inherited here from the start instead of as a later refactor — Gauntletarr already starts with a FastAPI backend as a pure JSON API under `/api/*`, no Jinja2/HTMX phase to outgrow).
 

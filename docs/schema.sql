@@ -99,8 +99,8 @@ CREATE TABLE IF NOT EXISTS run_log (
     orphan_torrent_count  INTEGER DEFAULT 0,   -- new dashboard KPI, SPEC.md §10
     ignored_count         INTEGER DEFAULT 0,   -- ditto
     health_snapshot       REAL,                -- "library health" % at the end of the run, for the
-                                                -- dashboard's historical chart (SPEC.md §17, open point —
-                                                -- schema here is indicative)
+                                                -- dashboard's historical chart (SPEC.md §10). Formula
+                                                -- settled in Fase 5, see app/health.py.
     errors                INTEGER DEFAULT 0
 );
 
