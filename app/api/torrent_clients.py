@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app import adapter_factory
 from app.deps import get_session
 from app.models import Disk, TorrentClient
 
@@ -29,6 +30,12 @@ class TorrentClientUpdateRequest(BaseModel):
     username: str | None = None
     password: str | None = None
     enabled: bool | None = None
+
+
+class TorrentClientTestResponse(BaseModel):
+    status: str  # "ok" | "error"
+    torrents_found: int | None = None
+    error: str | None = None
 
 
 class TorrentClientResponse(BaseModel):
@@ -81,6 +88,21 @@ def create_torrent_client(body: TorrentClientCreateRequest, session: Session = D
     session.add(tc)
     session.commit()
     return TorrentClientResponse.from_model(tc)
+
+
+@router.post("/{torrent_client_id}/test", response_model=TorrentClientTestResponse)
+def test_torrent_client(torrent_client_id: int, session: Session = Depends(get_session)):
+    """Sola lettura: chiama adapter.list_torrents() e riporta successo/errore,
+    senza bisogno di dischi/media_path configurati né di passare da uno
+    scan completo — utile per verificare le credenziali subito dopo aver
+    creato/modificato un client (docs/SPEC.md sezione 5)."""
+    tc = _get_torrent_client_or_404(session, torrent_client_id)
+    try:
+        adapter = adapter_factory.build_torrent_client_adapter(tc)
+        torrents = adapter.list_torrents()
+    except Exception as exc:
+        return TorrentClientTestResponse(status="error", error=str(exc))
+    return TorrentClientTestResponse(status="ok", torrents_found=len(torrents))
 
 
 @router.patch("/{torrent_client_id}", response_model=TorrentClientResponse)
