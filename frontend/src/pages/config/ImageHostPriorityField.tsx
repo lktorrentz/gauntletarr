@@ -17,8 +17,17 @@ const KNOWN_HOSTS: Record<string, string> = {
   imgbox: 'Imgbox (nessuna api_key richiesta)',
   imgbb: 'ImgBB',
   pixhost: 'Pixhost (nessuna api_key richiesta)',
+  lensdump: 'Lensdump',
+  ptscreens: 'PTScreens',
+  onlyimage: 'OnlyImage',
+  dalexni: 'Dalexni',
+  utppm: 'utp.pm',
+  seedpool_cdn: 'Seedpool CDN',
 }
-const DEFAULT_ORDER = ['ptpimg', 'imgbox', 'imgbb', 'pixhost']
+const DEFAULT_ORDER = [
+  'ptpimg', 'imgbox', 'imgbb', 'pixhost',
+  'lensdump', 'ptscreens', 'onlyimage', 'dalexni', 'utppm', 'seedpool_cdn',
+]
 
 // La lista salvata è esattamente quella "abilitata" (in ordine di
 // priorità) — un host noto ma assente non viene più aggiunto in coda in

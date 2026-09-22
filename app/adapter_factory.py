@@ -11,10 +11,16 @@ from sqlalchemy.orm import Session
 from app import settings_repo
 from app.adapters.image_host.base import ImageHostAdapter
 from app.adapters.image_host.chain import ImageHostChain
+from app.adapters.image_host.dalexni import DalexniAdapter
 from app.adapters.image_host.imgbb import ImgbbAdapter
 from app.adapters.image_host.imgbox import ImgboxAdapter
+from app.adapters.image_host.lensdump import LensdumpAdapter
+from app.adapters.image_host.onlyimage import OnlyimageAdapter
 from app.adapters.image_host.pixhost import PixhostAdapter
 from app.adapters.image_host.ptpimg import PtpimgAdapter
+from app.adapters.image_host.ptscreens import PtscreensAdapter
+from app.adapters.image_host.seedpool_cdn import SeedpoolCdnAdapter
+from app.adapters.image_host.utppm import UtppmAdapter
 from app.adapters.media_resolver.base import MediaResolverAdapter
 from app.adapters.media_resolver.filename_parser import FilenameParserResolver
 from app.adapters.torrent_client.base import TorrentClientAdapter
@@ -24,7 +30,10 @@ from app.adapters.tracker.base import TrackerAdapter, Unit3dTrackerAdapter
 from app.models import TorrentClient, Tracker
 from app.tmdb_client import TMDBClient
 
-DEFAULT_IMAGE_HOST_PRIORITY = ["ptpimg", "imgbox", "imgbb", "pixhost"]
+DEFAULT_IMAGE_HOST_PRIORITY = [
+    "ptpimg", "imgbox", "imgbb", "pixhost",
+    "lensdump", "ptscreens", "onlyimage", "dalexni", "utppm", "seedpool_cdn",
+]
 
 
 def build_torrent_client_adapter(torrent_client: TorrentClient) -> TorrentClientAdapter:
@@ -89,6 +98,24 @@ def _build_image_host_adapter(session: Session, key: str) -> ImageHostAdapter | 
         return ImgboxAdapter()  # nessuna api_key richiesta (upload anonimi)
     if key == "pixhost":
         return PixhostAdapter()  # nessuna api_key richiesta (upload anonimi)
+    if key == "lensdump":
+        api_key = settings_repo.get_setting(session, "image_host_lensdump_api_key")
+        return LensdumpAdapter(api_key=api_key) if api_key else None
+    if key == "ptscreens":
+        api_key = settings_repo.get_setting(session, "image_host_ptscreens_api_key")
+        return PtscreensAdapter(api_key=api_key) if api_key else None
+    if key == "onlyimage":
+        api_key = settings_repo.get_setting(session, "image_host_onlyimage_api_key")
+        return OnlyimageAdapter(api_key=api_key) if api_key else None
+    if key == "dalexni":
+        api_key = settings_repo.get_setting(session, "image_host_dalexni_api_key")
+        return DalexniAdapter(api_key=api_key) if api_key else None
+    if key == "utppm":
+        api_key = settings_repo.get_setting(session, "image_host_utppm_api_key")
+        return UtppmAdapter(api_key=api_key) if api_key else None
+    if key == "seedpool_cdn":
+        api_key = settings_repo.get_setting(session, "image_host_seedpool_cdn_api_key")
+        return SeedpoolCdnAdapter(api_key=api_key) if api_key else None
     raise ImageHostConfigError(f"Host immagini sconosciuto in image_host_priority: {key!r}")
 
 
@@ -106,8 +133,7 @@ def build_image_host_chain(session: Session) -> ImageHostChain:
     adapters = [a for a in (_build_image_host_adapter(session, key) for key in priority) if a is not None]
     if not adapters:
         raise ImageHostConfigError(
-            "Nessun host immagini configurato: imposta almeno una api_key "
-            "(image_host_ptpimg_api_key / image_host_imgbb_api_key) — Imgbox "
-            "da solo non richiede api_key ma va incluso in image_host_priority"
+            "Nessun host immagini configurato: imposta almeno una api_key, o includi "
+            "Imgbox/Pixhost in image_host_priority — sono gli unici due che non ne richiedono"
         )
     return ImageHostChain(adapters)

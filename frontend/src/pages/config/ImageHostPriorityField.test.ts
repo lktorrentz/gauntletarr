@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import { disabledHosts, parseOrder } from '@/pages/config/ImageHostPriorityField'
 
+const DEFAULT_ORDER = [
+  'ptpimg', 'imgbox', 'imgbb', 'pixhost', 'lensdump', 'ptscreens', 'onlyimage', 'dalexni', 'utppm', 'seedpool_cdn',
+]
+
 describe('parseOrder', () => {
   it('falls back to every known host, in default order, when never saved', () => {
-    expect(parseOrder(null)).toEqual(['ptpimg', 'imgbox', 'imgbb', 'pixhost'])
-    expect(parseOrder(undefined)).toEqual(['ptpimg', 'imgbox', 'imgbb', 'pixhost'])
-    expect(parseOrder('')).toEqual(['ptpimg', 'imgbox', 'imgbb', 'pixhost'])
+    expect(parseOrder(null)).toEqual(DEFAULT_ORDER)
+    expect(parseOrder(undefined)).toEqual(DEFAULT_ORDER)
+    expect(parseOrder('')).toEqual(DEFAULT_ORDER)
   })
 
   it('respects a saved custom order exactly, including a partial (disabled) subset', () => {
@@ -23,10 +27,10 @@ describe('parseOrder', () => {
 
 describe('disabledHosts', () => {
   it('lists known hosts missing from the enabled order', () => {
-    expect(disabledHosts(['ptpimg', 'imgbox'])).toEqual(['imgbb', 'pixhost'])
+    expect(disabledHosts(['ptpimg', 'imgbox'])).toEqual(DEFAULT_ORDER.filter((h) => h !== 'ptpimg' && h !== 'imgbox'))
   })
 
   it('is empty when every known host is enabled', () => {
-    expect(disabledHosts(['ptpimg', 'imgbox', 'imgbb', 'pixhost'])).toEqual([])
+    expect(disabledHosts(DEFAULT_ORDER)).toEqual([])
   })
 })

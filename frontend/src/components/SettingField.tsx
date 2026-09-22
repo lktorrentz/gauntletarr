@@ -12,12 +12,17 @@ export function SettingField({
   description,
   type = 'text',
   placeholder,
+  compact = false,
 }: {
   settingKey: string
   label: string
   description: string
   type?: 'text' | 'password' | 'number'
   placeholder?: string
+  // Una riga sola (nome + input + Salva) invece di etichetta/descrizione
+  // impilate sopra — per liste lunghe (es. le chiavi API dei provider
+  // immagine) dove lo spazio verticale conta più della descrizione estesa.
+  compact?: boolean
 }) {
   const { data, isPending } = useSetting(settingKey)
   const setSetting = useSetSetting(settingKey)
@@ -26,6 +31,37 @@ export function SettingField({
   // necessario qui, derivabile direttamente durante il render).
   const [draft, setDraft] = useState<string | null>(null)
   const value = draft ?? data?.value ?? ''
+
+  function save() {
+    setSetting.mutate(value, {
+      onSuccess: () => {
+        toast.success(`${label} salvato.`)
+        setDraft(null)
+      },
+      onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+    })
+  }
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2">
+        <Label htmlFor={settingKey} title={description} className="w-28 shrink-0 truncate text-xs">
+          {label}
+        </Label>
+        <Input
+          id={settingKey}
+          type={type}
+          value={value}
+          placeholder={isPending ? 'Caricamento…' : placeholder}
+          onChange={(e) => setDraft(e.target.value)}
+          className="h-8"
+        />
+        <Button variant="outline" size="sm" disabled={setSetting.isPending} onClick={save}>
+          Salva
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="grid gap-1.5">
@@ -39,19 +75,7 @@ export function SettingField({
           placeholder={isPending ? 'Caricamento…' : placeholder}
           onChange={(e) => setDraft(e.target.value)}
         />
-        <Button
-          variant="outline"
-          disabled={setSetting.isPending}
-          onClick={() =>
-            setSetting.mutate(value, {
-              onSuccess: () => {
-                toast.success(`${label} salvato.`)
-                setDraft(null)
-              },
-              onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
-            })
-          }
-        >
+        <Button variant="outline" disabled={setSetting.isPending} onClick={save}>
           Salva
         </Button>
       </div>

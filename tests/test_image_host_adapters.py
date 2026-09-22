@@ -3,9 +3,16 @@ import pytest
 
 from app.adapters.image_host.base import ImageHostError
 from app.adapters.image_host.chain import ImageHostChain
+from app.adapters.image_host.chevereto import chevereto_image_url
+from app.adapters.image_host.dalexni import DalexniAdapter
 from app.adapters.image_host.imgbb import ImgbbAdapter
+from app.adapters.image_host.lensdump import LensdumpAdapter
+from app.adapters.image_host.onlyimage import OnlyimageAdapter
 from app.adapters.image_host.pixhost import PixhostAdapter
 from app.adapters.image_host.ptpimg import PtpimgAdapter
+from app.adapters.image_host.ptscreens import PtscreensAdapter
+from app.adapters.image_host.seedpool_cdn import SeedpoolCdnAdapter
+from app.adapters.image_host.utppm import UtppmAdapter
 
 
 def _client(handler):
@@ -154,3 +161,121 @@ def test_chain_raises_last_error_if_all_fail():
 def test_chain_requires_at_least_one_adapter():
     with pytest.raises(ValueError):
         ImageHostChain([])
+
+
+def test_chevereto_image_url_tries_multiple_shapes():
+    assert chevereto_image_url({"data": {"image": {"medium": {"url": "a"}}}}) == "a"
+    assert chevereto_image_url({"data": {"image": {"url": "b"}}}) == "b"
+    assert chevereto_image_url({"image": {"medium": {"url": "c"}}}) == "c"
+    assert chevereto_image_url({"image": {"url": "d"}}) == "d"
+    assert chevereto_image_url({"data": {"medium": {"url": "e"}}}) == "e"
+    assert chevereto_image_url({"data": {"url": "f"}}) == "f"
+    assert chevereto_image_url({"nothing": "here"}) is None
+
+
+def test_lensdump_upload_returns_public_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["X-API-Key"] == "key123"
+        return httpx.Response(200, json={"data": {"image": {"url": "https://lensdump.com/x.png"}}})
+
+    adapter = LensdumpAdapter(api_key="key123", client=_client(handler))
+    assert adapter.upload(str(image)) == "https://lensdump.com/x.png"
+
+
+def test_ptscreens_upload_returns_public_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["X-API-Key"] == "key123"
+        return httpx.Response(200, json={"image": {"medium": {"url": "https://ptscreens.com/x.png"}}})
+
+    adapter = PtscreensAdapter(api_key="key123", client=_client(handler))
+    assert adapter.upload(str(image)) == "https://ptscreens.com/x.png"
+
+
+def test_onlyimage_upload_returns_public_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"image": {"url": "https://onlyimage.org/x.png"}})
+
+    adapter = OnlyimageAdapter(api_key="key123", client=_client(handler))
+    assert adapter.upload(str(image)) == "https://onlyimage.org/x.png"
+
+
+def test_utppm_upload_returns_public_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"image": {"url": "https://utp.pm/x.png"}}})
+
+    adapter = UtppmAdapter(api_key="key123", client=_client(handler))
+    assert adapter.upload(str(image)) == "https://utp.pm/x.png"
+
+
+def test_dalexni_upload_returns_medium_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"success": True, "data": {"medium": {"url": "https://dalexni.com/x.png"}, "thumb": {"url": "t"}}}
+        )
+
+    adapter = DalexniAdapter(api_key="key123", client=_client(handler))
+    assert adapter.upload(str(image)) == "https://dalexni.com/x.png"
+
+
+def test_dalexni_falls_back_to_thumb_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"success": True, "data": {"thumb": {"url": "https://dalexni.com/t.png"}}})
+
+    adapter = DalexniAdapter(api_key="key123", client=_client(handler))
+    assert adapter.upload(str(image)) == "https://dalexni.com/t.png"
+
+
+def test_dalexni_raises_on_unsuccessful_response(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"success": False})
+
+    adapter = DalexniAdapter(api_key="key123", client=_client(handler))
+    with pytest.raises(ImageHostError):
+        adapter.upload(str(image))
+
+
+def test_seedpool_cdn_upload_prefers_thumbnail_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer key123"
+        return httpx.Response(
+            200,
+            json={"files": [{"url": "https://i.seedpool.org/full.png", "thumbnail_url": "https://i.seedpool.org/t.png"}]},
+        )
+
+    adapter = SeedpoolCdnAdapter(api_key="key123", client=_client(handler))
+    assert adapter.upload(str(image)) == "https://i.seedpool.org/t.png"
+
+
+def test_seedpool_cdn_falls_back_to_base_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"files": [{"url": "https://i.seedpool.org/full.png"}]})
+
+    adapter = SeedpoolCdnAdapter(api_key="key123", client=_client(handler))
+    assert adapter.upload(str(image)) == "https://i.seedpool.org/full.png"

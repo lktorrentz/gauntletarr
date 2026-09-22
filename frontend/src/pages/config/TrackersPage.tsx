@@ -1,13 +1,15 @@
-import { PlusIcon, SettingsIcon, TrashIcon } from 'lucide-react'
+import { PencilIcon, PlusIcon, SettingsIcon, TrashIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { useBundledUploadProfiles, useCreateTracker, useDeleteTracker, useTrackers, useUpdateTracker } from '@/api/hooks/trackers'
+import type { Schemas } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -20,6 +22,8 @@ import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { selectLabel } from '@/lib/utils'
 import { UploadProfileDialog } from '@/pages/config/UploadProfileDialog'
+
+type Tracker = Schemas['TrackerResponse']
 
 function AddTrackerDialog() {
   const [open, setOpen] = useState(false)
@@ -132,6 +136,87 @@ function AddTrackerDialog() {
   )
 }
 
+function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
+  const [open, setOpen] = useState(false)
+  const [label, setLabel] = useState(tracker.label)
+  const [baseUrl, setBaseUrl] = useState(tracker.base_url)
+  const [apiToken, setApiToken] = useState('')
+  const [announceUrl, setAnnounceUrl] = useState(tracker.announce_url ?? '')
+  const [rateLimit, setRateLimit] = useState(tracker.rate_limit_per_min?.toString() ?? '')
+  const updateTracker = useUpdateTracker()
+
+  function submit() {
+    updateTracker.mutate(
+      {
+        id: tracker.id,
+        body: {
+          label,
+          base_url: baseUrl,
+          api_token: apiToken || undefined,
+          announce_url: announceUrl || undefined,
+          rate_limit_per_min: rateLimit ? Number(rateLimit) : undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          setOpen(false)
+          setApiToken('')
+        },
+        onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+      },
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title="Modifica"><PencilIcon className="size-4" /></Button>} />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Modifica tracker</DialogTitle>
+          <DialogDescription>Tipo (unit3d) non modificabile — elimina e ricrea per cambiarlo.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="t-edit-label">Etichetta</Label>
+            <Input id="t-edit-label" value={label} onChange={(e) => setLabel(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="t-edit-base-url">URL API</Label>
+            <Input id="t-edit-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="t-edit-api-token">API token</Label>
+            <Input
+              id="t-edit-api-token"
+              value={apiToken}
+              onChange={(e) => setApiToken(e.target.value)}
+              placeholder="Lascia vuoto per non cambiarlo"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="t-edit-announce-url">Announce URL (solo per upload)</Label>
+            <Input id="t-edit-announce-url" value={announceUrl} onChange={(e) => setAnnounceUrl(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="t-edit-rate-limit">Richieste/min</Label>
+            <Input
+              id="t-edit-rate-limit"
+              type="number"
+              value={rateLimit}
+              onChange={(e) => setRateLimit(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={submit} disabled={!label || !baseUrl || updateTracker.isPending}>
+            Salva
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function TrackersPage() {
   const { data: trackers, isPending } = useTrackers()
   const updateTracker = useUpdateTracker()
@@ -185,7 +270,8 @@ export function TrackersPage() {
                   >
                     <SettingsIcon className="size-4" />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" onClick={() => deleteTracker.mutate(tracker.id)}>
+                  <EditTrackerDialog tracker={tracker} />
+                  <Button variant="ghost" size="icon-sm" title="Elimina" onClick={() => deleteTracker.mutate(tracker.id)}>
                     <TrashIcon className="size-4" />
                   </Button>
                 </TableCell>

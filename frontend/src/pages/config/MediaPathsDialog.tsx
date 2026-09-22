@@ -3,9 +3,9 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { useCreateMediaPath, useDeleteMediaPath, useMediaPaths, useUpdateMediaPath } from '@/api/hooks/disks'
-import { Badge } from '@/components/ui/badge'
+import type { Schemas } from '@/api/client'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -16,6 +16,62 @@ const CONTENT_TYPE_LABELS = [
   { value: 'movie', label: 'Film' },
   { value: 'tv', label: 'TV' },
 ]
+
+type MediaPath = Schemas['MediaPathResponse']
+
+function MediaPathRow({ mp, diskId }: { mp: MediaPath; diskId: number }) {
+  const updateMediaPath = useUpdateMediaPath(diskId)
+  const deleteMediaPath = useDeleteMediaPath(diskId)
+  const [browserOpen, setBrowserOpen] = useState(false)
+
+  return (
+    <TableRow>
+      <TableCell>
+        <button
+          className="font-mono text-xs hover:underline"
+          onClick={() => setBrowserOpen(true)}
+          title="Cambia cartella"
+        >
+          {mp.relative_path}
+        </button>
+        <DiskBrowserDialog
+          diskId={diskId}
+          open={browserOpen}
+          onOpenChange={setBrowserOpen}
+          title="Scegli la nuova cartella"
+          onSelect={(path) => updateMediaPath.mutate({ mediaPathId: mp.id, body: { relative_path: path } })}
+        />
+      </TableCell>
+      <TableCell>
+        <Select
+          value={mp.content_type}
+          onValueChange={(v) => updateMediaPath.mutate({ mediaPathId: mp.id, body: { content_type: v } })}
+        >
+          <SelectTrigger className="w-24">
+            <SelectValue>
+              {(v: string | null) => selectLabel(CONTENT_TYPE_LABELS, v, (o) => o.value, (o) => o.label, 'Film')}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="movie">Film</SelectItem>
+            <SelectItem value="tv">TV</SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell>
+        <Switch
+          checked={mp.enabled}
+          onCheckedChange={(enabled) => updateMediaPath.mutate({ mediaPathId: mp.id, body: { enabled } })}
+        />
+      </TableCell>
+      <TableCell>
+        <Button variant="ghost" size="icon-sm" title="Elimina" onClick={() => deleteMediaPath.mutate(mp.id)}>
+          <TrashIcon className="size-4" />
+        </Button>
+      </TableCell>
+    </TableRow>
+  )
+}
 
 export function MediaPathsDialog({
   diskId,
@@ -30,8 +86,6 @@ export function MediaPathsDialog({
 }) {
   const { data: mediaPaths } = useMediaPaths(diskId)
   const createMediaPath = useCreateMediaPath(diskId)
-  const updateMediaPath = useUpdateMediaPath(diskId)
-  const deleteMediaPath = useDeleteMediaPath(diskId)
 
   const [browserOpen, setBrowserOpen] = useState(false)
   const [contentType, setContentType] = useState<'movie' | 'tv'>('movie')
@@ -48,6 +102,10 @@ export function MediaPathsDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Media path — {diskLabel}</DialogTitle>
+          <DialogDescription>
+            Le sottocartelle di questo disco dove sta la libreria vera e propria — lo scan cerca file video solo
+            qui dentro, mai nel resto del disco. Serve almeno una voce Film o TV perché lo scan trovi qualcosa.
+          </DialogDescription>
         </DialogHeader>
 
         <Table>
@@ -61,23 +119,7 @@ export function MediaPathsDialog({
           </TableHeader>
           <TableBody>
             {mediaPaths?.map((mp) => (
-              <TableRow key={mp.id}>
-                <TableCell className="font-mono text-xs">{mp.relative_path}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{mp.content_type}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Switch
-                    checked={mp.enabled}
-                    onCheckedChange={(enabled) => updateMediaPath.mutate({ mediaPathId: mp.id, body: { enabled } })}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon-sm" onClick={() => deleteMediaPath.mutate(mp.id)}>
-                    <TrashIcon className="size-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
+              <MediaPathRow key={mp.id} mp={mp} diskId={diskId} />
             ))}
             {mediaPaths?.length === 0 && (
               <TableRow>

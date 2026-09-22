@@ -41,3 +41,23 @@ def test_browse_rejects_path_traversal(client):
     response = client.get(f"/api/disks/{disk_id}/browse", params={"path": "../../etc"})
 
     assert response.status_code == 400
+
+
+def test_update_disk_torrent_client_root_path(client):
+    (client.scan_root / "disk1").mkdir()
+    created = client.post("/api/disks", json={"label": "Disk 1", "root_path": str(client.scan_root / "disk1")}).json()
+
+    response = client.patch(f"/api/disks/{created['id']}", json={"torrent_client_root_path": "/mnt/disk1"})
+
+    assert response.status_code == 200
+    assert response.json()["torrent_client_root_path"] == "/mnt/disk1"
+
+
+def test_update_disk_label(client):
+    (client.scan_root / "disk1").mkdir()
+    created = client.post("/api/disks", json={"label": "Disk 1", "root_path": str(client.scan_root / "disk1")}).json()
+
+    response = client.patch(f"/api/disks/{created['id']}", json={"label": "Renamed"})
+
+    assert response.status_code == 200
+    assert response.json()["label"] == "Renamed"

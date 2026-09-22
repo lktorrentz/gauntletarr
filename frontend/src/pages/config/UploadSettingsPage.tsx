@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { ImageHostPriorityField } from '@/pages/config/ImageHostPriorityField'
 
 function TonemapSwitch() {
   const { data } = useSetting('upload_tonemap_hdr')
@@ -66,8 +67,8 @@ function DescriptionHeaderField() {
 
 export function UploadSettingsPage() {
   return (
-    <div className="grid max-w-xl gap-6">
-      <Card>
+    <div className="grid gap-6">
+      <Card className="max-w-xl">
         <CardHeader>
           <CardTitle>Screenshot</CardTitle>
           <CardDescription>Applicate al prossimo upload preparato, non retroattive su quelli già pronti.</CardDescription>
@@ -84,12 +85,35 @@ export function UploadSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="max-w-xl">
         <CardHeader>
           <CardTitle>Descrizione</CardTitle>
         </CardHeader>
         <CardContent>
           <DescriptionHeaderField />
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-4xl">
+        <CardHeader>
+          <CardTitle>Host immagini</CardTitle>
+          <CardDescription>
+            Priorità e stato a sinistra, chiavi API a destra — si prova il primo host abilitato, se fallisce si
+            passa al successivo. Imgbox e Pixhost non ne richiedono.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 md:grid-cols-2">
+          <ImageHostPriorityField />
+          <div className="grid gap-2">
+            <SettingField compact settingKey="image_host_ptpimg_api_key" label="PTPImg" description="https://ptpimg.me" type="password" />
+            <SettingField compact settingKey="image_host_imgbb_api_key" label="ImgBB" description="https://api.imgbb.com" type="password" />
+            <SettingField compact settingKey="image_host_lensdump_api_key" label="Lensdump" description="https://lensdump.com" type="password" />
+            <SettingField compact settingKey="image_host_ptscreens_api_key" label="PTScreens" description="https://ptscreens.com" type="password" />
+            <SettingField compact settingKey="image_host_onlyimage_api_key" label="OnlyImage" description="https://onlyimage.org" type="password" />
+            <SettingField compact settingKey="image_host_dalexni_api_key" label="Dalexni" description="https://dalexni.com" type="password" />
+            <SettingField compact settingKey="image_host_utppm_api_key" label="utp.pm" description="https://utp.pm" type="password" />
+            <SettingField compact settingKey="image_host_seedpool_cdn_api_key" label="Seedpool CDN" description="https://i.seedpool.org" type="password" />
+          </div>
         </CardContent>
       </Card>
     </div>

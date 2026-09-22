@@ -20,6 +20,8 @@ class MediaPathCreateRequest(BaseModel):
 
 
 class MediaPathUpdateRequest(BaseModel):
+    relative_path: str | None = None
+    content_type: str | None = None
     enabled: bool | None = None
 
 
@@ -60,16 +62,19 @@ class MediaPathConflictError(ValueError):
     pass
 
 
-def create_media_path_row(session: Session, disk: Disk, relative_path: str, content_type: str) -> MediaPath:
-    if content_type not in ("movie", "tv"):
-        raise MediaPathValidationError("content_type deve essere 'movie' o 'tv'")
-
+def _validate_relative_path(disk: Disk, relative_path: str) -> None:
     try:
         resolved = resolve_scoped(disk.root_path, relative_path)
     except ScopeViolation as exc:
         raise MediaPathValidationError(str(exc)) from exc
     if not os.path.isdir(resolved):
         raise MediaPathValidationError(f"Percorso non trovato: {relative_path!r}")
+
+
+def create_media_path_row(session: Session, disk: Disk, relative_path: str, content_type: str) -> MediaPath:
+    if content_type not in ("movie", "tv"):
+        raise MediaPathValidationError("content_type deve essere 'movie' o 'tv'")
+    _validate_relative_path(disk, relative_path)
 
     media_path = MediaPath(disk_id=disk.id, relative_path=relative_path, content_type=content_type)
     session.add(media_path)
@@ -103,9 +108,24 @@ def create_media_path(disk_id: int, body: MediaPathCreateRequest, session: Sessi
 @router.patch("/api/media-paths/{media_path_id}", response_model=MediaPathResponse)
 def update_media_path(media_path_id: int, body: MediaPathUpdateRequest, session: Session = Depends(get_session)):
     mp = _get_media_path_or_404(session, media_path_id)
+    disk = _get_disk_or_404(session, mp.disk_id)
+    if body.content_type is not None:
+        if body.content_type not in ("movie", "tv"):
+            raise HTTPException(status_code=400, detail="content_type deve essere 'movie' o 'tv'")
+        mp.content_type = body.content_type
+    if body.relative_path is not None:
+        try:
+            _validate_relative_path(disk, body.relative_path)
+        except MediaPathValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        mp.relative_path = body.relative_path
     if body.enabled is not None:
         mp.enabled = body.enabled
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Questa MediaPath esiste già per questo disco") from exc
     return MediaPathResponse.from_model(mp)
 
 

@@ -973,6 +973,8 @@ export interface components {
             root_path: string;
             /** Torrents Rel Path */
             torrents_rel_path: string | null;
+            /** Torrent Client Root Path */
+            torrent_client_root_path: string | null;
             /** St Dev */
             st_dev: number | null;
         };
@@ -982,6 +984,8 @@ export interface components {
             label?: string | null;
             /** Torrents Rel Path */
             torrents_rel_path?: string | null;
+            /** Torrent Client Root Path */
+            torrent_client_root_path?: string | null;
         };
         /** DupeCandidateResponse */
         DupeCandidateResponse: {
@@ -1147,6 +1151,10 @@ export interface components {
         };
         /** MediaPathUpdateRequest */
         MediaPathUpdateRequest: {
+            /** Relative Path */
+            relative_path?: string | null;
+            /** Content Type */
+            content_type?: string | null;
             /** Enabled */
             enabled?: boolean | null;
         };

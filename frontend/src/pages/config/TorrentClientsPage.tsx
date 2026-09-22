@@ -1,4 +1,4 @@
-import { HardDriveIcon, PlusIcon, TrashIcon, ZapIcon } from 'lucide-react'
+import { HardDriveIcon, PencilIcon, PlusIcon, TrashIcon, ZapIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -12,12 +12,14 @@ import {
   useTorrentClients,
   useUpdateTorrentClient,
 } from '@/api/hooks/torrentClients'
+import type { Schemas } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -29,6 +31,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { selectLabel } from '@/lib/utils'
+
+type TorrentClient = Schemas['TorrentClientResponse']
 
 const ADAPTER_TYPES = [
   { value: 'qbittorrent', label: 'qBittorrent' },
@@ -167,6 +171,109 @@ function AddTorrentClientDialog() {
   )
 }
 
+function EditTorrentClientDialog({ tc }: { tc: TorrentClient }) {
+  const [open, setOpen] = useState(false)
+  const [label, setLabel] = useState(tc.label)
+  const [baseUrl, setBaseUrl] = useState(tc.base_url)
+  const [username, setUsername] = useState(tc.username ?? '')
+  const [password, setPassword] = useState('')
+  const [apiToken, setApiToken] = useState('')
+  const [quiInstanceId, setQuiInstanceId] = useState(tc.qui_instance_id?.toString() ?? '')
+  const updateTorrentClient = useUpdateTorrentClient()
+  const isQui = tc.adapter_type === 'qui'
+
+  function submit() {
+    updateTorrentClient.mutate(
+      {
+        id: tc.id,
+        body: {
+          label,
+          base_url: baseUrl,
+          username: isQui ? undefined : username || undefined,
+          password: isQui ? undefined : password || undefined,
+          api_token: isQui ? apiToken || undefined : undefined,
+          qui_instance_id: isQui && quiInstanceId ? Number(quiInstanceId) : undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          setOpen(false)
+          setPassword('')
+          setApiToken('')
+        },
+        onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+      },
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title="Modifica"><PencilIcon className="size-4" /></Button>} />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Modifica client torrent</DialogTitle>
+          <DialogDescription>Tipo ({tc.adapter_type}) non modificabile — elimina e ricrea per cambiarlo.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="tc-edit-label">Etichetta</Label>
+            <Input id="tc-edit-label" value={label} onChange={(e) => setLabel(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="tc-edit-base-url">URL</Label>
+            <Input id="tc-edit-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+          </div>
+          {isQui ? (
+            <>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tc-edit-api-token">API key</Label>
+                <Input
+                  id="tc-edit-api-token"
+                  type="password"
+                  value={apiToken}
+                  onChange={(e) => setApiToken(e.target.value)}
+                  placeholder="Lascia vuoto per non cambiarla"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tc-edit-qui-instance-id">Istanza</Label>
+                <Input
+                  id="tc-edit-qui-instance-id"
+                  type="number"
+                  value={quiInstanceId}
+                  onChange={(e) => setQuiInstanceId(e.target.value)}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tc-edit-username">Utente</Label>
+                <Input id="tc-edit-username" value={username} onChange={(e) => setUsername(e.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tc-edit-password">Password</Label>
+                <Input
+                  id="tc-edit-password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Lascia vuoto per non cambiarla"
+                />
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button onClick={submit} disabled={!label || !baseUrl || updateTorrentClient.isPending}>
+            Salva
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function TestButton({ id }: { id: number }) {
   const test = useTestTorrentClient()
   return (
@@ -285,7 +392,8 @@ export function TorrentClientsPage() {
                 <TableCell className="flex justify-end gap-1">
                   <TestButton id={tc.id} />
                   <DisksDialog torrentClientId={tc.id} diskIds={tc.disk_ids} />
-                  <Button variant="ghost" size="icon-sm" onClick={() => deleteTorrentClient.mutate(tc.id)}>
+                  <EditTorrentClientDialog tc={tc} />
+                  <Button variant="ghost" size="icon-sm" title="Elimina" onClick={() => deleteTorrentClient.mutate(tc.id)}>
                     <TrashIcon className="size-4" />
                   </Button>
                 </TableCell>
