@@ -17,6 +17,12 @@ Dopo ogni modifica agli endpoint del backend, rigenera i tipi TypeScript dallo s
 npm run gen-types
 ```
 
+## Test
+
+```bash
+npm run test   # vitest, component/unit test sulla logica non banale (vedi src/**/*.test.ts[x])
+```
+
 ## Build
 
 ```bash
@@ -31,3 +37,7 @@ In produzione `dist/` viene servito direttamente da FastAPI (`app/frontend.py`) 
 - `src/components/ui/` — componenti shadcn/ui (copiati nel repo dal CLI, non una dipendenza runtime)
 - `src/components/layout/` — shell dell'app (sidebar, layout)
 - `src/pages/` — una pagina per voce di navigazione (`src/lib/nav.ts`, struttura da `docs/SPEC.md` §10)
+
+## Attenzione: `Select.Value` di Base UI
+
+I componenti shadcn/ui qui sono costruiti su **Base UI**, non Radix — a differenza di Radix, `Select.Value` mostra il `value` grezzo selezionato invece dell'etichetta della `SelectItem` corrispondente, e passargli `children` disattiva anche il fallback automatico al `placeholder`. Va sempre gestito esplicitamente con l'helper condiviso `selectLabel()` (`src/lib/utils.ts`, testato in `utils.test.ts`) invece di ripetere la logica in ogni `Select`.

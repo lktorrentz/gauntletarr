@@ -18,7 +18,7 @@ const KNOWN_HOSTS: Record<string, string> = {
 }
 const DEFAULT_ORDER = ['ptpimg', 'imgbox', 'imgbb']
 
-function parseOrder(raw: string | null | undefined): string[] {
+export function parseOrder(raw: string | null | undefined): string[] {
   const fromSetting = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []
   const known = fromSetting.filter((key) => key in KNOWN_HOSTS)
   // Host mai salvati (o un valore vuoto/mai impostato) vanno comunque

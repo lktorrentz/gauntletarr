@@ -33,7 +33,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { DiskBrowserDialog } from '@/pages/config/DiskBrowserDialog'
 import { selectLabel } from '@/lib/utils'
 
-function CreateUploadForm({ onCreated }: { onCreated: (id: number) => void }) {
+export function CreateUploadForm({ onCreated }: { onCreated: (id: number) => void }) {
   const { data: disks } = useDisks()
   const { data: trackers } = useTrackers()
   const [diskId, setDiskId] = useState<number | null>(null)
