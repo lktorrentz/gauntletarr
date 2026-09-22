@@ -12,9 +12,9 @@ import { RunsPage } from '@/pages/reseeding/RunsPage'
 import { ReviewPage } from '@/pages/reseeding/ReviewPage'
 import { NewUploadPage } from '@/pages/upload/NewUploadPage'
 import { UploadQueuePage } from '@/pages/upload/UploadQueuePage'
-import { TreeViewPage } from '@/pages/library/TreeViewPage'
-import { GridViewPage } from '@/pages/library/GridViewPage'
-import { OrphanedPage } from '@/pages/library/OrphanedPage'
+import { FolderView } from '@/pages/library/FolderView'
+import { PosterView } from '@/pages/library/PosterView'
+import { TorrentFolderView } from '@/pages/torrent/TorrentFolderView'
 import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
 
 // Ogni voce di navigazione (NAV_DASHBOARD + NAV_GROUPS) diventa una route:
@@ -24,9 +24,9 @@ import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
 // elenchi di route da tenere sincronizzati a mano.
 const overrides: Record<string, ReactNode> = {
   [NAV_DASHBOARD.to]: <DashboardPage />,
-  '/library/tree': <TreeViewPage />,
-  '/library/grid': <GridViewPage />,
-  '/library/orphaned': <OrphanedPage />,
+  '/library/poster': <PosterView />,
+  '/library/folder': <FolderView />,
+  '/torrent/folder': <TorrentFolderView />,
   '/reseeding/review': <ReviewPage />,
   '/reseeding/runs': <RunsPage />,
   '/upload/new': <NewUploadPage />,

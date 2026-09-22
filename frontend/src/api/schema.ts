@@ -247,6 +247,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/library/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Duplicates
+         * @description Copie non intenzionali dello stesso contenuto su inode diversi —
+         *     file già hardlinkati fra loro non compaiono qui (app/duplicates.py).
+         */
+        get: operations["list_duplicates_api_library_duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/library/posters/{tmdb_id}.jpg": {
         parameters: {
             query?: never;
@@ -336,6 +357,28 @@ export interface paths {
         post: operations["associate_disk_api_torrent_clients__torrent_client_id__disks__disk_id__post"];
         /** Dissociate Disk */
         delete: operations["dissociate_disk_api_torrent_clients__torrent_client_id__disks__disk_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/exclusion-presets/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Exclusion Presets
+         * @description Preset pronti per esclusioni note (sidecar dei client torrent più
+         *     comuni + spazzatura tipica di release scena) — l'utente li abilita in
+         *     Impostazioni senza doverne conoscere i pattern esatti.
+         */
+        get: operations["list_exclusion_presets_api_settings_exclusion_presets_available_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -845,6 +888,31 @@ export interface components {
             /** Size Bytes */
             size_bytes: number;
         };
+        /** DuplicateFile */
+        DuplicateFile: {
+            /** Media File Id */
+            media_file_id: number;
+            /** Disk Id */
+            disk_id: number;
+            /** Relative Path */
+            relative_path: string;
+        };
+        /** DuplicateGroup */
+        DuplicateGroup: {
+            /** Content Hash */
+            content_hash: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Files */
+            files: components["schemas"]["DuplicateFile"][];
+        };
+        /** ExclusionPresetResponse */
+        ExclusionPresetResponse: {
+            /** Key */
+            key: string;
+            /** Patterns */
+            patterns: string[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -904,6 +972,10 @@ export interface components {
             size_bytes: number;
             /** State */
             state: string;
+            /** Excluded */
+            excluded: boolean;
+            /** Linked Paths */
+            linked_paths: string[];
         };
         /** MediaItemFile */
         MediaItemFile: {
@@ -915,6 +987,10 @@ export interface components {
             relative_path: string;
             /** State */
             state: string;
+            /** Excluded */
+            excluded: boolean;
+            /** Linked Paths */
+            linked_paths: string[];
         };
         /** MediaItemOverview */
         MediaItemOverview: {
@@ -1039,6 +1115,10 @@ export interface components {
             media_file_id: number | null;
             /** State */
             state: string;
+            /** Excluded */
+            excluded: boolean;
+            /** Linked Paths */
+            linked_paths: string[];
         };
         /** SeedJobResponse */
         SeedJobResponse: {
@@ -1898,6 +1978,37 @@ export interface operations {
             };
         };
     };
+    list_duplicates_api_library_duplicates_get: {
+        parameters: {
+            query?: {
+                disk_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateGroup"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_poster_api_library_posters__tmdb_id__jpg_get: {
         parameters: {
             query?: never;
@@ -2133,6 +2244,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_exclusion_presets_api_settings_exclusion_presets_available_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExclusionPresetResponse"][];
                 };
             };
         };

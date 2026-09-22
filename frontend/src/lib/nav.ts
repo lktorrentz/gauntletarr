@@ -1,6 +1,7 @@
 import {
   FolderTree,
   Gauge,
+  HardDriveDownload,
   LayoutDashboard,
   Settings,
   UploadCloud,
@@ -41,10 +42,14 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'Library',
     icon: FolderTree,
     items: [
-      { title: 'Tree view', to: '/library/tree' },
-      { title: 'Grid view', to: '/library/grid' },
-      { title: 'Orphaned & ignored', to: '/library/orphaned' },
+      { title: 'Poster view', to: '/library/poster' },
+      { title: 'Folder view', to: '/library/folder' },
     ],
+  },
+  {
+    title: 'Torrent',
+    icon: HardDriveDownload,
+    items: [{ title: 'Folder view', to: '/torrent/folder' }],
   },
   {
     title: 'Reseeding',
