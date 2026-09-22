@@ -52,7 +52,7 @@ def resolve_unmatched_media_files(
     for mf in media_files:
         abs_path = os.path.join(mf.disk.root_path, mf.relative_path)
         try:
-            result = resolver.resolve(abs_path, mf.media_path.content_type)
+            result = resolver.resolve(abs_path)
         except Exception:
             logger.exception("Resolver fallito su %r", abs_path)
             unresolved += 1

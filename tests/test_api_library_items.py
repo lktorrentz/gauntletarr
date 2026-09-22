@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from app.models import Disk, MediaFile, MediaItem, MediaPath, RunLog
+from app.models import Disk, MediaFile, MediaItem, RunLog
 
 
 def _session(client):
@@ -13,9 +13,6 @@ def test_library_items_groups_files_under_media_item(client):
         disk = Disk(label="d", root_path="/mnt/d")
         session.add(disk)
         session.commit()
-        mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-        session.add(mp)
-        session.commit()
         run = RunLog(run_type="manual", started_at=datetime.now(UTC))
         session.add(run)
         session.commit()
@@ -23,7 +20,7 @@ def test_library_items_groups_files_under_media_item(client):
         session.add(item)
         session.commit()
         mf = MediaFile(
-            media_path_id=mp.id, disk_id=disk.id, relative_path="movies/Interstellar.mkv", size_bytes=1,
+            disk_id=disk.id, relative_path="movies/Interstellar.mkv", size_bytes=1,
             st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
         )
         session.add(mf)
@@ -59,14 +56,11 @@ def test_media_files_marks_excluded_by_pattern(client):
         disk = Disk(label="d", root_path="/mnt/d")
         session.add(disk)
         session.commit()
-        mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-        session.add(mp)
-        session.commit()
         run = RunLog(run_type="manual", started_at=datetime.now(UTC))
         session.add(run)
         session.commit()
         mf = MediaFile(
-            media_path_id=mp.id, disk_id=disk.id, relative_path="movies/Movie.2024.nfo", size_bytes=1,
+            disk_id=disk.id, relative_path="movies/Movie.2024.nfo", size_bytes=1,
             st_dev=1, inode=1, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
         )
         session.add(mf)
@@ -85,18 +79,15 @@ def test_duplicates_endpoint_returns_groups(client):
         disk = Disk(label="d", root_path="/mnt/d")
         session.add(disk)
         session.commit()
-        mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-        session.add(mp)
-        session.commit()
         run = RunLog(run_type="manual", started_at=datetime.now(UTC))
         session.add(run)
         session.commit()
         session.add(MediaFile(
-            media_path_id=mp.id, disk_id=disk.id, relative_path="movies/A.mkv", size_bytes=10,
+            disk_id=disk.id, relative_path="movies/A.mkv", size_bytes=10,
             st_dev=1, inode=1, content_hash="abc", last_scan_id=run.id, last_seen_at=datetime.now(UTC),
         ))
         session.add(MediaFile(
-            media_path_id=mp.id, disk_id=disk.id, relative_path="movies/B.mkv", size_bytes=10,
+            disk_id=disk.id, relative_path="movies/B.mkv", size_bytes=10,
             st_dev=1, inode=2, content_hash="abc", last_scan_id=run.id, last_seen_at=datetime.now(UTC),
         ))
         session.commit()

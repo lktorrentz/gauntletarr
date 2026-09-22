@@ -102,9 +102,9 @@ def create_torrent_client(body: TorrentClientCreateRequest, session: Session = D
 @router.post("/{torrent_client_id}/test", response_model=TorrentClientTestResponse)
 def test_torrent_client(torrent_client_id: int, session: Session = Depends(get_session)):
     """Sola lettura: chiama adapter.list_torrents() e riporta successo/errore,
-    senza bisogno di dischi/media_path configurati né di passare da uno
-    scan completo — utile per verificare le credenziali subito dopo aver
-    creato/modificato un client (docs/SPEC.md sezione 5)."""
+    senza bisogno di dischi configurati né di passare da uno scan completo —
+    utile per verificare le credenziali subito dopo aver creato/modificato
+    un client (docs/SPEC.md sezione 5)."""
     tc = _get_torrent_client_or_404(session, torrent_client_id)
     try:
         adapter = adapter_factory.build_torrent_client_adapter(tc)

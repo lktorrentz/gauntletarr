@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from app import matching, pipeline
 from app.adapters.tracker.base import TorrentCandidate
-from app.models import Candidate, Disk, MediaFile, MediaItem, MediaPath, SeedFile, Tracker
+from app.models import Candidate, Disk, MediaFile, MediaItem, SeedFile, Tracker
 
 
 def _tc(**overrides) -> TorrentCandidate:
@@ -92,29 +92,26 @@ def test_match_file_persists_one_candidate_per_torrent_candidate(db_session, mon
     assert all(c.direction == "media_to_torrent" for c in candidates)
 
 
-def _make_disk_and_media_path(db_session):
-    disk = Disk(label="d", root_path="/mnt/d", torrents_rel_path="torrents")
+def _make_disk(db_session):
+    disk = Disk(label="d", root_path="/mnt/d", media_rel_path="movies", torrents_rel_path="torrents")
     db_session.add(disk)
     db_session.commit()
-    mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-    db_session.add(mp)
-    db_session.commit()
-    return disk, mp
+    return disk
 
 
 def test_orphan_media_files_excludes_hardlinked(db_session):
-    disk, mp = _make_disk_and_media_path(db_session)
+    disk = _make_disk(db_session)
     run = pipeline.start_run(db_session, "manual")
     item = MediaItem(content_type="movie", tmdb_id=1)
     db_session.add(item)
     db_session.commit()
 
     linked = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path="movies/linked.mkv", size_bytes=1,
+        disk_id=disk.id, relative_path="movies/linked.mkv", size_bytes=1,
         st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     orphan = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path="movies/orphan.mkv", size_bytes=1,
+        disk_id=disk.id, relative_path="movies/orphan.mkv", size_bytes=1,
         st_dev=1, inode=2, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     db_session.add_all([linked, orphan])

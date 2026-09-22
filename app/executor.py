@@ -68,7 +68,6 @@ def _execute_media_to_torrent(session: Session, review: MatchReview, adapter: To
     if media_file is None:
         raise ExecutionError(f"MatchReview {review.id} (media_to_torrent) senza media_file collegato")
     disk = media_file.disk
-    media_path = media_file.media_path
 
     if not disk.torrents_rel_path:
         raise ExecutionError(f"Disco '{disk.label}' non ha torrents_rel_path configurato")
@@ -79,7 +78,7 @@ def _execute_media_to_torrent(session: Session, review: MatchReview, adapter: To
     if not os.path.isdir(scan_root):
         raise ExecutionError(f"torrents_rel_path non esiste su disco: {scan_root}")
 
-    target_rel_path = media_path.effective_new_torrent_rel_path
+    target_rel_path = disk.effective_new_torrent_rel_path
     try:
         target_root = resolve_scoped(disk.root_path, target_rel_path)
     except ScopeViolation as exc:

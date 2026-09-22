@@ -6,7 +6,7 @@ con/senza hardlink.
 import os
 
 from app import library, pipeline, scanner
-from app.models import Disk, MediaFile, MediaPath
+from app.models import Disk, MediaFile
 
 
 def _make_disk(db_session, tmp_path, torrents_rel_path="torrents"):
@@ -14,15 +14,14 @@ def _make_disk(db_session, tmp_path, torrents_rel_path="torrents"):
     (root / "media" / "movies").mkdir(parents=True)
     (root / torrents_rel_path).mkdir(parents=True)
 
-    disk = Disk(label="disk1", root_path=str(root), torrents_rel_path=torrents_rel_path)
+    disk = Disk(
+        label="disk1", root_path=str(root), media_rel_path="media/movies",
+        torrents_rel_path=torrents_rel_path,
+    )
     db_session.add(disk)
     db_session.commit()
 
-    media_path = MediaPath(disk_id=disk.id, relative_path="media/movies", content_type="movie")
-    db_session.add(media_path)
-    db_session.commit()
-
-    return disk, media_path, root
+    return disk, root
 
 
 def _run_scan(db_session, disk):
@@ -35,7 +34,7 @@ def test_hardlinked_file_is_linked(db_session, tmp_path):
     # Lo scanner rileva solo l'hardlink (seed_file.media_file_id) — lo stato
     # "seeding" completo richiede anche il tracciamento del client (Fase 2,
     # vedi tests/test_library_states.py), qui deliberatamente non configurato.
-    disk, _media_path, root = _make_disk(db_session, tmp_path)
+    disk, root = _make_disk(db_session, tmp_path)
 
     media_file_path = root / "media" / "movies" / "Movie.2024.mkv"
     media_file_path.write_bytes(b"fake video content")
@@ -56,7 +55,7 @@ def test_hardlinked_file_is_linked(db_session, tmp_path):
 
 
 def test_media_file_without_hardlink_is_orphan(db_session, tmp_path):
-    disk, _media_path, root = _make_disk(db_session, tmp_path)
+    disk, root = _make_disk(db_session, tmp_path)
 
     (root / "media" / "movies" / "Lonely.2024.mkv").write_bytes(b"no link for me")
 
@@ -68,7 +67,7 @@ def test_media_file_without_hardlink_is_orphan(db_session, tmp_path):
 
 
 def test_seed_file_without_media_counterpart_is_orphan_torrent(db_session, tmp_path):
-    disk, _media_path, root = _make_disk(db_session, tmp_path)
+    disk, root = _make_disk(db_session, tmp_path)
 
     (root / "torrents" / "Standalone.2024.mkv").write_bytes(b"seeding but not in library")
 
@@ -81,7 +80,7 @@ def test_seed_file_without_media_counterpart_is_orphan_torrent(db_session, tmp_p
 
 
 def test_non_video_extension_ignored_on_media_side(db_session, tmp_path):
-    disk, _media_path, root = _make_disk(db_session, tmp_path)
+    disk, root = _make_disk(db_session, tmp_path)
 
     (root / "media" / "movies" / "readme.txt").write_bytes(b"not a video")
 
@@ -93,7 +92,7 @@ def test_non_video_extension_ignored_on_media_side(db_session, tmp_path):
 def test_non_video_file_on_torrent_side_is_still_indexed(db_session, tmp_path):
     # Lato torrent NON filtriamo per estensione (sottotitoli/nfo/sample
     # fanno parte del torrent, servono dalla Fase 2 per client_torrent_file).
-    disk, _media_path, root = _make_disk(db_session, tmp_path)
+    disk, root = _make_disk(db_session, tmp_path)
 
     (root / "torrents" / "movie.srt").write_bytes(b"subtitle")
 
@@ -105,7 +104,7 @@ def test_non_video_file_on_torrent_side_is_still_indexed(db_session, tmp_path):
 
 
 def test_rescanning_does_not_duplicate_rows(db_session, tmp_path):
-    disk, _media_path, root = _make_disk(db_session, tmp_path)
+    disk, root = _make_disk(db_session, tmp_path)
 
     media_file_path = root / "media" / "movies" / "Movie.2024.mkv"
     media_file_path.write_bytes(b"fake video content")
@@ -126,11 +125,8 @@ def test_rescanning_does_not_duplicate_rows(db_session, tmp_path):
 def test_disk_without_torrents_rel_path_only_scans_media(db_session, tmp_path):
     root = tmp_path / "disk2"
     (root / "media" / "movies").mkdir(parents=True)
-    disk = Disk(label="disk2", root_path=str(root))  # torrents_rel_path non configurato
+    disk = Disk(label="disk2", root_path=str(root), media_rel_path="media/movies")  # torrents_rel_path non configurato
     db_session.add(disk)
-    db_session.commit()
-    media_path = MediaPath(disk_id=disk.id, relative_path="media/movies", content_type="movie")
-    db_session.add(media_path)
     db_session.commit()
 
     (root / "media" / "movies" / "Movie.2024.mkv").write_bytes(b"content")
@@ -141,8 +137,23 @@ def test_disk_without_torrents_rel_path_only_scans_media(db_session, tmp_path):
     assert library.seed_file_states(db_session) == []
 
 
+def test_disk_without_media_rel_path_only_scans_torrents(db_session, tmp_path):
+    root = tmp_path / "disk3"
+    (root / "torrents").mkdir(parents=True)
+    disk = Disk(label="disk3", root_path=str(root), torrents_rel_path="torrents")  # media_rel_path non configurato
+    db_session.add(disk)
+    db_session.commit()
+
+    (root / "torrents" / "Standalone.2024.mkv").write_bytes(b"content")
+
+    _run_scan(db_session, disk)
+
+    assert library.media_file_states(db_session) == []
+    assert len(library.seed_file_states(db_session)) == 1
+
+
 def test_scan_populates_content_hash(db_session, tmp_path):
-    disk, _media_path, root = _make_disk(db_session, tmp_path)
+    disk, root = _make_disk(db_session, tmp_path)
     (root / "media" / "movies" / "Movie.2024.mkv").write_bytes(b"fake video content")
 
     _run_scan(db_session, disk)

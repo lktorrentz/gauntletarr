@@ -55,42 +55,24 @@ class Disk(Base):
     label: Mapped[str] = mapped_column(nullable=False)
     root_path: Mapped[str] = mapped_column(nullable=False, unique=True)
     st_dev: Mapped[int | None]
+    media_rel_path: Mapped[str | None]
     torrents_rel_path: Mapped[str | None]
+    new_torrent_rel_path: Mapped[str | None]
     torrent_client_root_path: Mapped[str | None]
     created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
 
-    media_paths: Mapped[list["MediaPath"]] = relationship(
-        back_populates="disk", cascade="all, delete-orphan"
-    )
     torrent_clients: Mapped[list["TorrentClient"]] = relationship(
         secondary="disk_torrent_client", back_populates="disks"
     )
 
-
-class MediaPath(Base):
-    __tablename__ = "media_path"
-    __table_args__ = (
-        UniqueConstraint("disk_id", "relative_path"),
-        CheckConstraint("content_type IN ('movie','tv')", name="ck_media_path_content_type"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    disk_id: Mapped[int] = mapped_column(ForeignKey("disk.id", ondelete="CASCADE"), nullable=False)
-    relative_path: Mapped[str] = mapped_column(nullable=False)
-    content_type: Mapped[str] = mapped_column(nullable=False)
-    enabled: Mapped[bool] = mapped_column(nullable=False, server_default=text("1"))
-    new_torrent_rel_path: Mapped[str | None]
-
-    disk: Mapped["Disk"] = relationship(back_populates="media_paths")
-
     @property
     def effective_new_torrent_rel_path(self) -> str | None:
-        """Cartella dove va creato un NUOVO hardlink per questa libreria (e
-        il save_path da comunicare al client) se configurata, altrimenti
-        quella del disco (vedi docs/SPEC.md, ereditato da ratio-guardian
-        §3). Riguarda SOLO dove posizionare cose nuove: la ricerca "già in
-        seeding" resta sempre sull'intera disk.torrents_rel_path."""
-        return self.new_torrent_rel_path or self.disk.torrents_rel_path
+        """Cartella dove va creato un NUOVO hardlink (e il save_path da
+        comunicare al client) se configurata, altrimenti torrents_rel_path
+        (vedi docs/SPEC.md, ereditato da ratio-guardian §3). Riguarda SOLO
+        dove posizionare cose nuove: la ricerca "già in seeding" resta
+        sempre sull'intero torrents_rel_path."""
+        return self.new_torrent_rel_path or self.torrents_rel_path
 
 
 class Tracker(Base):
@@ -209,7 +191,6 @@ class MediaFile(Base):
     __table_args__ = (UniqueConstraint("disk_id", "relative_path"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    media_path_id: Mapped[int] = mapped_column(ForeignKey("media_path.id", ondelete="CASCADE"), nullable=False)
     disk_id: Mapped[int] = mapped_column(ForeignKey("disk.id", ondelete="CASCADE"), nullable=False)
     relative_path: Mapped[str] = mapped_column(nullable=False)
     size_bytes: Mapped[int] = mapped_column(nullable=False)
@@ -226,7 +207,6 @@ class MediaFile(Base):
     last_scan_id: Mapped[int] = mapped_column(ForeignKey("run_log.id"), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(nullable=False)
 
-    media_path: Mapped["MediaPath"] = relationship()
     disk: Mapped["Disk"] = relationship()
     media_item: Mapped["MediaItem | None"] = relationship()
 

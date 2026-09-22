@@ -8,7 +8,6 @@ from app.api.auth import router as auth_router
 from app.api.dashboard import router as dashboard_router
 from app.api.disks import router as disks_router
 from app.api.library import router as library_router
-from app.api.media_paths import router as media_paths_router
 from app.api.reviews import router as reviews_router
 from app.api.runs import router as runs_router
 from app.api.schedule import router as schedule_router
@@ -57,7 +56,6 @@ app.include_router(auth_router)
 # continua a funzionare esattamente come prima di questa fase.
 _protected = Depends(auth.require_auth)
 app.include_router(disks_router, dependencies=[_protected])
-app.include_router(media_paths_router, dependencies=[_protected])
 app.include_router(runs_router, dependencies=[_protected])
 app.include_router(library_router, dependencies=[_protected])
 app.include_router(torrent_clients_router, dependencies=[_protected])

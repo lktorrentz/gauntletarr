@@ -30,18 +30,15 @@ def _media_item(db_session):
 
 def _media_file_stub(db_session, item):
     # I test di review.py non toccano il filesystem: bastano id validi via FK,
-    # non serve un Disk/MediaPath reali per la sola logica di classificazione.
-    from app.models import Disk, MediaPath
+    # non serve un Disk reale per la sola logica di classificazione.
+    from app.models import Disk
 
     disk = Disk(label="d", root_path="/mnt/d")
     db_session.add(disk)
     db_session.commit()
-    mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-    db_session.add(mp)
-    db_session.commit()
     run = pipeline.start_run(db_session, "manual")
     mf = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path="movies/x.mkv", size_bytes=1,
+        disk_id=disk.id, relative_path="movies/x.mkv", size_bytes=1,
         st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     db_session.add(mf)

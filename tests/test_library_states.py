@@ -8,7 +8,7 @@ import os
 
 from app import library, pipeline, scanner, torrent_indexer
 from app.adapters.torrent_client.base import ClientTorrentFileInfo, ClientTorrentInfo, TorrentClientAdapter
-from app.models import Disk, MediaPath, TorrentClient
+from app.models import Disk, TorrentClient
 
 
 class FakeAdapter(TorrentClientAdapter):
@@ -30,11 +30,8 @@ def test_four_state_combinations(db_session, tmp_path):
     (root / "media" / "movies").mkdir(parents=True)
     (root / "torrents").mkdir(parents=True)
 
-    disk = Disk(label="disk1", root_path=str(root), torrents_rel_path="torrents")
+    disk = Disk(label="disk1", root_path=str(root), media_rel_path="media/movies", torrents_rel_path="torrents")
     db_session.add(disk)
-    db_session.commit()
-    media_path = MediaPath(disk_id=disk.id, relative_path="media/movies", content_type="movie")
-    db_session.add(media_path)
     db_session.commit()
 
     tc = TorrentClient(label="qbt", adapter_type="qbittorrent", base_url="http://qbt")

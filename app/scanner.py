@@ -50,19 +50,18 @@ def _walk_files(abs_root: str):
 
 
 def scan_disk(session: Session, disk: Disk, run: RunLog) -> dict[str, int]:
-    """Scansiona un disco: tutte le sue MediaPath abilitate (filtrate alle
-    estensioni video) e, se configurata, la sua cartella torrent (ogni
+    """Scansiona un disco: la sua cartella media (se configurata, filtrata
+    alle estensioni video) e, se configurata, la sua cartella torrent (ogni
     file, senza filtro — un client traccia anche sottotitoli/nfo/sample,
     servirà per il collegamento coi client_torrent_file dalla Fase 2)."""
     now = datetime.now(UTC)
     media_rows: list[dict] = []
-    for media_path in [mp for mp in disk.media_paths if mp.enabled]:
-        abs_root = os.path.join(disk.root_path, media_path.relative_path)
+    if disk.media_rel_path:
+        abs_root = os.path.join(disk.root_path, disk.media_rel_path)
         for full_path, st in _walk_files(abs_root):
             if Path(full_path).suffix.lower() not in VIDEO_EXTENSIONS:
                 continue
             media_rows.append({
-                "media_path_id": media_path.id,
                 "disk_id": disk.id,
                 "relative_path": os.path.relpath(full_path, disk.root_path),
                 "size_bytes": st.st_size,
@@ -81,7 +80,7 @@ def scan_disk(session: Session, disk: Disk, run: RunLog) -> dict[str, int]:
         session, MediaFile.__table__, media_rows,
         conflict_cols=["disk_id", "relative_path"],
         update_cols=[
-            "media_path_id", "size_bytes", "st_dev", "inode", "nlink", "content_hash",
+            "size_bytes", "st_dev", "inode", "nlink", "content_hash",
             "last_scan_id", "last_seen_at",
         ],
     )

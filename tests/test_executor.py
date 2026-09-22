@@ -5,7 +5,7 @@ import pytest
 
 from app import executor, pipeline
 from app.adapters.torrent_client.base import TorrentStatus
-from app.models import Candidate, Disk, MatchReview, MediaFile, MediaItem, MediaPath, SeedFile, Tracker
+from app.models import Candidate, Disk, MatchReview, MediaFile, MediaItem, SeedFile, Tracker
 
 
 class FakeAdapter:
@@ -35,11 +35,8 @@ def _make_disk_media_path(tmp_path):
 
 def _base_setup(db_session, tmp_path):
     root = _make_disk_media_path(tmp_path)
-    disk = Disk(label="d", root_path=str(root), torrents_rel_path="torrents")
+    disk = Disk(label="d", root_path=str(root), media_rel_path="media/movies", torrents_rel_path="torrents")
     db_session.add(disk)
-    db_session.commit()
-    mp = MediaPath(disk_id=disk.id, relative_path="media/movies", content_type="movie")
-    db_session.add(mp)
     db_session.commit()
     tracker = Tracker(label="t", adapter_type="unit3d", base_url="https://t.example", api_token="x")
     db_session.add(tracker)
@@ -48,16 +45,16 @@ def _base_setup(db_session, tmp_path):
     db_session.add(item)
     db_session.commit()
     run = pipeline.start_run(db_session, "manual")
-    return root, disk, mp, tracker, item, run
+    return root, disk, tracker, item, run
 
 
 def test_execute_media_to_torrent_creates_hardlink_and_adds_torrent(db_session, tmp_path):
-    root, disk, mp, tracker, item, run = _base_setup(db_session, tmp_path)
+    root, disk, tracker, item, run = _base_setup(db_session, tmp_path)
 
     media_file_path = root / "media" / "movies" / "Movie.2024.mkv"
     media_file_path.write_bytes(b"content")
     media_file = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path="media/movies/Movie.2024.mkv", size_bytes=7,
+        disk_id=disk.id, relative_path="media/movies/Movie.2024.mkv", size_bytes=7,
         st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     db_session.add(media_file)
@@ -87,11 +84,11 @@ def test_execute_media_to_torrent_creates_hardlink_and_adds_torrent(db_session, 
 
 
 def test_execute_media_to_torrent_respects_candidate_folder(db_session, tmp_path):
-    root, disk, mp, tracker, item, run = _base_setup(db_session, tmp_path)
+    root, disk, tracker, item, run = _base_setup(db_session, tmp_path)
     media_file_path = root / "media" / "movies" / "Movie.2024.mkv"
     media_file_path.write_bytes(b"content")
     media_file = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path="media/movies/Movie.2024.mkv", size_bytes=7,
+        disk_id=disk.id, relative_path="media/movies/Movie.2024.mkv", size_bytes=7,
         st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     db_session.add(media_file)
@@ -113,11 +110,11 @@ def test_execute_media_to_torrent_respects_candidate_folder(db_session, tmp_path
 
 
 def test_execute_media_to_torrent_fails_on_cross_device(db_session, tmp_path, monkeypatch):
-    root, disk, mp, tracker, item, run = _base_setup(db_session, tmp_path)
+    root, disk, tracker, item, run = _base_setup(db_session, tmp_path)
     media_file_path = root / "media" / "movies" / "Movie.2024.mkv"
     media_file_path.write_bytes(b"content")
     media_file = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path="media/movies/Movie.2024.mkv", size_bytes=7,
+        disk_id=disk.id, relative_path="media/movies/Movie.2024.mkv", size_bytes=7,
         st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     db_session.add(media_file)
@@ -153,11 +150,11 @@ def test_execute_media_to_torrent_fails_on_cross_device(db_session, tmp_path, mo
 
 
 def test_execute_torrent_to_client_adds_existing_file_without_new_hardlink(db_session, tmp_path):
-    root, disk, mp, tracker, item, run = _base_setup(db_session, tmp_path)
+    root, disk, tracker, item, run = _base_setup(db_session, tmp_path)
     existing_file = root / "torrents" / "Standalone.2024.mkv"
     existing_file.write_bytes(b"content")
     media_file = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path="media/movies/Standalone.2024.mkv", size_bytes=7,
+        disk_id=disk.id, relative_path="media/movies/Standalone.2024.mkv", size_bytes=7,
         st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     db_session.add(media_file)
@@ -188,11 +185,11 @@ def test_execute_torrent_to_client_adds_existing_file_without_new_hardlink(db_se
 
 
 def test_execute_without_download_link_fails_explicitly(db_session, tmp_path):
-    root, disk, mp, tracker, item, run = _base_setup(db_session, tmp_path)
+    root, disk, tracker, item, run = _base_setup(db_session, tmp_path)
     existing_file = root / "torrents" / "Standalone.2024.mkv"
     existing_file.write_bytes(b"content")
     media_file = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path="media/movies/x.mkv", size_bytes=7,
+        disk_id=disk.id, relative_path="media/movies/x.mkv", size_bytes=7,
         st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     db_session.add(media_file)
@@ -219,7 +216,7 @@ def test_execute_without_download_link_fails_explicitly(db_session, tmp_path):
 
 
 def test_reconcile_seed_job_updates_status_to_seeding(db_session, tmp_path):
-    root, disk, mp, tracker, item, run = _base_setup(db_session, tmp_path)
+    root, disk, tracker, item, run = _base_setup(db_session, tmp_path)
     candidate = Candidate(
         media_item_id=item.id, tracker_id=tracker.id, torrent_id_remote="1", name="x", size_bytes=1,
         source="catalog_search", direction="media_to_torrent", confidence=1.0,

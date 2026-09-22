@@ -7,10 +7,9 @@ def _create_disk_with_hardlinked_file(client):
     (root / "torrents").mkdir(parents=True)
 
     disk_id = client.post("/api/disks", json={"label": "Disk 1", "root_path": str(root)}).json()["id"]
-    client.patch(f"/api/disks/{disk_id}", json={"torrents_rel_path": "torrents"})
-    client.post(
-        f"/api/disks/{disk_id}/media-paths",
-        json={"relative_path": "media/movies", "content_type": "movie"},
+    client.patch(
+        f"/api/disks/{disk_id}",
+        json={"torrents_rel_path": "torrents", "media_rel_path": "media/movies"},
     )
 
     media_file = root / "media" / "movies" / "Movie.2024.mkv"

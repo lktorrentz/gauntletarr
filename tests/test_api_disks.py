@@ -5,7 +5,9 @@ def test_available_mounts_lists_unassigned_subfolders(client):
     response = client.get("/api/disks/available-mounts")
 
     assert response.status_code == 200
-    mounts = response.json()["mounts"]
+    body = response.json()
+    assert body["scan_root"] == str(client.scan_root)
+    mounts = body["mounts"]
     assert str(client.scan_root / "disk1") in mounts
     assert str(client.scan_root / "disk2") in mounts
 
@@ -61,3 +63,20 @@ def test_update_disk_label(client):
 
     assert response.status_code == 200
     assert response.json()["label"] == "Renamed"
+
+
+def test_update_disk_media_rel_path_and_new_torrent_rel_path(client):
+    (client.scan_root / "disk1").mkdir()
+    created = client.post("/api/disks", json={"label": "Disk 1", "root_path": str(client.scan_root / "disk1")}).json()
+    assert created["media_rel_path"] is None
+    assert created["new_torrent_rel_path"] is None
+
+    response = client.patch(
+        f"/api/disks/{created['id']}",
+        json={"media_rel_path": "media", "new_torrent_rel_path": "torrents/new"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["media_rel_path"] == "media"
+    assert body["new_torrent_rel_path"] == "torrents/new"

@@ -18,6 +18,7 @@ from app import mediainfo_util, screenshots, settings_repo, torrent_create
 from app.adapters.image_host.base import ImageHostAdapter, ImageHostError
 from app.adapters.media_resolver.base import MediaResolverAdapter
 from app.adapters.tracker.base import TorrentCandidate, TrackerAdapter, UploadError, UploadFields
+from app.content_type_guess import guess_content_type_from_guessit
 from app.models import Tracker, TrackerUploadProfile, UploadJob
 
 logger = logging.getLogger(__name__)
@@ -39,8 +40,7 @@ class UploadPreparationError(Exception):
 
 
 def _guess_content_type(source_path: str) -> str:
-    guess = guessit.guessit(source_path)
-    return "tv" if guess.get("type") == "episode" else "movie"
+    return guess_content_type_from_guessit(guessit.guessit(source_path))
 
 
 def _guess_release_type_key(source_path: str, type_map: dict) -> str | None:

@@ -13,29 +13,23 @@ CREATE TABLE IF NOT EXISTS disk (
     label                       TEXT NOT NULL,
     root_path                   TEXT NOT NULL UNIQUE,   -- must match/be inside a config.yaml mount
     st_dev                      INTEGER,                -- cached from the last verification
+    media_rel_path              TEXT,                   -- relative to root_path, nullable — where the scan
+                                                         -- looks for video files. One media library per disk;
+                                                         -- movie vs tv is detected by the resolver (filename/
+                                                         -- path heuristics), never chosen here.
     torrents_rel_path           TEXT,                   -- relative to root_path, nullable
+    new_torrent_rel_path        TEXT,                   -- optional, relative to root_path (same convention as
+                                                         -- torrents_rel_path): ONLY where to create a NEW
+                                                         -- hardlink and which save_path to hand the client.
+                                                         -- Does NOT narrow the "already seeding" search, which
+                                                         -- always stays on the whole torrents_rel_path. If
+                                                         -- null, torrents_rel_path is used unchanged.
     torrent_client_root_path    TEXT,                   -- root of THIS disk as seen by the torrent client, if
                                                          -- different from root_path (different container/mount
                                                          -- for the same physical disk) — null if the client and
                                                          -- Gauntletarr see the same path (common case, same
                                                          -- host or same mount)
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS media_path (
-    id                  INTEGER PRIMARY KEY,
-    disk_id             INTEGER NOT NULL REFERENCES disk(id) ON DELETE CASCADE,
-    relative_path       TEXT NOT NULL,          -- relative to disk.root_path
-    content_type        TEXT NOT NULL CHECK (content_type IN ('movie','tv')),
-    enabled             BOOLEAN NOT NULL DEFAULT 1,
-    new_torrent_rel_path TEXT,                  -- optional, relative to disk.root_path (same convention
-                                                 -- as disk.torrents_rel_path): ONLY where to create a NEW
-                                                 -- hardlink for this library and which save_path to hand
-                                                 -- the client. Does NOT narrow the "already seeding"
-                                                 -- search, which always stays on the whole
-                                                 -- disk.torrents_rel_path. If null, disk.torrents_rel_path
-                                                 -- is used unchanged.
-    UNIQUE(disk_id, relative_path)
 );
 
 CREATE TABLE IF NOT EXISTS tracker (
@@ -141,15 +135,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_media_item_movie ON media_item(tmdb_id)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_media_item_tv ON media_item(tmdb_id, season_number, episode_number)
     WHERE content_type = 'tv';
 
--- Physical, media library side. One row per file on disk under a media_path.
+-- Physical, media library side. One row per file on disk under disk.media_rel_path.
 CREATE TABLE IF NOT EXISTS media_file (
     id                      INTEGER PRIMARY KEY,
-    media_path_id           INTEGER NOT NULL REFERENCES media_path(id) ON DELETE CASCADE,
-    disk_id                 INTEGER NOT NULL REFERENCES disk(id) ON DELETE CASCADE,   -- denormalized from
-                                                                                       -- media_path so
-                                                                                       -- (disk_id, st_dev, inode)
-                                                                                       -- can be indexed
-                                                                                       -- without an extra join
+    disk_id                 INTEGER NOT NULL REFERENCES disk(id) ON DELETE CASCADE,
     relative_path           TEXT NOT NULL,          -- relative to disk.root_path
     size_bytes              INTEGER NOT NULL,
     st_dev                  INTEGER NOT NULL,       -- "as of last scan" — never trusted beyond last_scan_id

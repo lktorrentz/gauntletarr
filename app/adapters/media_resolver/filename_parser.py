@@ -7,6 +7,7 @@ Sempre disponibile, nessuna dipendenza esterna oltre l'API TMDB
 import guessit
 
 from app.adapters.media_resolver.base import MediaResolverAdapter, ResolvedMedia
+from app.content_type_guess import guess_content_type_from_guessit
 from app.tmdb_client import TMDBClient
 
 
@@ -25,12 +26,13 @@ class FilenameParserResolver(MediaResolverAdapter):
     def __init__(self, tmdb_client: TMDBClient):
         self._tmdb = tmdb_client
 
-    def resolve(self, file_path: str, content_type: str) -> ResolvedMedia | None:
+    def resolve(self, file_path: str) -> ResolvedMedia | None:
         guess = guessit.guessit(file_path)
         title = guess.get("title")
         if not title:
             return None
         year = _first_if_list(guess.get("year"))
+        content_type = guess_content_type_from_guessit(guess)
 
         if content_type == "movie":
             result = self._tmdb.search_movie(title, year)

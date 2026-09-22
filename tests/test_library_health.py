@@ -8,26 +8,22 @@ from app.models import (
     MatchReview,
     MediaFile,
     MediaItem,
-    MediaPath,
     SeedFile,
     Tracker,
 )
 
 
 def _base(db_session):
-    disk = Disk(label="d", root_path="/mnt/d")
+    disk = Disk(label="d", root_path="/mnt/d", media_rel_path="movies")
     db_session.add(disk)
     db_session.commit()
-    mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-    db_session.add(mp)
-    db_session.commit()
     run = pipeline.start_run(db_session, "manual")
-    return disk, mp, run
+    return disk, run
 
 
-def _media_file(db_session, disk, mp, run, *, relative_path, size_bytes=100, inode=1):
+def _media_file(db_session, disk, run, *, relative_path, size_bytes=100, inode=1):
     mf = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path=relative_path, size_bytes=size_bytes,
+        disk_id=disk.id, relative_path=relative_path, size_bytes=size_bytes,
         st_dev=1, inode=inode, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
     db_session.add(mf)
@@ -48,9 +44,9 @@ def test_empty_library_is_100_percent_healthy(db_session):
 
 
 def test_health_pct_is_size_weighted(db_session):
-    disk, mp, run = _base(db_session)
-    seeding_mf = _media_file(db_session, disk, mp, run, relative_path="movies/a.mkv", size_bytes=75, inode=1)
-    _media_file(db_session, disk, mp, run, relative_path="movies/b.mkv", size_bytes=25, inode=2)  # orphan_media
+    disk, run = _base(db_session)
+    seeding_mf = _media_file(db_session, disk, run, relative_path="movies/a.mkv", size_bytes=75, inode=1)
+    _media_file(db_session, disk, run, relative_path="movies/b.mkv", size_bytes=25, inode=2)  # orphan_media
 
     sf = SeedFile(
         disk_id=disk.id, relative_path="torrents/a.mkv", size_bytes=75, st_dev=1, inode=3,
@@ -72,7 +68,7 @@ def test_health_pct_is_size_weighted(db_session):
 
 
 def test_orphan_torrent_and_ignored_counted_from_seed_files(db_session):
-    disk, mp, run = _base(db_session)
+    disk, run = _base(db_session)
     db_session.add(SeedFile(
         disk_id=disk.id, relative_path="torrents/untracked.mkv", size_bytes=10, st_dev=1, inode=1,
         last_scan_id=run.id, last_seen_at=datetime.now(UTC),
@@ -96,8 +92,8 @@ def test_orphan_torrent_and_ignored_counted_from_seed_files(db_session):
 
 
 def test_pending_review_and_failed_and_unmatched_counted(db_session):
-    disk, mp, run = _base(db_session)
-    _media_file(db_session, disk, mp, run, relative_path="movies/unmatched.mkv")  # no media_item -> unmatched
+    disk, run = _base(db_session)
+    _media_file(db_session, disk, run, relative_path="movies/unmatched.mkv")  # no media_item -> unmatched
 
     tracker = Tracker(label="t", adapter_type="unit3d", base_url="https://t.example", api_token="x")
     db_session.add(tracker)

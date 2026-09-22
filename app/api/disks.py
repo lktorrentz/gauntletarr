@@ -1,8 +1,9 @@
 """File Browser API scoped-per-disco.
 
 Vedi docs/SPEC.md sezione 4 (ereditata da ratio-guardian). Usata sia per
-selezionare MediaPath che per creare/selezionare torrents_rel_path — un
-solo meccanismo di scoping condiviso (app/fs_scope.py), mai duplicato.
+selezionare disk.media_rel_path che per creare/selezionare
+torrents_rel_path — un solo meccanismo di scoping condiviso
+(app/fs_scope.py), mai duplicato.
 
 Gauntletarr è un'API JSON pura fin dall'inizio (a differenza di
 ratio-guardian, che ha ancora una Web UI Jinja2): anche l'elenco dei mount
@@ -56,7 +57,9 @@ class DiskCreateRequest(BaseModel):
 
 class DiskUpdateRequest(BaseModel):
     label: str | None = None
+    media_rel_path: str | None = None
     torrents_rel_path: str | None = None
+    new_torrent_rel_path: str | None = None
     torrent_client_root_path: str | None = None
 
 
@@ -64,7 +67,9 @@ class DiskResponse(BaseModel):
     id: int
     label: str
     root_path: str
+    media_rel_path: str | None
     torrents_rel_path: str | None
+    new_torrent_rel_path: str | None
     torrent_client_root_path: str | None
     st_dev: int | None
 
@@ -72,12 +77,15 @@ class DiskResponse(BaseModel):
     def from_model(cls, disk: Disk) -> "DiskResponse":
         return cls(
             id=disk.id, label=disk.label, root_path=disk.root_path,
+            media_rel_path=disk.media_rel_path,
             torrents_rel_path=disk.torrents_rel_path,
+            new_torrent_rel_path=disk.new_torrent_rel_path,
             torrent_client_root_path=disk.torrent_client_root_path, st_dev=disk.st_dev,
         )
 
 
 class AvailableMountsResponse(BaseModel):
+    scan_root: str
     mounts: list[str]
 
 
@@ -179,7 +187,7 @@ def _resolve_or_400(disk: Disk, relative: str) -> str:
 def available_mounts(request: Request, session: Session = Depends(get_session)):
     scan_root = request.app.state.settings.disk_scan_root
     used_paths = {d.root_path for d in session.query(Disk).all()}
-    return AvailableMountsResponse(mounts=list_available_mounts(scan_root, used_paths))
+    return AvailableMountsResponse(scan_root=scan_root, mounts=list_available_mounts(scan_root, used_paths))
 
 
 @router.get("/{disk_id}/browse", response_model=BrowseResponse)
@@ -240,8 +248,12 @@ def update_disk(disk_id: int, body: DiskUpdateRequest, session: Session = Depend
     disk = _get_disk_or_404(session, disk_id)
     if body.label is not None:
         disk.label = body.label
+    if body.media_rel_path is not None:
+        disk.media_rel_path = body.media_rel_path or None
     if body.torrents_rel_path is not None:
         disk.torrents_rel_path = body.torrents_rel_path or None
+    if body.new_torrent_rel_path is not None:
+        disk.new_torrent_rel_path = body.new_torrent_rel_path or None
     if body.torrent_client_root_path is not None:
         disk.torrent_client_root_path = body.torrent_client_root_path or None
     session.commit()

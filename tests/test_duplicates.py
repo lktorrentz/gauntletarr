@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from app.duplicates import compute_fast_hash, find_duplicate_media_files
-from app.models import Disk, MediaFile, MediaPath, RunLog
+from app.models import Disk, MediaFile, RunLog
 
 
 def _session(client):
@@ -28,9 +28,9 @@ def test_compute_fast_hash_missing_file_returns_none(tmp_path):
     assert compute_fast_hash(str(tmp_path / "missing.mkv")) is None
 
 
-def _make_media_file(session, disk, mp, run, *, relative_path, size_bytes, st_dev, inode, content_hash):
+def _make_media_file(session, disk, run, *, relative_path, size_bytes, st_dev, inode, content_hash):
     mf = MediaFile(
-        media_path_id=mp.id, disk_id=disk.id, relative_path=relative_path, size_bytes=size_bytes,
+        disk_id=disk.id, relative_path=relative_path, size_bytes=size_bytes,
         st_dev=st_dev, inode=inode, content_hash=content_hash,
         last_scan_id=run.id, last_seen_at=datetime.now(UTC),
     )
@@ -44,19 +44,16 @@ def test_find_duplicate_media_files_flags_same_content_different_inode(client):
         disk = Disk(label="d", root_path="/mnt/d")
         session.add(disk)
         session.commit()
-        mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-        session.add(mp)
-        session.commit()
         run = RunLog(run_type="manual", started_at=datetime.now(UTC))
         session.add(run)
         session.commit()
 
         _make_media_file(
-            session, disk, mp, run, relative_path="movies/A/Movie.mkv",
+            session, disk, run, relative_path="movies/A/Movie.mkv",
             size_bytes=1000, st_dev=1, inode=1, content_hash="deadbeef",
         )
         _make_media_file(
-            session, disk, mp, run, relative_path="movies/B/Movie.mkv",
+            session, disk, run, relative_path="movies/B/Movie.mkv",
             size_bytes=1000, st_dev=1, inode=2, content_hash="deadbeef",
         )
         session.commit()
@@ -75,20 +72,17 @@ def test_find_duplicate_media_files_excludes_already_hardlinked(client):
         disk = Disk(label="d", root_path="/mnt/d")
         session.add(disk)
         session.commit()
-        mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-        session.add(mp)
-        session.commit()
         run = RunLog(run_type="manual", started_at=datetime.now(UTC))
         session.add(run)
         session.commit()
 
         # Stesso (st_dev, inode): due path per lo stesso file fisico, nessuno spreco.
         _make_media_file(
-            session, disk, mp, run, relative_path="movies/A/Movie.mkv",
+            session, disk, run, relative_path="movies/A/Movie.mkv",
             size_bytes=1000, st_dev=1, inode=1, content_hash="deadbeef",
         )
         _make_media_file(
-            session, disk, mp, run, relative_path="movies/B/Movie.mkv",
+            session, disk, run, relative_path="movies/B/Movie.mkv",
             size_bytes=1000, st_dev=1, inode=1, content_hash="deadbeef",
         )
         session.commit()
@@ -104,19 +98,16 @@ def test_find_duplicate_media_files_ignores_null_hash(client):
         disk = Disk(label="d", root_path="/mnt/d")
         session.add(disk)
         session.commit()
-        mp = MediaPath(disk_id=disk.id, relative_path="movies", content_type="movie")
-        session.add(mp)
-        session.commit()
         run = RunLog(run_type="manual", started_at=datetime.now(UTC))
         session.add(run)
         session.commit()
 
         _make_media_file(
-            session, disk, mp, run, relative_path="movies/A/Movie.mkv",
+            session, disk, run, relative_path="movies/A/Movie.mkv",
             size_bytes=1000, st_dev=1, inode=1, content_hash=None,
         )
         _make_media_file(
-            session, disk, mp, run, relative_path="movies/B/Movie.mkv",
+            session, disk, run, relative_path="movies/B/Movie.mkv",
             size_bytes=1000, st_dev=1, inode=2, content_hash=None,
         )
         session.commit()

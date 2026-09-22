@@ -198,42 +198,6 @@ export interface paths {
         patch: operations["update_disk_api_disks__disk_id__patch"];
         trace?: never;
     };
-    "/api/disks/{disk_id}/media-paths": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Media Paths */
-        get: operations["list_media_paths_api_disks__disk_id__media_paths_get"];
-        put?: never;
-        /** Create Media Path */
-        post: operations["create_media_path_api_disks__disk_id__media_paths_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/media-paths/{media_path_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Media Path */
-        delete: operations["delete_media_path_api_media_paths__media_path_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Media Path */
-        patch: operations["update_media_path_api_media_paths__media_path_id__patch"];
-        trace?: never;
-    };
     "/api/runs": {
         parameters: {
             query?: never;
@@ -405,9 +369,9 @@ export interface paths {
         /**
          * Test Torrent Client
          * @description Sola lettura: chiama adapter.list_torrents() e riporta successo/errore,
-         *     senza bisogno di dischi/media_path configurati né di passare da uno
-         *     scan completo — utile per verificare le credenziali subito dopo aver
-         *     creato/modificato un client (docs/SPEC.md sezione 5).
+         *     senza bisogno di dischi configurati né di passare da uno scan completo —
+         *     utile per verificare le credenziali subito dopo aver creato/modificato
+         *     un client (docs/SPEC.md sezione 5).
          */
         post: operations["test_torrent_client_api_torrent_clients__torrent_client_id__test_post"];
         delete?: never;
@@ -878,6 +842,8 @@ export interface components {
         };
         /** AvailableMountsResponse */
         AvailableMountsResponse: {
+            /** Scan Root */
+            scan_root: string;
             /** Mounts */
             mounts: string[];
         };
@@ -971,8 +937,12 @@ export interface components {
             label: string;
             /** Root Path */
             root_path: string;
+            /** Media Rel Path */
+            media_rel_path: string | null;
             /** Torrents Rel Path */
             torrents_rel_path: string | null;
+            /** New Torrent Rel Path */
+            new_torrent_rel_path: string | null;
             /** Torrent Client Root Path */
             torrent_client_root_path: string | null;
             /** St Dev */
@@ -982,8 +952,12 @@ export interface components {
         DiskUpdateRequest: {
             /** Label */
             label?: string | null;
+            /** Media Rel Path */
+            media_rel_path?: string | null;
             /** Torrents Rel Path */
             torrents_rel_path?: string | null;
+            /** New Torrent Rel Path */
+            new_torrent_rel_path?: string | null;
             /** Torrent Client Root Path */
             torrent_client_root_path?: string | null;
         };
@@ -1128,35 +1102,6 @@ export interface components {
             has_poster: boolean;
             /** Files */
             files: components["schemas"]["MediaItemFile"][];
-        };
-        /** MediaPathCreateRequest */
-        MediaPathCreateRequest: {
-            /** Relative Path */
-            relative_path: string;
-            /** Content Type */
-            content_type: string;
-        };
-        /** MediaPathResponse */
-        MediaPathResponse: {
-            /** Id */
-            id: number;
-            /** Disk Id */
-            disk_id: number;
-            /** Relative Path */
-            relative_path: string;
-            /** Content Type */
-            content_type: string;
-            /** Enabled */
-            enabled: boolean;
-        };
-        /** MediaPathUpdateRequest */
-        MediaPathUpdateRequest: {
-            /** Relative Path */
-            relative_path?: string | null;
-            /** Content Type */
-            content_type?: string | null;
-            /** Enabled */
-            enabled?: boolean | null;
         };
         /** MkdirRequest */
         MkdirRequest: {
@@ -1915,136 +1860,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiskResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_media_paths_api_disks__disk_id__media_paths_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                disk_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MediaPathResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_media_path_api_disks__disk_id__media_paths_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                disk_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MediaPathCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MediaPathResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_media_path_api_media_paths__media_path_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                media_path_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_media_path_api_media_paths__media_path_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                media_path_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MediaPathUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MediaPathResponse"];
                 };
             };
             /** @description Validation Error */

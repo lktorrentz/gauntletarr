@@ -16,7 +16,7 @@ def test_resolves_a_movie():
         return httpx.Response(200, json={"results": [{"id": 157336, "poster_path": "/interstellar.jpg"}]})
 
     resolver = _resolver(handler)
-    result = resolver.resolve("Interstellar.2014.2160p.UHD.BluRay.mkv", "movie")
+    result = resolver.resolve("Interstellar.2014.2160p.UHD.BluRay.mkv")
 
     assert result is not None
     assert result.tmdb_id == 157336
@@ -31,7 +31,7 @@ def test_resolves_a_tv_episode():
         return httpx.Response(200, json={"results": [{"id": 1399, "poster_path": "/got.jpg"}]})
 
     resolver = _resolver(handler)
-    result = resolver.resolve("Game.of.Thrones.S03E09.The.Rains.of.Castamere.mkv", "tv")
+    result = resolver.resolve("Game.of.Thrones.S03E09.The.Rains.of.Castamere.mkv")
 
     assert result is not None
     assert result.tmdb_id == 1399
@@ -44,7 +44,7 @@ def test_returns_none_when_tmdb_has_no_match():
     handler = lambda request: httpx.Response(200, json={"results": []})  # noqa: E731
     resolver = _resolver(handler)
 
-    assert resolver.resolve("Interstellar.2014.mkv", "movie") is None
+    assert resolver.resolve("Interstellar.2014.mkv") is None
 
 
 def test_returns_none_for_unparsable_filename():
@@ -54,7 +54,7 @@ def test_returns_none_for_unparsable_filename():
     handler = lambda request: httpx.Response(200, json={"results": []})  # noqa: E731
     resolver = _resolver(handler)
 
-    assert resolver.resolve("asdf1234.mkv", "movie") is None
+    assert resolver.resolve("asdf1234.mkv") is None
 
 
 def test_returns_none_for_tv_file_without_episode_number():
@@ -63,4 +63,4 @@ def test_returns_none_for_tv_file_without_episode_number():
     handler = lambda request: httpx.Response(200, json={"results": []})  # noqa: E731
     resolver = _resolver(handler)
 
-    assert resolver.resolve("Game.of.Thrones.Season.3.Complete.mkv", "tv") is None
+    assert resolver.resolve("Game.of.Thrones.Season.3.Complete.mkv") is None

@@ -22,8 +22,10 @@ class MediaResolverAdapter(ABC):
     SOURCE: str  # "filename_parser" | "sonarr" | "radarr" — vedi media_file.resolver_source
 
     @abstractmethod
-    def resolve(self, file_path: str, content_type: str) -> ResolvedMedia | None:
+    def resolve(self, file_path: str) -> ResolvedMedia | None:
         """None se non risolvibile (filename non parsabile, nessun risultato TMDB) —
         mai un'eccezione per un fallimento atteso, solo per errori veri (rete,
-        API key mancante, ecc.), che il chiamante logga e conta come unresolved."""
+        API key mancante, ecc.), che il chiamante logga e conta come unresolved.
+        movie vs tv è dedotto dal resolver stesso (es. guessit), mai passato
+        dal chiamante — nessuna configurazione manuale del tipo (SPEC.md)."""
         raise NotImplementedError
