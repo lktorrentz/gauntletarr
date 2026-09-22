@@ -188,7 +188,7 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
               id="t-edit-api-token"
               value={apiToken}
               onChange={(e) => setApiToken(e.target.value)}
-              placeholder={t('trackers.leaveBlank')}
+              placeholder={t('common.leaveBlank')}
             />
           </div>
           <div className="grid gap-1.5">

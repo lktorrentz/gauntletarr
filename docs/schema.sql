@@ -81,6 +81,27 @@ CREATE TABLE IF NOT EXISTS disk_torrent_client (
     PRIMARY KEY (disk_id, torrent_client_id)
 );
 
+-- Content-identification adapters, optional and never required by the
+-- resolver (SPEC.md SS2/SS6). Multi-instance from the start, same
+-- reasoning as tracker/torrent_client, even though no concrete adapter
+-- consumes these yet (media_resolver's SOURCE lists "sonarr"/"radarr" as
+-- future values) — the storage is prepared ahead of the adapter.
+CREATE TABLE IF NOT EXISTS radarr_instance (
+    id          INTEGER PRIMARY KEY,
+    label       TEXT NOT NULL,
+    base_url    TEXT NOT NULL,
+    api_key     TEXT NOT NULL,          -- encrypted at rest
+    enabled     BOOLEAN NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS sonarr_instance (
+    id          INTEGER PRIMARY KEY,
+    label       TEXT NOT NULL,
+    base_url    TEXT NOT NULL,
+    api_key     TEXT NOT NULL,          -- encrypted at rest
+    enabled     BOOLEAN NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS app_settings (
     key     TEXT PRIMARY KEY,
     value   TEXT NOT NULL

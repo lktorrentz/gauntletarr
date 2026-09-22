@@ -35,6 +35,9 @@ export const errors = {
   'errors.torrent_client_adapter_type_unsupported':
     'adapter_type not yet implemented: {adapter_type} (supported: {supported})',
 
+  'errors.radarr_instance_not_found': 'Radarr instance {id} not found.',
+  'errors.sonarr_instance_not_found': 'Sonarr instance {id} not found.',
+
   'errors.invalid_cron_expression': 'Invalid cron expression: {message}',
 
   'errors.upload_job_not_found': 'upload_job {id} not found.',

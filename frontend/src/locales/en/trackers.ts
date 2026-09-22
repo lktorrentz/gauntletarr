@@ -15,7 +15,6 @@ export const trackers = {
   'trackers.create': 'Create',
   'trackers.editTracker': 'Edit tracker',
   'trackers.editTypeLocked': "Type (unit3d) can't be changed — delete and recreate to change it.",
-  'trackers.leaveBlank': 'Leave blank to keep it unchanged',
   'trackers.rateLimit': 'Requests/min',
   'trackers.enabled': 'Enabled',
   'trackers.noTrackers': 'No trackers configured.',

@@ -8,10 +8,12 @@ from app.api.auth import router as auth_router
 from app.api.dashboard import router as dashboard_router
 from app.api.disks import router as disks_router
 from app.api.library import router as library_router
+from app.api.radarr_instances import router as radarr_instances_router
 from app.api.reviews import router as reviews_router
 from app.api.runs import router as runs_router
 from app.api.schedule import router as schedule_router
 from app.api.settings import router as settings_router
+from app.api.sonarr_instances import router as sonarr_instances_router
 from app.api.torrent_clients import router as torrent_clients_router
 from app.api.trackers import router as trackers_router
 from app.api.uploads import router as uploads_router
@@ -61,6 +63,8 @@ app.include_router(library_router, dependencies=[_protected])
 app.include_router(torrent_clients_router, dependencies=[_protected])
 app.include_router(settings_router, dependencies=[_protected])
 app.include_router(trackers_router, dependencies=[_protected])
+app.include_router(radarr_instances_router, dependencies=[_protected])
+app.include_router(sonarr_instances_router, dependencies=[_protected])
 app.include_router(reviews_router, dependencies=[_protected])
 app.include_router(schedule_router, dependencies=[_protected])
 app.include_router(dashboard_router, dependencies=[_protected])

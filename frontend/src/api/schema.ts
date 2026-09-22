@@ -534,6 +534,78 @@ export interface paths {
         patch: operations["update_upload_profile_api_trackers__tracker_id__upload_profile_patch"];
         trace?: never;
     };
+    "/api/radarr-instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Radarr Instances */
+        get: operations["list_radarr_instances_api_radarr_instances_get"];
+        put?: never;
+        /** Create Radarr Instance */
+        post: operations["create_radarr_instance_api_radarr_instances_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/radarr-instances/{instance_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Radarr Instance */
+        delete: operations["delete_radarr_instance_api_radarr_instances__instance_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Radarr Instance */
+        patch: operations["update_radarr_instance_api_radarr_instances__instance_id__patch"];
+        trace?: never;
+    };
+    "/api/sonarr-instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sonarr Instances */
+        get: operations["list_sonarr_instances_api_sonarr_instances_get"];
+        put?: never;
+        /** Create Sonarr Instance */
+        post: operations["create_sonarr_instance_api_sonarr_instances_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sonarr-instances/{instance_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Sonarr Instance */
+        delete: operations["delete_sonarr_instance_api_sonarr_instances__instance_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Sonarr Instance */
+        patch: operations["update_sonarr_instance_api_sonarr_instances__instance_id__patch"];
+        trace?: never;
+    };
     "/api/reviews": {
         parameters: {
             query?: never;
@@ -1138,6 +1210,37 @@ export interface components {
             /** Created */
             created: boolean;
         };
+        /** RadarrInstanceCreateRequest */
+        RadarrInstanceCreateRequest: {
+            /** Label */
+            label: string;
+            /** Base Url */
+            base_url: string;
+            /** Api Key */
+            api_key: string;
+        };
+        /** RadarrInstanceResponse */
+        RadarrInstanceResponse: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Base Url */
+            base_url: string;
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** RadarrInstanceUpdateRequest */
+        RadarrInstanceUpdateRequest: {
+            /** Label */
+            label?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Api Key */
+            api_key?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
         /** ReviewResponse */
         ReviewResponse: {
             /** Id */
@@ -1243,6 +1346,37 @@ export interface components {
             username: string;
             /** Password */
             password: string;
+        };
+        /** SonarrInstanceCreateRequest */
+        SonarrInstanceCreateRequest: {
+            /** Label */
+            label: string;
+            /** Base Url */
+            base_url: string;
+            /** Api Key */
+            api_key: string;
+        };
+        /** SonarrInstanceResponse */
+        SonarrInstanceResponse: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Base Url */
+            base_url: string;
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** SonarrInstanceUpdateRequest */
+        SonarrInstanceUpdateRequest: {
+            /** Label */
+            label?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Api Key */
+            api_key?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
         };
         /** TokenResponse */
         TokenResponse: {
@@ -2705,6 +2839,240 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UploadProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_radarr_instances_api_radarr_instances_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadarrInstanceResponse"][];
+                };
+            };
+        };
+    };
+    create_radarr_instance_api_radarr_instances_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RadarrInstanceCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadarrInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_radarr_instance_api_radarr_instances__instance_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_radarr_instance_api_radarr_instances__instance_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RadarrInstanceUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadarrInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sonarr_instances_api_sonarr_instances_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SonarrInstanceResponse"][];
+                };
+            };
+        };
+    };
+    create_sonarr_instance_api_sonarr_instances_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SonarrInstanceCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SonarrInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_sonarr_instance_api_sonarr_instances__instance_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_sonarr_instance_api_sonarr_instances__instance_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SonarrInstanceUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SonarrInstanceResponse"];
                 };
             };
             /** @description Validation Error */

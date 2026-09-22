@@ -129,6 +129,35 @@ class DiskTorrentClient(Base):
     torrent_client: Mapped["TorrentClient"] = relationship()
 
 
+class RadarrInstance(Base):
+    """Adapter di content-identification opzionale, mai richiesto dal
+    resolver (docs/SPEC.md SS2/SS6) — nessun adapter concreto lo consuma
+    ancora, questa è solo la tabella multi-istanza preparata in anticipo
+    (stesso pattern di Tracker/TorrentClient: multi-istanza da subito,
+    non un flat key/value singolo su app_settings)."""
+
+    __tablename__ = "radarr_instance"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(nullable=False)
+    base_url: Mapped[str] = mapped_column(nullable=False)
+    api_key: Mapped[str] = mapped_column(EncryptedString, nullable=False)
+    enabled: Mapped[bool] = mapped_column(nullable=False, server_default=text("1"))
+
+
+class SonarrInstance(Base):
+    """Vedi RadarrInstance — stesso ruolo e stesso stato (non ancora
+    consumato da nessun adapter), per Sonarr."""
+
+    __tablename__ = "sonarr_instance"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(nullable=False)
+    base_url: Mapped[str] = mapped_column(nullable=False)
+    api_key: Mapped[str] = mapped_column(EncryptedString, nullable=False)
+    enabled: Mapped[bool] = mapped_column(nullable=False, server_default=text("1"))
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
 
