@@ -2,7 +2,7 @@ import { PlusIcon, SettingsIcon, TrashIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { useCreateTracker, useDeleteTracker, useTrackers, useUpdateTracker } from '@/api/hooks/trackers'
+import { useBundledUploadProfiles, useCreateTracker, useDeleteTracker, useTrackers, useUpdateTracker } from '@/api/hooks/trackers'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -15,17 +15,37 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { selectLabel } from '@/lib/utils'
 import { UploadProfileDialog } from '@/pages/config/UploadProfileDialog'
 
 function AddTrackerDialog() {
   const [open, setOpen] = useState(false)
+  const [presetKey, setPresetKey] = useState('')
   const [label, setLabel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [apiToken, setApiToken] = useState('')
   const [announceUrl, setAnnounceUrl] = useState('')
   const createTracker = useCreateTracker()
+  const { data: bundled } = useBundledUploadProfiles()
+
+  function applyPreset(key: string) {
+    setPresetKey(key)
+    const preset = bundled?.find((p) => p.key === key)
+    if (!preset) return
+    if (!label) setLabel(preset.label)
+    if (preset.base_url) setBaseUrl(preset.base_url)
+  }
+
+  function reset() {
+    setPresetKey('')
+    setLabel('')
+    setBaseUrl('')
+    setApiToken('')
+    setAnnounceUrl('')
+  }
 
   function submit() {
     createTracker.mutate(
@@ -33,10 +53,7 @@ function AddTrackerDialog() {
       {
         onSuccess: () => {
           setOpen(false)
-          setLabel('')
-          setBaseUrl('')
-          setApiToken('')
-          setAnnounceUrl('')
+          reset()
         },
         onError: (error) => toast.error(`Creazione fallita: ${error.message}`),
       },
@@ -51,6 +68,29 @@ function AddTrackerDialog() {
           <DialogTitle>Aggiungi tracker</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Preset</Label>
+            <Select value={presetKey} onValueChange={applyPreset}>
+              <SelectTrigger>
+                <SelectValue placeholder="Tracker esistente o personalizzato…">
+                  {(v: string | null) =>
+                    selectLabel(bundled, v, (p) => p.key, (p) => p.label, 'Tracker esistente o personalizzato…')
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {bundled?.map((p) => (
+                  <SelectItem key={p.key} value={p.key}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Precompila etichetta e URL API — restano modificabili, e un tracker non in lista si configura
+              compilando i campi sotto a mano.
+            </p>
+          </div>
           <div className="grid gap-1.5">
             <Label htmlFor="t-label">Etichetta</Label>
             <Input id="t-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="mytracker" />

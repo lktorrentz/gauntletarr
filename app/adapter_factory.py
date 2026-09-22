@@ -13,6 +13,7 @@ from app.adapters.image_host.base import ImageHostAdapter
 from app.adapters.image_host.chain import ImageHostChain
 from app.adapters.image_host.imgbb import ImgbbAdapter
 from app.adapters.image_host.imgbox import ImgboxAdapter
+from app.adapters.image_host.pixhost import PixhostAdapter
 from app.adapters.image_host.ptpimg import PtpimgAdapter
 from app.adapters.media_resolver.base import MediaResolverAdapter
 from app.adapters.media_resolver.filename_parser import FilenameParserResolver
@@ -23,7 +24,7 @@ from app.adapters.tracker.base import TrackerAdapter, Unit3dTrackerAdapter
 from app.models import TorrentClient, Tracker
 from app.tmdb_client import TMDBClient
 
-DEFAULT_IMAGE_HOST_PRIORITY = ["ptpimg", "imgbox", "imgbb"]
+DEFAULT_IMAGE_HOST_PRIORITY = ["ptpimg", "imgbox", "imgbb", "pixhost"]
 
 
 def build_torrent_client_adapter(torrent_client: TorrentClient) -> TorrentClientAdapter:
@@ -86,6 +87,8 @@ def _build_image_host_adapter(session: Session, key: str) -> ImageHostAdapter | 
         return ImgbbAdapter(api_key=api_key) if api_key else None
     if key == "imgbox":
         return ImgboxAdapter()  # nessuna api_key richiesta (upload anonimi)
+    if key == "pixhost":
+        return PixhostAdapter()  # nessuna api_key richiesta (upload anonimi)
     raise ImageHostConfigError(f"Host immagini sconosciuto in image_host_priority: {key!r}")
 
 

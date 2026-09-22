@@ -151,6 +151,8 @@ class BundledUploadProfileResponse(BaseModel):
     key: str
     label: str
     adapter_type: str
+    base_url: str | None  # host dell'API del tracker (mai l'announce URL, personale) — prefill comodo,
+                          # mai vincolante: resta modificabile in fase di creazione del Tracker
 
 
 @router.get("/upload-profiles/bundled", response_model=list[BundledUploadProfileResponse])

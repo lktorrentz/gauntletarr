@@ -14,7 +14,7 @@ import guessit
 from jinja2 import Template
 from sqlalchemy.orm import Session
 
-from app import mediainfo_util, screenshots, torrent_create
+from app import mediainfo_util, screenshots, settings_repo, torrent_create
 from app.adapters.image_host.base import ImageHostAdapter, ImageHostError
 from app.adapters.media_resolver.base import MediaResolverAdapter
 from app.adapters.tracker.base import TorrentCandidate, TrackerAdapter, UploadError, UploadFields
@@ -110,9 +110,14 @@ def prepare(
     job.info_hash = info_hash
     job.mediainfo_text = mediainfo_util.extract_full_text(job.source_path)
 
+    screenshot_count = int(settings_repo.get_setting(session, "upload_screenshot_count") or "4")
+    tonemap_hdr = (settings_repo.get_setting(session, "upload_tonemap_hdr") or "").lower() == "true"
+
     screenshot_urls: list[str] = []
     try:
-        shot_paths = screenshots.generate_screenshots(job.source_path, os.path.join(job_dir, "screenshots"))
+        shot_paths = screenshots.generate_screenshots(
+            job.source_path, os.path.join(job_dir, "screenshots"), count=screenshot_count, tonemap=tonemap_hdr
+        )
     except screenshots.ScreenshotError:
         logger.exception("Generazione screenshot fallita per %r", job.source_path)
         shot_paths = []
@@ -135,9 +140,9 @@ def prepare(
     job.resolution_id = resolution_map.get(screen_size) if screen_size else None
 
     template = Template(profile.description_template or "{{ mediainfo }}")
-    job.description_rendered = template.render(
-        mediainfo=job.mediainfo_text or "", screenshot_urls=screenshot_urls, notes=""
-    )
+    rendered = template.render(mediainfo=job.mediainfo_text or "", screenshot_urls=screenshot_urls, notes="")
+    header = settings_repo.get_setting(session, "upload_description_header")
+    job.description_rendered = f"{header}\n\n{rendered}" if header else rendered
 
     job.status = "ready"
     session.commit()
@@ -151,7 +156,9 @@ def dupe_check(tmdb_id: int, tracker_adapter: TrackerAdapter) -> list[TorrentCan
     return tracker_adapter.search_by_tmdb(tmdb_id)
 
 
-def submit(session: Session, job: UploadJob, tracker_adapter: TrackerAdapter) -> UploadJob:
+def submit(
+    session: Session, job: UploadJob, tracker_adapter: TrackerAdapter, profile: TrackerUploadProfile
+) -> UploadJob:
     """Passo 9 di docs/SPEC.md §9 — va chiamato SOLO dopo la conferma umana
     esplicita (docs/SPEC.md: "non negoziabile quanto il recheck forzato del
     reseeding"). app/api/uploads.py è l'unico chiamante previsto."""
@@ -169,6 +176,12 @@ def submit(session: Session, job: UploadJob, tracker_adapter: TrackerAdapter) ->
         resolution_id=job.resolution_id,
         tmdb_id=job.tmdb_id,
         imdb_id=job.imdb_id or "0",
+        # Prima di questo fix i due flag del profilo (default_anonymous/
+        # default_personal_release, editabili da UI da subito) non venivano
+        # mai letti qui: un upload risultava sempre non-anonimo a
+        # prescindere da cosa l'utente avesse impostato sul profilo.
+        anonymous=profile.default_anonymous,
+        personal_release=profile.default_personal_release,
     )
     job.status = "uploading"
     session.commit()

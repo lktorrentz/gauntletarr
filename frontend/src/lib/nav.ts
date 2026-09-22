@@ -74,6 +74,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Disks', to: '/config/disks' },
       { title: 'Torrent clients', to: '/config/torrent-clients' },
       { title: 'Trackers', to: '/config/trackers' },
+      { title: 'Upload', to: '/config/upload' },
+      { title: 'Integrations', to: '/config/integrations' },
       { title: 'Settings', to: '/config/settings' },
     ],
   },

@@ -10,8 +10,11 @@ def test_list_bundled_profiles(client):
     response = client.get("/api/trackers/upload-profiles/bundled")
 
     assert response.status_code == 200
-    keys = {p["key"] for p in response.json()}
+    profiles = response.json()
+    keys = {p["key"] for p in profiles}
     assert "itt" in keys
+    itt = next(p for p in profiles if p["key"] == "itt")
+    assert itt["base_url"] == "https://itatorrents.xyz"
 
 
 def test_create_upload_profile_from_bundled_key(client):

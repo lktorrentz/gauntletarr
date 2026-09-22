@@ -810,6 +810,8 @@ export interface components {
             label: string;
             /** Adapter Type */
             adapter_type: string;
+            /** Base Url */
+            base_url: string | null;
         };
         /** CandidateAuditResponse */
         CandidateAuditResponse: {

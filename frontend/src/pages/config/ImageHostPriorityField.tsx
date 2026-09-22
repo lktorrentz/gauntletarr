@@ -1,11 +1,12 @@
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVerticalIcon } from 'lucide-react'
+import { GripVerticalIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { useSetSetting, useSetting } from '@/api/hooks/settings'
+import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
@@ -15,20 +16,26 @@ const KNOWN_HOSTS: Record<string, string> = {
   ptpimg: 'PTPImg',
   imgbox: 'Imgbox (nessuna api_key richiesta)',
   imgbb: 'ImgBB',
+  pixhost: 'Pixhost (nessuna api_key richiesta)',
 }
-const DEFAULT_ORDER = ['ptpimg', 'imgbox', 'imgbb']
+const DEFAULT_ORDER = ['ptpimg', 'imgbox', 'imgbb', 'pixhost']
 
+// La lista salvata è esattamente quella "abilitata" (in ordine di
+// priorità) — un host noto ma assente non viene più aggiunto in coda in
+// automatico: da quando esiste uno spegnimento esplicito (vedi sotto),
+// farlo riapparirebbe da solo un host che l'utente ha appena disabilitato.
+// L'unico fallback è per un valore mai salvato: lì sì, tutto abilitato
+// di default, nell'ordine noto.
 export function parseOrder(raw: string | null | undefined): string[] {
-  const fromSetting = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []
-  const known = fromSetting.filter((key) => key in KNOWN_HOSTS)
-  // Host mai salvati (o un valore vuoto/mai impostato) vanno comunque
-  // mostrati, in coda, nell'ordine di default — mai un host "invisibile"
-  // solo perché non è ancora stato riordinato una volta.
-  const missing = DEFAULT_ORDER.filter((key) => !known.includes(key))
-  return [...known, ...missing]
+  if (!raw) return [...DEFAULT_ORDER]
+  return raw.split(',').map((s) => s.trim()).filter((key) => key in KNOWN_HOSTS)
 }
 
-function SortableRow({ id, label }: { id: string; label: string }) {
+export function disabledHosts(enabled: string[]): string[] {
+  return DEFAULT_ORDER.filter((key) => !enabled.includes(key))
+}
+
+function SortableRow({ id, label, onDisable }: { id: string; label: string; onDisable: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
 
   return (
@@ -48,7 +55,10 @@ function SortableRow({ id, label }: { id: string; label: string }) {
       >
         <GripVerticalIcon className="size-4" />
       </button>
-      {label}
+      <span className="flex-1">{label}</span>
+      <Button variant="ghost" size="icon-sm" title="Disabilita" onClick={onDisable}>
+        <XIcon className="size-3.5" />
+      </Button>
     </div>
   )
 }
@@ -58,22 +68,26 @@ export function ImageHostPriorityField() {
   const setSetting = useSetSetting('image_host_priority')
   const [draft, setDraft] = useState<string[] | null>(null)
   const order = draft ?? parseOrder(data?.value)
+  const disabled = disabledHosts(order)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+
+  function save(next: string[], message: string) {
+    setDraft(next)
+    setSetting.mutate(next.join(','), {
+      onSuccess: () => toast.success(message),
+      onError: (error) => {
+        toast.error(`Salvataggio fallito: ${error.message}`)
+        setDraft(null)
+      },
+    })
+  }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
     const oldIndex = order.indexOf(String(active.id))
     const newIndex = order.indexOf(String(over.id))
-    const next = arrayMove(order, oldIndex, newIndex)
-    setDraft(next)
-    setSetting.mutate(next.join(','), {
-      onSuccess: () => toast.success('Ordine di priorità salvato.'),
-      onError: (error) => {
-        toast.error(`Salvataggio fallito: ${error.message}`)
-        setDraft(null)
-      },
-    })
+    save(arrayMove(order, oldIndex, newIndex), 'Ordine di priorità salvato.')
   }
 
   return (
@@ -86,11 +100,30 @@ export function ImageHostPriorityField() {
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <div className="grid gap-1.5">
             {order.map((key) => (
-              <SortableRow key={key} id={key} label={KNOWN_HOSTS[key]} />
+              <SortableRow
+                key={key}
+                id={key}
+                label={KNOWN_HOSTS[key]}
+                onDisable={() => save(order.filter((k) => k !== key), `${KNOWN_HOSTS[key]} disabilitato.`)}
+              />
             ))}
           </div>
         </SortableContext>
       </DndContext>
+      {disabled.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-2">
+          {disabled.map((key) => (
+            <Button
+              key={key}
+              variant="outline"
+              size="sm"
+              onClick={() => save([...order, key], `${KNOWN_HOSTS[key]} abilitato.`)}
+            >
+              + {KNOWN_HOSTS[key]}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

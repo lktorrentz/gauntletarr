@@ -183,10 +183,13 @@ def confirm_upload(upload_id: int, body: UploadConfirmRequest, session: Session 
             status_code=400, detail=f"upload_job in stato {job.status!r}, atteso 'ready' (esegui prima /prepare)"
         )
     tracker = _get_tracker_or_404(session, job.tracker_id)
+    profile = session.get(TrackerUploadProfile, tracker.id)
+    if profile is None:
+        raise HTTPException(status_code=400, detail=f"Tracker {tracker.label!r} non ha un profilo di upload")
     tracker_adapter = adapter_factory.build_tracker_adapter(tracker)
 
     try:
-        job = upload.submit(session, job, tracker_adapter)
+        job = upload.submit(session, job, tracker_adapter, profile)
     except UploadPreparationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except UploadError as exc:

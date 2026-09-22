@@ -83,10 +83,10 @@ def test_prepare_creates_torrent_mediainfo_screenshots_and_description(db_sessio
     profile = upload_profiles.create_upload_profile(db_session, tracker, "itt")
     job = upload.create_draft(db_session, _video(tmp_path), tracker, resolver=None)
 
-    monkeypatch.setattr(
-        upload.screenshots, "generate_screenshots",
-        lambda video_path, output_dir, count=4: [str(tmp_path / "shot0.png"), str(tmp_path / "shot1.png")],
-    )
+    def _fake_generate_screenshots(video_path, output_dir, count=4, tonemap=False):
+        return [str(tmp_path / "shot0.png"), str(tmp_path / "shot1.png")]
+
+    monkeypatch.setattr(upload.screenshots, "generate_screenshots", _fake_generate_screenshots)
     for name in ("shot0.png", "shot1.png"):
         (tmp_path / name).write_bytes(b"fake png")
     image_host_chain = _FakeImageHostChain()
@@ -101,6 +101,44 @@ def test_prepare_creates_torrent_mediainfo_screenshots_and_description(db_sessio
     ]
     assert "https://img.example/1.png" in result.description_rendered
     assert result.category_id == 1  # movie, dal profilo itt bundlato
+
+
+def test_prepare_respects_screenshot_count_and_tonemap_settings(db_session, tmp_path, monkeypatch):
+    from app import settings_repo
+
+    settings_repo.set_setting(db_session, "upload_screenshot_count", "2")
+    settings_repo.set_setting(db_session, "upload_tonemap_hdr", "true")
+
+    tracker = _tracker(db_session)
+    profile = upload_profiles.create_upload_profile(db_session, tracker, "itt")
+    job = upload.create_draft(db_session, _video(tmp_path), tracker, resolver=None)
+
+    calls = []
+
+    def _fake_generate_screenshots(video_path, output_dir, count=4, tonemap=False):
+        calls.append({"count": count, "tonemap": tonemap})
+        return []
+
+    monkeypatch.setattr(upload.screenshots, "generate_screenshots", _fake_generate_screenshots)
+
+    upload.prepare(db_session, job, tracker, profile, _FakeImageHostChain(), str(tmp_path / "data"))
+
+    assert calls == [{"count": 2, "tonemap": True}]
+
+
+def test_prepare_prepends_description_header_when_configured(db_session, tmp_path, monkeypatch):
+    from app import settings_repo
+
+    settings_repo.set_setting(db_session, "upload_description_header", "[b]Encoded by me[/b]")
+
+    tracker = _tracker(db_session)
+    profile = upload_profiles.create_upload_profile(db_session, tracker, "itt")
+    job = upload.create_draft(db_session, _video(tmp_path), tracker, resolver=None)
+    monkeypatch.setattr(upload.screenshots, "generate_screenshots", lambda *a, **k: [])
+
+    result = upload.prepare(db_session, job, tracker, profile, _FakeImageHostChain(), str(tmp_path / "data"))
+
+    assert result.description_rendered.startswith("[b]Encoded by me[/b]\n\n")
 
 
 def test_prepare_raises_without_announce_url(db_session, tmp_path):
@@ -125,31 +163,53 @@ def test_dupe_check_delegates_to_tracker_adapter():
 
 def test_submit_requires_resolved_fields(db_session, tmp_path):
     tracker = _tracker(db_session)
+    profile = upload_profiles.create_upload_profile(db_session, tracker, None)
     job = upload.create_draft(db_session, _video(tmp_path), tracker, resolver=None)
     job.torrent_path = str(tmp_path / "x.torrent")
     db_session.commit()
 
     with pytest.raises(UploadPreparationError):
-        upload.submit(db_session, job, _FakeTrackerAdapter())
+        upload.submit(db_session, job, _FakeTrackerAdapter(), profile)
 
 
 def test_submit_success_marks_uploaded_with_torrent_id(db_session, tmp_path):
     tracker = _tracker(db_session)
+    profile = upload_profiles.create_upload_profile(db_session, tracker, None)
     job = upload.create_draft(db_session, _video(tmp_path), tracker, resolver=None)
     job.torrent_path = str(tmp_path / "x.torrent")
     job.category_id, job.type_id, job.resolution_id, job.tmdb_id = 1, 3, 3, 157336
     db_session.commit()
     adapter = _FakeTrackerAdapter(torrent_id="4242")
 
-    result = upload.submit(db_session, job, adapter)
+    result = upload.submit(db_session, job, adapter, profile)
 
     assert result.status == "uploaded"
     assert result.torrent_id_remote == "4242"
     assert len(adapter.upload_calls) == 1
 
 
+def test_submit_forwards_profile_anonymous_and_personal_release_flags(db_session, tmp_path):
+    tracker = _tracker(db_session)
+    profile = upload_profiles.create_upload_profile(db_session, tracker, None)
+    profile.default_anonymous = True
+    profile.default_personal_release = True
+    db_session.commit()
+    job = upload.create_draft(db_session, _video(tmp_path), tracker, resolver=None)
+    job.torrent_path = str(tmp_path / "x.torrent")
+    job.category_id, job.type_id, job.resolution_id, job.tmdb_id = 1, 3, 3, 157336
+    db_session.commit()
+    adapter = _FakeTrackerAdapter(torrent_id="4242")
+
+    upload.submit(db_session, job, adapter, profile)
+
+    fields = adapter.upload_calls[0][0]
+    assert fields.anonymous is True
+    assert fields.personal_release is True
+
+
 def test_submit_failure_marks_failed_and_reraises(db_session, tmp_path):
     tracker = _tracker(db_session)
+    profile = upload_profiles.create_upload_profile(db_session, tracker, None)
     job = upload.create_draft(db_session, _video(tmp_path), tracker, resolver=None)
     job.torrent_path = str(tmp_path / "x.torrent")
     job.category_id, job.type_id, job.resolution_id, job.tmdb_id = 1, 3, 3, 157336
@@ -157,7 +217,7 @@ def test_submit_failure_marks_failed_and_reraises(db_session, tmp_path):
     adapter = _FakeTrackerAdapter(error=UploadError("tracker rifiuta"))
 
     with pytest.raises(UploadError):
-        upload.submit(db_session, job, adapter)
+        upload.submit(db_session, job, adapter, profile)
 
     assert job.status == "failed"
     assert job.error_message == "tracker rifiuta"

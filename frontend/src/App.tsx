@@ -8,6 +8,8 @@ import { DisksPage } from '@/pages/config/DisksPage'
 import { TorrentClientsPage } from '@/pages/config/TorrentClientsPage'
 import { TrackersPage } from '@/pages/config/TrackersPage'
 import { SettingsPage } from '@/pages/config/SettingsPage'
+import { UploadSettingsPage } from '@/pages/config/UploadSettingsPage'
+import { IntegrationsPage } from '@/pages/config/IntegrationsPage'
 import { RunsPage } from '@/pages/reseeding/RunsPage'
 import { ReviewPage } from '@/pages/reseeding/ReviewPage'
 import { NewUploadPage } from '@/pages/upload/NewUploadPage'
@@ -34,6 +36,8 @@ const overrides: Record<string, ReactNode> = {
   '/config/disks': <DisksPage />,
   '/config/torrent-clients': <TorrentClientsPage />,
   '/config/trackers': <TrackersPage />,
+  '/config/upload': <UploadSettingsPage />,
+  '/config/integrations': <IntegrationsPage />,
   '/config/settings': <SettingsPage />,
 }
 

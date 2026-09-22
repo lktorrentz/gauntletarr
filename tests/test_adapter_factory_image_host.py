@@ -3,14 +3,16 @@ import pytest
 from app import adapter_factory
 from app.adapters.image_host.imgbb import ImgbbAdapter
 from app.adapters.image_host.imgbox import ImgboxAdapter
+from app.adapters.image_host.pixhost import PixhostAdapter
 from app.adapters.image_host.ptpimg import PtpimgAdapter
 from app.models import AppSetting
 
 
-def test_default_priority_includes_imgbox_even_without_keys(db_session):
+def test_default_priority_includes_anonymous_hosts_even_without_keys(db_session):
     chain = adapter_factory.build_image_host_chain(db_session)
 
     assert any(isinstance(a, ImgboxAdapter) for a in chain._adapters)
+    assert any(isinstance(a, PixhostAdapter) for a in chain._adapters)
     assert not any(isinstance(a, PtpimgAdapter) for a in chain._adapters)
     assert not any(isinstance(a, ImgbbAdapter) for a in chain._adapters)
 

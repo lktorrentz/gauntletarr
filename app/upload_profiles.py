@@ -28,7 +28,10 @@ def list_bundled_profiles() -> list[dict]:
             continue
         with open(os.path.join(PROFILES_DIR, filename)) as f:
             data = yaml.safe_load(f)
-        profiles.append({"key": data["key"], "label": data["label"], "adapter_type": data["adapter_type"]})
+        profiles.append({
+            "key": data["key"], "label": data["label"], "adapter_type": data["adapter_type"],
+            "base_url": data.get("base_url"),
+        })
     return profiles
 
 

@@ -110,7 +110,7 @@ def test_prepare_success(client, tmp_path, monkeypatch):
     ).json()
 
     monkeypatch.setattr(
-        upload.screenshots, "generate_screenshots", lambda video_path, output_dir, count=4: []
+        upload.screenshots, "generate_screenshots", lambda video_path, output_dir, count=4, tonemap=False: []
     )
     monkeypatch.setattr(adapter_factory, "build_image_host_chain", lambda session: _FakeImageHostChain())
 
@@ -141,7 +141,9 @@ def test_confirm_success_uploads_and_adds_to_client(client, tmp_path, monkeypatc
         "/api/uploads",
         json={"disk_id": disk_id, "relative_path": "media/Movie.2024.1080p.WEB.mkv", "tracker_id": tracker_id},
     ).json()
-    monkeypatch.setattr(upload.screenshots, "generate_screenshots", lambda video_path, output_dir, count=4: [])
+    monkeypatch.setattr(
+        upload.screenshots, "generate_screenshots", lambda video_path, output_dir, count=4, tonemap=False: []
+    )
     monkeypatch.setattr(adapter_factory, "build_image_host_chain", lambda session: _FakeImageHostChain())
     client.post(f"/api/uploads/{created['id']}/prepare")
     client.patch(f"/api/uploads/{created['id']}", json={"tmdb_id": 157336})

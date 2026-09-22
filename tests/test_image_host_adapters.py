@@ -4,6 +4,7 @@ import pytest
 from app.adapters.image_host.base import ImageHostError
 from app.adapters.image_host.chain import ImageHostChain
 from app.adapters.image_host.imgbb import ImgbbAdapter
+from app.adapters.image_host.pixhost import PixhostAdapter
 from app.adapters.image_host.ptpimg import PtpimgAdapter
 
 
@@ -75,6 +76,35 @@ def test_imgbb_upload_raises_on_failure_response(tmp_path):
     adapter = ImgbbAdapter(api_key="bad", client=_client(handler))
 
     with pytest.raises(ImageHostError, match="invalid key"):
+        adapter.upload(str(image))
+
+
+def test_pixhost_upload_returns_public_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "api.pixhost.to"
+        return httpx.Response(
+            200, json={"show_url": "https://pixhost.to/show/1/x.png", "th_url": "https://t.pixhost.to/1/x.png"}
+        )
+
+    adapter = PixhostAdapter(client=_client(handler))
+    url = adapter.upload(str(image))
+
+    assert url == "https://pixhost.to/show/1/x.png"
+
+
+def test_pixhost_upload_raises_on_missing_show_url(tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(b"fake png bytes")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"unexpected": "shape"})
+
+    adapter = PixhostAdapter(client=_client(handler))
+
+    with pytest.raises(ImageHostError):
         adapter.upload(str(image))
 
 
