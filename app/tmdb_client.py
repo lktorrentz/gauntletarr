@@ -6,9 +6,20 @@ per i test (stesso pattern di app/adapters/torrent_client/qbittorrent.py),
 mai una connessione reale nei test.
 """
 
+from typing import Protocol
+
 import httpx
 
 TMDB_API_BASE = "https://api.themoviedb.org/3"
+
+
+class TMDBSearchClient(Protocol):
+    """Interfaccia strutturale condivisa da TMDBClient e da
+    app.tmdb_cache.CachingTMDBClient — FilenameParserResolver accetta
+    l'una o l'altra senza saperlo (typing strutturale, nessuna eredità)."""
+
+    def search_movie(self, query: str, year: int | None = None) -> dict | None: ...
+    def search_tv(self, query: str, year: int | None = None) -> dict | None: ...
 
 
 class TMDBClient:

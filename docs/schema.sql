@@ -181,6 +181,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_media_item_movie ON media_item(tmdb_id)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_media_item_tv ON media_item(tmdb_id, season_number, episode_number)
     WHERE content_type = 'tv';
 
+-- Persistent cache of TMDB search results, keyed by what the resolver
+-- actually searches with (guessit's parsed title + year), not by any file
+-- identity — many media_file rows share the same key (every episode of the
+-- same show), so this is what stops a network call per file instead of per
+-- distinct title. Only successful lookups are cached (tmdb_id NOT NULL): a
+-- title TMDB doesn't know today could match new content added there
+-- tomorrow, and there's no TTL/invalidation here yet to safely re-check a
+-- cached miss — a resolved tmdb_id, on the other hand, never changes for
+-- the same title/year, so caching it forever is safe. year defaults to 0
+-- (never NULL) specifically so the UNIQUE constraint below still dedupes
+-- title-only queries with no recognizable year — SQLite treats NULL as
+-- always distinct in a UNIQUE, which would otherwise insert a fresh row
+-- per file even for the exact same query.
+CREATE TABLE IF NOT EXISTS tmdb_search_cache (
+    id              INTEGER PRIMARY KEY,
+    content_type    TEXT NOT NULL CHECK (content_type IN ('movie','tv')),
+    query           TEXT NOT NULL,          -- guessit title, normalized (trimmed + lowercased)
+    year            INTEGER NOT NULL DEFAULT 0,
+    tmdb_id         INTEGER NOT NULL,
+    poster_path     TEXT,
+    resolved_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(content_type, query, year)
+);
+
 -- Physical, media library side. One row per file on disk under disk.media_rel_path.
 CREATE TABLE IF NOT EXISTS media_file (
     id                      INTEGER PRIMARY KEY,

@@ -231,6 +231,26 @@ class MediaItem(Base):
     created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
 
 
+class TmdbSearchCache(Base):
+    """Vedi docs/schema.sql: cache persistente delle ricerche TMDB, chiave =
+    ciò che il resolver cerca (titolo/anno guessit), non il file — molti
+    media_file condividono la stessa chiave (episodi di una stessa serie)."""
+
+    __tablename__ = "tmdb_search_cache"
+    __table_args__ = (
+        CheckConstraint("content_type IN ('movie','tv')", name="ck_tmdb_search_cache_content_type"),
+        UniqueConstraint("content_type", "query", "year"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    content_type: Mapped[str] = mapped_column(nullable=False)
+    query: Mapped[str] = mapped_column(nullable=False)
+    year: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
+    tmdb_id: Mapped[int] = mapped_column(nullable=False)
+    poster_path: Mapped[str | None]
+    resolved_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+
 class MediaFile(Base):
     __tablename__ = "media_file"
     __table_args__ = (UniqueConstraint("disk_id", "relative_path"),)

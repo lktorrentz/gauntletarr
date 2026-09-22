@@ -8,7 +8,7 @@ import guessit
 
 from app.adapters.media_resolver.base import MediaResolverAdapter, ResolvedMedia
 from app.content_type_guess import guess_content_type_from_guessit
-from app.tmdb_client import TMDBClient
+from app.tmdb_client import TMDBSearchClient
 
 
 def _first_if_list(value):
@@ -23,7 +23,7 @@ def _first_if_list(value):
 class FilenameParserResolver(MediaResolverAdapter):
     SOURCE = "filename_parser"
 
-    def __init__(self, tmdb_client: TMDBClient):
+    def __init__(self, tmdb_client: TMDBSearchClient):
         self._tmdb = tmdb_client
 
     def resolve(self, file_path: str) -> ResolvedMedia | None:

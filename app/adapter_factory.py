@@ -29,6 +29,7 @@ from app.adapters.torrent_client.qui import QuiTorrentClientAdapter
 from app.adapters.tracker.base import TrackerAdapter, Unit3dTrackerAdapter
 from app.api_errors import CodedError
 from app.models import TorrentClient, Tracker
+from app.tmdb_cache import CachingTMDBClient
 from app.tmdb_client import TMDBClient
 
 DEFAULT_IMAGE_HOST_PRIORITY = [
@@ -68,7 +69,8 @@ def build_media_resolver(session: Session) -> MediaResolverAdapter:
     tmdb_api_key = settings_repo.get_setting(session, "tmdb_api_key")
     if not tmdb_api_key:
         raise TmdbApiKeyMissingError("tmdb_api_key_missing")
-    return FilenameParserResolver(TMDBClient(api_key=tmdb_api_key))
+    tmdb_client = CachingTMDBClient(session, TMDBClient(api_key=tmdb_api_key))
+    return FilenameParserResolver(tmdb_client)
 
 
 def build_tracker_adapter(tracker: Tracker) -> TrackerAdapter:
