@@ -1,3 +1,4 @@
+import { application } from './application'
 import { auth } from './auth'
 import { common } from './common'
 import { dashboard } from './dashboard'
@@ -6,7 +7,9 @@ import { errors } from './errors'
 import { integrations } from './integrations'
 import { layout } from './layout'
 import { library } from './library'
+import { logs } from './logs'
 import { reseeding } from './reseeding'
+import { security } from './security'
 import { torrent } from './torrent'
 import { torrentClients } from './torrentClients'
 import { trackers } from './trackers'
@@ -17,6 +20,7 @@ import { uploadSettings } from './uploadSettings'
 // "disks.title") — qui solo un merge piatto, mai nesting: t() resta un
 // semplice lookup O(1) su un oggetto, senza dover camminare un albero.
 export const en = {
+  ...application,
   ...auth,
   ...common,
   ...dashboard,
@@ -25,7 +29,9 @@ export const en = {
   ...integrations,
   ...layout,
   ...library,
+  ...logs,
   ...reseeding,
+  ...security,
   ...torrent,
   ...torrentClients,
   ...trackers,

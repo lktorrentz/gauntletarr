@@ -1,9 +1,12 @@
-import { HardDriveIcon, PlugIcon, UploadCloudIcon } from 'lucide-react'
+import { HardDriveIcon, InfoIcon, PlugIcon, ScrollTextIcon, ShieldIcon, UploadCloudIcon } from 'lucide-react'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ApplicationSection } from '@/pages/config/ApplicationSection'
 import { AutoApproveSection } from '@/pages/config/AutoApproveSection'
 import { DisksSection } from '@/pages/config/DisksSection'
 import { IntegrationsSection } from '@/pages/config/IntegrationsSection'
+import { LogsSection } from '@/pages/config/LogsSection'
+import { SecuritySection } from '@/pages/config/SecuritySection'
 import { TorrentClientsSection } from '@/pages/config/TorrentClientsSection'
 import { TrackersSection } from '@/pages/config/TrackersSection'
 import { UploadSettingsSection } from '@/pages/config/UploadSettingsSection'
@@ -24,6 +27,18 @@ export function ConfigurationPage() {
           <UploadCloudIcon />
           Upload
         </TabsTrigger>
+        <TabsTrigger value="security" className="justify-start gap-2 px-3 py-2">
+          <ShieldIcon />
+          Security
+        </TabsTrigger>
+        <TabsTrigger value="application" className="justify-start gap-2 px-3 py-2">
+          <InfoIcon />
+          Application
+        </TabsTrigger>
+        <TabsTrigger value="logs" className="justify-start gap-2 px-3 py-2">
+          <ScrollTextIcon />
+          Logs
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="mapping" className="grid gap-6">
         <DisksSection />
@@ -36,6 +51,15 @@ export function ConfigurationPage() {
       </TabsContent>
       <TabsContent value="upload">
         <UploadSettingsSection />
+      </TabsContent>
+      <TabsContent value="security">
+        <SecuritySection />
+      </TabsContent>
+      <TabsContent value="application">
+        <ApplicationSection />
+      </TabsContent>
+      <TabsContent value="logs">
+        <LogsSection />
       </TabsContent>
     </Tabs>
   )

@@ -289,13 +289,13 @@ export function IntegrationsSection() {
   const deleteSonarrInstance = useDeleteSonarrInstance()
 
   return (
-    <div className="grid max-w-xl gap-6">
-      <Card>
+    <div className="grid gap-6">
+      <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>{t('integrations.contentIdTitle')}</CardTitle>
           <CardDescription>{t('integrations.contentIdDescription')}</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <SettingField
             settingKey="tmdb_api_key"
             label="TMDB API key"

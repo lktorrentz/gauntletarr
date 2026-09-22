@@ -874,6 +874,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** App Info */
+        get: operations["app_info_api_system_info_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/update-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Update Check
+         * @description Chiamata solo su richiesta esplicita dell'utente (bottone "Check for
+         *     updates" in UI), mai in automatico — nessuna release è ancora stata
+         *     pubblicata su questo repo (SPEC.md §"Repo"), quindi oggi risponderà
+         *     quasi sempre con note="Nessuna release pubblicata ancora", ma resta
+         *     pronto a funzionare non appena il maintainer inizia a taggare.
+         */
+        get: operations["update_check_api_system_update_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Logs */
+        get: operations["logs_api_system_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -912,6 +970,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AppInfoResponse */
+        AppInfoResponse: {
+            /** Version */
+            version: string;
+            /** Python Version */
+            python_version: string;
+            /** Platform */
+            platform: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+        };
         /** AssociateDiskRequest */
         AssociateDiskRequest: {
             /** Torrent Client Root Path */
@@ -1137,12 +1209,30 @@ export interface components {
             /** Errors */
             errors: number;
         };
+        /** LogEntry */
+        LogEntry: {
+            /** Timestamp */
+            timestamp: string;
+            /** Level */
+            level: string;
+            /** Logger */
+            logger: string;
+            /** Message */
+            message: string;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Username */
             username: string;
             /** Password */
             password: string;
+        };
+        /** LogsResponse */
+        LogsResponse: {
+            /** Entries */
+            entries: components["schemas"]["LogEntry"][];
+            /** Available */
+            available: boolean;
         };
         /** MeResponse */
         MeResponse: {
@@ -1493,6 +1583,22 @@ export interface components {
             rate_limit_per_min?: number | null;
             /** Enabled */
             enabled?: boolean | null;
+        };
+        /** UpdateCheckResponse */
+        UpdateCheckResponse: {
+            /** Current Version */
+            current_version: string;
+            /** Latest Version */
+            latest_version: string | null;
+            /** Update Available */
+            update_available: boolean;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Note */
+            note?: string | null;
         };
         /** UploadConfirmRequest */
         UploadConfirmRequest: {
@@ -3599,6 +3705,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    app_info_api_system_info_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppInfoResponse"];
+                };
+            };
+        };
+    };
+    update_check_api_system_update_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateCheckResponse"];
+                };
+            };
+        };
+    };
+    logs_api_system_logs_get: {
+        parameters: {
+            query?: {
+                min_level?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsResponse"];
                 };
             };
             /** @description Validation Error */

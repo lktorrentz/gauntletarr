@@ -1,5 +1,5 @@
 export const integrations = {
-  'integrations.contentIdTitle': 'Content identification',
+  'integrations.contentIdTitle': 'Metadata',
   'integrations.contentIdDescription': 'Used by the resolver during scans and by the upload wizard.',
   'integrations.tvdbApiKeyDescription': 'https://thetvdb.com/api-information — optional, not yet used by the resolver.',
   'integrations.notYetUsedDescription':
