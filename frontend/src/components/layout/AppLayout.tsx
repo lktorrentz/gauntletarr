@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { AppSidebar } from '@/components/layout/AppSidebar'
+import { RunNowButton } from '@/components/RunNowButton'
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { resolveSectionTitle } from '@/lib/nav'
@@ -13,11 +14,12 @@ function TopHeader() {
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
       <SidebarTrigger />
       <Separator orientation="vertical" className="h-4" />
-      <div className="flex items-center gap-1.5 text-sm">
+      <div className="flex flex-1 items-center gap-1.5 text-sm">
         {parent && <span className="text-muted-foreground">{parent}</span>}
         {parent && <span className="text-muted-foreground">/</span>}
         <span className="font-medium">{title}</span>
       </div>
+      <RunNowButton />
     </header>
   )
 }

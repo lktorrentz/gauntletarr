@@ -1,14 +1,11 @@
-import { PlayIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react'
+import { TrendingDownIcon, TrendingUpIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
-import { toast } from 'sonner'
 
 import { useDashboard, useDashboardHistory, useDashboardWhatsNew } from '@/api/hooks/dashboard'
 import type { Schemas } from '@/api/client'
-import { useTriggerRun } from '@/api/hooks/runs'
 import { useUploads } from '@/api/hooks/uploads'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -232,27 +229,6 @@ function HealthHistoryChart() {
 // richiesta esplicita dell'utente dopo la Sotto-fase 8.2 (prima stava
 // sotto "Reseeding", dando l'impressione di riguardare solo quell'area).
 // Struttura hero card + area chart ispirata al blocco dashboard-01 di
-// Stesso trigger di ReseedingPage (POST /api/runs) — la Dashboard non ha
-// bisogno della tabella run/schedule che sta lì, solo di un modo scopribile
-// per lanciare uno scan subito senza dover prima capire che "Reseeding" è
-// anche la pagina delle run (richiesta esplicita dell'utente).
-function RunNowButton() {
-  const triggerRun = useTriggerRun()
-  return (
-    <Button
-      onClick={() =>
-        triggerRun.mutate(undefined, {
-          onError: (error) => toast.error(t('common.runFailed', { message: error.message })),
-        })
-      }
-      disabled={triggerRun.isPending}
-    >
-      <PlayIcon className="size-4" />
-      {t('common.runNow')}
-    </Button>
-  )
-}
-
 // shadcn/ui, adattata ai dati reali di questa app (nessun dato finto:
 // i trend sui delta vengono dal confronto tra le ultime due run in
 // storico, non da percentuali inventate).
@@ -276,10 +252,6 @@ export function DashboardPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex justify-end">
-        <RunNowButton />
-      </div>
-
       <HeroCards data={data} history={history} />
 
       <HealthHistoryChart />
