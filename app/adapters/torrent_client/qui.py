@@ -32,6 +32,7 @@ token: un TorrentClient di gauntletarr punta sempre a UNA istanza specifica
 scrivere, non può sceglierla a runtime.
 """
 
+import logging
 import os
 import time
 
@@ -44,6 +45,8 @@ from app.adapters.torrent_client.base import (
     TorrentClientAdapter,
     TorrentStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class QuiTorrentClientAdapter(TorrentClientAdapter):
@@ -139,11 +142,20 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
         return TorrentStatus(info_hash=torrent["hash"], state=state, recheck_status=recheck_status, progress=progress)
 
     def list_torrents(self) -> list[ClientTorrentInfo]:
+        logger.debug("qui[%s]: list_torrents() — recupero la lista paginata...", self.instance_id)
+        torrents = self._fetch_all_torrents()
+        logger.debug(
+            "qui[%s]: %d torrent nella lista, ora recupero file/tracker per ciascuno",
+            self.instance_id, len(torrents),
+        )
         result = []
-        for torrent in self._fetch_all_torrents():
+        for i, torrent in enumerate(torrents):
             info_hash = torrent.get("hash")
             if not info_hash:
                 continue
+            logger.debug(
+                "qui[%s]: torrent %d/%d (%s) — GET .../files", self.instance_id, i + 1, len(torrents), info_hash[:8]
+            )
             files_resp = self._client.get(f"/api/instances/{self.instance_id}/torrents/{info_hash}/files")
             files_resp.raise_for_status()
             files = [
@@ -161,6 +173,7 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
                     files=files,
                 )
             )
+        logger.debug("qui[%s]: list_torrents() completato — %d torrent risolti", self.instance_id, len(result))
         return result
 
     def _first_tracker_url(self, info_hash: str) -> str | None:
@@ -181,12 +194,14 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
         seen_hashes: set[str] = set()
         page = 0
         while True:
+            logger.debug("qui[%s]: GET .../torrents?page=%d&limit=%d", self.instance_id, page, self.page_limit)
             response = self._client.get(
                 f"/api/instances/{self.instance_id}/torrents",
                 params={"page": page, "limit": self.page_limit},
             )
             response.raise_for_status()
             batch = response.json().get("torrents") or []
+            logger.debug("qui[%s]: pagina %d — %d torrent ricevuti", self.instance_id, page, len(batch))
             if not batch:
                 break
             new_items = [t for t in batch if t.get("hash") and t["hash"] not in seen_hashes]

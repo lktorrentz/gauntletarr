@@ -131,7 +131,12 @@ CREATE TABLE IF NOT EXISTS run_log (
     run_type            TEXT NOT NULL CHECK (run_type IN ('scheduled','manual','bulk_import')),
     started_at          TIMESTAMP NOT NULL,
     finished_at         TIMESTAMP,
-    current_phase       TEXT CHECK (current_phase IN ('scanning','matching','executing')),  -- null = not running
+    -- One value per real step of app/pipeline.py::run_bulk_import, committed
+    -- as the run transitions through them (not just at start/end) so a live
+    -- poller (GET /api/runs) sees genuine progress, not "scanning" for the
+    -- whole run. null = not running.
+    current_phase       TEXT CHECK (current_phase IN
+                            ('scanning','resolving','indexing','matching','executing','reconciling')),
     phase_total         INTEGER,          -- total for the current phase, for live status (X/Y)
     phase_done          INTEGER,          -- done so far in the current phase
     items_total         INTEGER,          -- precounted when the run starts (total scan)
@@ -144,7 +149,13 @@ CREATE TABLE IF NOT EXISTS run_log (
     health_snapshot       REAL,                -- "library health" % at the end of the run, for the
                                                 -- dashboard's historical chart (SPEC.md §10). Formula
                                                 -- settled in Fase 5, see app/health.py.
-    errors                INTEGER DEFAULT 0
+    errors                INTEGER DEFAULT 0,
+    last_error            TEXT                 -- short summary of the last exception caught during this
+                                                -- run (e.g. "torrent client 'X': <message>"), so it's
+                                                -- visible in the UI without digging through the Logs tab —
+                                                -- the full traceback still goes to logger.exception().
+                                                -- Nullable, no DEFAULT: additive column, see migrate_schema()
+                                                -- in app/db.py.
 );
 
 -- ============ PHYSICAL (written ONLY by the scan process — never by hand, never read by other tables) ============

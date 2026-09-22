@@ -59,7 +59,9 @@ def index_torrent_client(
     indicizzato (client_torrent creati), ma nessun file risulterà collegato
     a un seed_file — non è un errore, solo una configurazione incompleta."""
     now = datetime.now(UTC)
+    logger.debug("Client %r: chiamata adapter.list_torrents()...", torrent_client.label)
     torrents: list[ClientTorrentInfo] = adapter.list_torrents()
+    logger.debug("Client %r: adapter.list_torrents() ha restituito %d torrent", torrent_client.label, len(torrents))
 
     torrent_rows = [
         {
@@ -80,6 +82,7 @@ def index_torrent_client(
         update_cols=["name", "save_path", "category", "tracker_url", "state", "last_polled_at"],
     )
     session.commit()
+    logger.debug("Client %r: %d righe client_torrent scritte", torrent_client.label, len(torrent_rows))
 
     hash_to_id: dict[str, int] = dict(
         session.query(ClientTorrent.info_hash, ClientTorrent.id).filter_by(torrent_client_id=torrent_client.id).all()
@@ -87,6 +90,11 @@ def index_torrent_client(
 
     links = session.query(DiskTorrentClient).filter_by(torrent_client_id=torrent_client.id).all()
     disks = [session.get(Disk, link.disk_id) for link in links]
+    if not disks:
+        logger.debug(
+            "Client %r: nessun disco associato — nessun client_torrent_file risulterà collegato a un seed_file",
+            torrent_client.label,
+        )
     root_path_by_disk_id = {link.disk_id: link.torrent_client_root_path for link in links}
     seed_lookup_by_disk: dict[int, dict[str, int]] = {
         disk.id: dict(session.query(SeedFile.relative_path, SeedFile.id).filter_by(disk_id=disk.id).all())

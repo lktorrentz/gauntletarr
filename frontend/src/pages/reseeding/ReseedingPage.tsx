@@ -166,7 +166,14 @@ function RunsCard() {
                   )}
                 </TableCell>
                 <TableCell>{run.items_scanned}</TableCell>
-                <TableCell>{run.errors > 0 ? <Badge variant="destructive">{run.errors}</Badge> : 0}</TableCell>
+                <TableCell>
+                  {run.errors > 0 ? <Badge variant="destructive">{run.errors}</Badge> : 0}
+                  {run.last_error && (
+                    <p className="mt-1 max-w-xs truncate text-xs text-destructive" title={run.last_error}>
+                      {run.last_error}
+                    </p>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {runs?.length === 0 && (

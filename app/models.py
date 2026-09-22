@@ -186,7 +186,8 @@ class RunLog(Base):
     __table_args__ = (
         CheckConstraint("run_type IN ('scheduled','manual','bulk_import')", name="ck_run_log_run_type"),
         CheckConstraint(
-            "current_phase IS NULL OR current_phase IN ('scanning','matching','executing')",
+            "current_phase IS NULL OR current_phase IN "
+            "('scanning','resolving','indexing','matching','executing','reconciling')",
             name="ck_run_log_current_phase",
         ),
     )
@@ -207,6 +208,7 @@ class RunLog(Base):
     ignored_count: Mapped[int] = mapped_column(server_default=text("0"))
     health_snapshot: Mapped[float | None]
     errors: Mapped[int] = mapped_column(server_default=text("0"))
+    last_error: Mapped[str | None]
 
 
 # ============ FISICO (scritto SOLO dal processo di scan, app/scanner.py) ============

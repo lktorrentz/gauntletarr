@@ -29,13 +29,14 @@ class RunResponse(BaseModel):
     current_phase: str | None
     items_scanned: int
     errors: int
+    last_error: str | None
 
     @classmethod
     def from_model(cls, run: RunLog) -> "RunResponse":
         return cls(
             id=run.id, run_type=run.run_type, started_at=run.started_at,
             finished_at=run.finished_at, current_phase=run.current_phase,
-            items_scanned=run.items_scanned, errors=run.errors,
+            items_scanned=run.items_scanned, errors=run.errors, last_error=run.last_error,
         )
 
 

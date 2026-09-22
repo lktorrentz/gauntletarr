@@ -1508,6 +1508,8 @@ export interface components {
             items_scanned: number;
             /** Errors */
             errors: number;
+            /** Last Error */
+            last_error: string | null;
         };
         /** ScheduleResponse */
         ScheduleResponse: {
