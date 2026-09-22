@@ -4,14 +4,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ComingSoon } from '@/pages/ComingSoon'
 import { DashboardPage } from '@/pages/DashboardPage'
-import { DisksPage } from '@/pages/config/DisksPage'
-import { TorrentClientsPage } from '@/pages/config/TorrentClientsPage'
-import { TrackersPage } from '@/pages/config/TrackersPage'
-import { SettingsPage } from '@/pages/config/SettingsPage'
-import { UploadSettingsPage } from '@/pages/config/UploadSettingsPage'
-import { IntegrationsPage } from '@/pages/config/IntegrationsPage'
-import { RunsPage } from '@/pages/reseeding/RunsPage'
-import { ReviewPage } from '@/pages/reseeding/ReviewPage'
+import { ConfigurationPage } from '@/pages/config/ConfigurationPage'
+import { ReseedingPage } from '@/pages/reseeding/ReseedingPage'
 import { NewUploadPage } from '@/pages/upload/NewUploadPage'
 import { UploadQueuePage } from '@/pages/upload/UploadQueuePage'
 import { FolderView } from '@/pages/library/FolderView'
@@ -29,16 +23,9 @@ const overrides: Record<string, ReactNode> = {
   '/library/poster': <PosterView />,
   '/library/folder': <FolderView />,
   '/torrent/folder': <TorrentFolderView />,
-  '/reseeding/review': <ReviewPage />,
-  '/reseeding/runs': <RunsPage />,
-  '/upload/new': <NewUploadPage />,
-  '/upload/queue': <UploadQueuePage />,
-  '/config/disks': <DisksPage />,
-  '/config/torrent-clients': <TorrentClientsPage />,
-  '/config/trackers': <TrackersPage />,
-  '/config/upload': <UploadSettingsPage />,
-  '/config/integrations': <IntegrationsPage />,
-  '/config/settings': <SettingsPage />,
+  '/reseeding': <ReseedingPage />,
+  '/upload': <UploadQueuePage />,
+  '/config': <ConfigurationPage />,
 }
 
 const ALL_ITEMS = [NAV_DASHBOARD, ...NAV_GROUPS.flatMap((group) => group.items)]
@@ -51,6 +38,7 @@ function App() {
         {ALL_ITEMS.map((item) => (
           <Route key={item.to} path={item.to} element={overrides[item.to] ?? <ComingSoon title={item.title} />} />
         ))}
+        <Route path="/upload/new" element={<NewUploadPage />} />
         <Route path="/upload/:jobId" element={<NewUploadPage />} />
       </Route>
     </Routes>

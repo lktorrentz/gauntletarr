@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { SettingField } from '@/components/SettingField'
 
-export function IntegrationsPage() {
+export function IntegrationsSection() {
   return (
     <div className="grid max-w-xl gap-6">
       <Card>

@@ -217,7 +217,7 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
   )
 }
 
-export function TrackersPage() {
+export function TrackersSection() {
   const { data: trackers, isPending } = useTrackers()
   const updateTracker = useUpdateTracker()
   const deleteTracker = useDeleteTracker()

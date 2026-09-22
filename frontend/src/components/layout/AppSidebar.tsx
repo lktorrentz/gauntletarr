@@ -123,6 +123,29 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {NAV_GROUPS.map((group) => {
+          // Un gruppo con una sola voce non ha bisogno di un dropdown —
+          // si comporta come Dashboard: link piatto con icona e titolo
+          // del gruppo, evidenziato anche sulle sue sotto-route (es.
+          // /upload/new, /upload/123 restano "dentro" Upload).
+          if (group.items.length === 1) {
+            const item = group.items[0]
+            const isActive = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+            return (
+              <SidebarGroup key={group.title}>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton render={<Link to={item.to} />} isActive={isActive}>
+                        <group.icon className="size-4" />
+                        {group.title}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )
+          }
+
           const open = openGroups.has(group.title)
           return (
             <Collapsible key={group.title} open={open} onOpenChange={() => toggleGroup(group.title)}>

@@ -1,7 +1,7 @@
 import { SettingField } from '@/components/SettingField'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-export function SettingsPage() {
+export function AutoApproveSection() {
   return (
     <div className="grid max-w-xl gap-6">
       <Card>

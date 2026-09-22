@@ -65,7 +65,7 @@ function DescriptionHeaderField() {
   )
 }
 
-export function UploadSettingsPage() {
+export function UploadSettingsSection() {
   return (
     <div className="grid gap-6">
       <Card className="max-w-xl">

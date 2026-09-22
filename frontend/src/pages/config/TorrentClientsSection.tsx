@@ -331,7 +331,7 @@ function DisksDialog({ torrentClientId, diskIds }: { torrentClientId: number; di
   )
 }
 
-export function TorrentClientsPage() {
+export function TorrentClientsSection() {
   const { data: torrentClients, isPending } = useTorrentClients()
   const { data: disks } = useDisks()
   const updateTorrentClient = useUpdateTorrentClient()

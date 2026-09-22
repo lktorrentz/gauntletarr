@@ -209,7 +209,7 @@ function EditDiskDialog({ disk }: { disk: Disk }) {
   )
 }
 
-export function DisksPage() {
+export function DisksSection() {
   const { data: disks, isPending } = useDisks()
   const deleteDisk = useDeleteDisk()
   const [mediaPathsDiskId, setMediaPathsDiskId] = useState<number | null>(null)

@@ -1,8 +1,10 @@
+import { PlusIcon } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 import { useUploads } from '@/api/hooks/uploads'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -19,7 +21,14 @@ export function UploadQueuePage() {
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Upload</CardTitle>
+        <Button onClick={() => navigate('/upload/new')}>
+          <PlusIcon className="size-4" />
+          Nuovo upload
+        </Button>
+      </CardHeader>
+      <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
