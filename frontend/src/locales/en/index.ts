@@ -10,6 +10,7 @@ import { library } from './library'
 import { logs } from './logs'
 import { metadata } from './metadata'
 import { reseeding } from './reseeding'
+import { runStatus } from './runStatus'
 import { security } from './security'
 import { timeLanguage } from './timeLanguage'
 import { torrent } from './torrent'
@@ -34,6 +35,7 @@ export const en = {
   ...logs,
   ...metadata,
   ...reseeding,
+  ...runStatus,
   ...security,
   ...timeLanguage,
   ...torrent,

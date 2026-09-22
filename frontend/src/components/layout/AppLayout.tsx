@@ -2,9 +2,10 @@ import { Outlet, useLocation } from 'react-router-dom'
 
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { RunNowButton } from '@/components/RunNowButton'
+import { RunStatusIndicator } from '@/components/RunStatusIndicator'
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
-import { resolveSectionTitle } from '@/lib/nav'
+import { NAV_DASHBOARD, resolveSectionTitle } from '@/lib/nav'
 
 function TopHeader() {
   const location = useLocation()
@@ -19,7 +20,7 @@ function TopHeader() {
         {parent && <span className="text-muted-foreground">/</span>}
         <span className="font-medium">{title}</span>
       </div>
-      <RunNowButton />
+      {location.pathname === NAV_DASHBOARD.to && <RunNowButton />}
     </header>
   )
 }
@@ -34,6 +35,7 @@ export function AppLayout() {
           <Outlet />
         </div>
       </SidebarInset>
+      <RunStatusIndicator />
     </SidebarProvider>
   )
 }
