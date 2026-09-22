@@ -53,12 +53,12 @@ function AddDiskDialog() {
             <Label htmlFor="disk-label">Etichetta</Label>
             <Input id="disk-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="main" />
           </div>
-          <div className="grid gap-1.5">
-            <Label>Mount disponibile</Label>
-            {mounts?.mounts.length ? (
+          {mounts?.mounts.length ? (
+            <div className="grid gap-1.5">
+              <Label>Sottocartelle non ancora registrate</Label>
               <Select value={rootPath} onValueChange={setRootPath}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Scegli un mount…" />
+                  <SelectValue placeholder="Scegli una sottocartella di disk_scan_root…" />
                 </SelectTrigger>
                 <SelectContent>
                   {mounts.mounts.map((m) => (
@@ -68,12 +68,17 @@ function AddDiskDialog() {
                   ))}
                 </SelectContent>
               </Select>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Nessun mount libero sotto disk_scan_root — inseriscilo manualmente qui sotto.
+              <p className="text-xs text-muted-foreground">
+                Solo un aiuto per il caso multi-disco (un mount per disco fisico, es. /mnt/disk1) — un path diverso,
+                incluso disk_scan_root stesso per un mount unico, si scrive direttamente qui sotto.
               </p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Nessuna sottocartella libera sotto disk_scan_root — normale con un mount unico (es. /data): scrivi il
+              path direttamente qui sotto.
+            </p>
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor="disk-root-path">root_path</Label>
             <Input
