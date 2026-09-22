@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import duplicates, library, settings_repo
+from app.api_errors import coded_detail
 from app.deps import get_session
 from app.exclusions import CompiledExclusions, compile_exclusions
 
@@ -108,5 +109,5 @@ def get_poster(tmdb_id: int, request: Request):
     posters_dir = os.path.join(request.app.state.settings.data_dir, "posters")
     local_path = os.path.join(posters_dir, f"{tmdb_id}.jpg")
     if not os.path.isfile(local_path):
-        raise HTTPException(status_code=404, detail="Poster non in cache")
+        raise HTTPException(status_code=404, detail=coded_detail("poster_not_cached"))
     return FileResponse(local_path, media_type="image/jpeg")

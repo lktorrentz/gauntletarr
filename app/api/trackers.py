@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import upload_profiles
+from app.api_errors import coded_detail, from_coded_error
 from app.deps import get_session
 from app.models import Tracker, TrackerUploadProfile
 
@@ -54,7 +55,7 @@ class TrackerResponse(BaseModel):
 def _get_tracker_or_404(session: Session, tracker_id: int) -> Tracker:
     tracker = session.get(Tracker, tracker_id)
     if tracker is None:
-        raise HTTPException(status_code=404, detail=f"Tracker {tracker_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("tracker_not_found", id=tracker_id))
     return tracker
 
 
@@ -68,8 +69,10 @@ def create_tracker(body: TrackerCreateRequest, session: Session = Depends(get_se
     if body.adapter_type not in SUPPORTED_ADAPTER_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"adapter_type non supportato: {body.adapter_type!r} "
-            f"(supportati: {sorted(SUPPORTED_ADAPTER_TYPES)})",
+            detail=coded_detail(
+                "tracker_adapter_type_unsupported",
+                adapter_type=body.adapter_type, supported=sorted(SUPPORTED_ADAPTER_TYPES),
+            ),
         )
     tracker = Tracker(
         label=body.label, adapter_type=body.adapter_type, base_url=body.base_url,
@@ -163,7 +166,7 @@ def list_bundled_upload_profiles():
 def _get_upload_profile_or_404(session: Session, tracker_id: int) -> TrackerUploadProfile:
     profile = session.get(TrackerUploadProfile, tracker_id)
     if profile is None:
-        raise HTTPException(status_code=404, detail=f"Tracker {tracker_id} non ha un profilo di upload")
+        raise HTTPException(status_code=404, detail=coded_detail("tracker_no_upload_profile", tracker=tracker_id))
     return profile
 
 
@@ -173,11 +176,11 @@ def create_upload_profile(
 ):
     tracker = _get_tracker_or_404(session, tracker_id)
     if session.get(TrackerUploadProfile, tracker_id) is not None:
-        raise HTTPException(status_code=409, detail=f"Tracker {tracker_id} ha già un profilo di upload")
+        raise HTTPException(status_code=409, detail=coded_detail("tracker_upload_profile_conflict", id=tracker_id))
     try:
         profile = upload_profiles.create_upload_profile(session, tracker, body.profile_key)
     except upload_profiles.ProfileNotFoundError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=from_coded_error(exc)) from exc
     return UploadProfileResponse.from_model(profile)
 
 

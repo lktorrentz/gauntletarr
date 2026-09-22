@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import pipeline
+from app.api_errors import coded_detail
 from app.deps import get_session
 from app.models import RunLog
 
@@ -67,5 +68,5 @@ def list_runs(session: Session = Depends(get_session)):
 def get_run(run_id: int, session: Session = Depends(get_session)):
     run = session.get(RunLog, run_id)
     if run is None:
-        raise HTTPException(status_code=404, detail=f"Run {run_id} non trovata")
+        raise HTTPException(status_code=404, detail=coded_detail("run_not_found", id=run_id))
     return RunResponse.from_model(run)

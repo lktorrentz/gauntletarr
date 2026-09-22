@@ -27,6 +27,7 @@ from app.adapters.torrent_client.base import TorrentClientAdapter
 from app.adapters.torrent_client.qbittorrent import QBittorrentAdapter
 from app.adapters.torrent_client.qui import QuiTorrentClientAdapter
 from app.adapters.tracker.base import TrackerAdapter, Unit3dTrackerAdapter
+from app.api_errors import CodedError
 from app.models import TorrentClient, Tracker
 from app.tmdb_client import TMDBClient
 
@@ -59,14 +60,14 @@ def build_torrent_client_adapter(torrent_client: TorrentClient) -> TorrentClient
     )
 
 
-class TmdbApiKeyMissingError(ValueError):
+class TmdbApiKeyMissingError(CodedError):
     pass
 
 
 def build_media_resolver(session: Session) -> MediaResolverAdapter:
     tmdb_api_key = settings_repo.get_setting(session, "tmdb_api_key")
     if not tmdb_api_key:
-        raise TmdbApiKeyMissingError("tmdb_api_key non configurata in app_settings (PUT /api/settings/tmdb_api_key)")
+        raise TmdbApiKeyMissingError("tmdb_api_key_missing")
     return FilenameParserResolver(TMDBClient(api_key=tmdb_api_key))
 
 
@@ -80,7 +81,7 @@ def build_tracker_adapter(tracker: Tracker) -> TrackerAdapter:
     raise ValueError(f"adapter_type tracker non supportato: {tracker.adapter_type!r}")
 
 
-class ImageHostConfigError(ValueError):
+class ImageHostConfigError(CodedError):
     pass
 
 
@@ -116,7 +117,7 @@ def _build_image_host_adapter(session: Session, key: str) -> ImageHostAdapter | 
     if key == "seedpool_cdn":
         api_key = settings_repo.get_setting(session, "image_host_seedpool_cdn_api_key")
         return SeedpoolCdnAdapter(api_key=api_key) if api_key else None
-    raise ImageHostConfigError(f"Host immagini sconosciuto in image_host_priority: {key!r}")
+    raise ImageHostConfigError("image_host_unknown", key=key)
 
 
 def build_image_host_chain(session: Session) -> ImageHostChain:
@@ -132,8 +133,5 @@ def build_image_host_chain(session: Session) -> ImageHostChain:
 
     adapters = [a for a in (_build_image_host_adapter(session, key) for key in priority) if a is not None]
     if not adapters:
-        raise ImageHostConfigError(
-            "Nessun host immagini configurato: imposta almeno una api_key, o includi "
-            "Imgbox/Pixhost in image_host_priority — sono gli unici due che non ne richiedono"
-        )
+        raise ImageHostConfigError("no_image_host_configured")
     return ImageHostChain(adapters)

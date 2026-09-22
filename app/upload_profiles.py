@@ -10,12 +10,13 @@ import os
 import yaml
 from sqlalchemy.orm import Session
 
+from app.api_errors import CodedError
 from app.models import Tracker, TrackerUploadProfile
 
 PROFILES_DIR = os.path.join(os.path.dirname(__file__), "tracker_profiles")
 
 
-class ProfileNotFoundError(FileNotFoundError):
+class ProfileNotFoundError(CodedError):
     pass
 
 
@@ -38,7 +39,7 @@ def list_bundled_profiles() -> list[dict]:
 def _load_bundled_profile(key: str) -> dict:
     path = os.path.join(PROFILES_DIR, f"{key}.yaml")
     if not os.path.isfile(path):
-        raise ProfileNotFoundError(f"Profilo bundlato non trovato: {key!r}")
+        raise ProfileNotFoundError("bundled_profile_not_found", key=key)
     with open(path) as f:
         return yaml.safe_load(f)
 

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import adapter_factory
+from app.api_errors import coded_detail
 from app.deps import get_session
 from app.models import Disk, TorrentClient
 
@@ -65,14 +66,14 @@ class TorrentClientResponse(BaseModel):
 def _get_torrent_client_or_404(session: Session, torrent_client_id: int) -> TorrentClient:
     tc = session.get(TorrentClient, torrent_client_id)
     if tc is None:
-        raise HTTPException(status_code=404, detail=f"Client torrent {torrent_client_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("torrent_client_not_found", id=torrent_client_id))
     return tc
 
 
 def _get_disk_or_404(session: Session, disk_id: int) -> Disk:
     disk = session.get(Disk, disk_id)
     if disk is None:
-        raise HTTPException(status_code=404, detail=f"Disco {disk_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("disk_not_found", id=disk_id))
     return disk
 
 
@@ -86,8 +87,10 @@ def create_torrent_client(body: TorrentClientCreateRequest, session: Session = D
     if body.adapter_type not in SUPPORTED_ADAPTER_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"adapter_type non ancora implementato: {body.adapter_type!r} "
-            f"(supportati: {sorted(SUPPORTED_ADAPTER_TYPES)})",
+            detail=coded_detail(
+                "torrent_client_adapter_type_unsupported",
+                adapter_type=body.adapter_type, supported=sorted(SUPPORTED_ADAPTER_TYPES),
+            ),
         )
     tc = TorrentClient(
         label=body.label, adapter_type=body.adapter_type, base_url=body.base_url,

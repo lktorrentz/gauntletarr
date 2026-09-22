@@ -7,11 +7,13 @@ creazione degli hardlink).
 
 import os
 
+from app.api_errors import CodedError
 
-class ScopeViolation(Exception):
+
+class ScopeViolation(CodedError):
     def __init__(self, candidate: str):
         self.candidate = candidate
-        super().__init__(f"Percorso fuori dallo scope consentito: {candidate}")
+        super().__init__("path_outside_scope", path=candidate)
 
 
 def resolve_scoped(root_path: str, relative: str) -> str:

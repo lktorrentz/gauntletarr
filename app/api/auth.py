@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import auth, settings_repo
+from app.api_errors import coded_detail
 from app.deps import get_session
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -52,11 +53,11 @@ def setup(body: SetupRequest, session: Session = Depends(get_session)):
     esiste già uno. Cambiare le credenziali dopo passa sempre da
     /change-password, protetto dalla password attuale."""
     if auth.is_auth_configured(session):
-        raise HTTPException(status_code=409, detail="Login già configurato")
+        raise HTTPException(status_code=409, detail=coded_detail("auth_already_configured"))
     if not body.username.strip():
-        raise HTTPException(status_code=400, detail="Username obbligatorio")
+        raise HTTPException(status_code=400, detail=coded_detail("auth_username_required"))
     if len(body.password) < 8:
-        raise HTTPException(status_code=400, detail="Password di almeno 8 caratteri")
+        raise HTTPException(status_code=400, detail=coded_detail("auth_password_too_short"))
     settings_repo.set_setting(session, "auth_username", body.username.strip())
     settings_repo.set_setting(session, "auth_password_hash", auth.hash_password(body.password))
     return TokenResponse(access_token=auth.create_access_token(body.username.strip()), username=body.username.strip())
@@ -72,7 +73,7 @@ def login(body: LoginRequest, session: Session = Depends(get_session)):
         or body.username != stored_username
         or not auth.verify_password(body.password, stored_hash)
     ):
-        raise HTTPException(status_code=401, detail="Credenziali non valide")
+        raise HTTPException(status_code=401, detail=coded_detail("auth_invalid_credentials"))
     return TokenResponse(access_token=auth.create_access_token(stored_username), username=stored_username)
 
 
@@ -80,7 +81,7 @@ def login(body: LoginRequest, session: Session = Depends(get_session)):
 def me(request: Request, session: Session = Depends(get_session)):
     username = auth.authenticated_username(request, session)
     if username is None:
-        raise HTTPException(status_code=401, detail="Autenticazione richiesta")
+        raise HTTPException(status_code=401, detail=coded_detail("auth_required"))
     return MeResponse(username=username)
 
 
@@ -90,7 +91,7 @@ def change_password(
 ):
     stored_hash = settings_repo.get_setting(session, "auth_password_hash")
     if not stored_hash or not auth.verify_password(body.current_password, stored_hash):
-        raise HTTPException(status_code=401, detail="Password attuale errata")
+        raise HTTPException(status_code=401, detail=coded_detail("auth_wrong_current_password"))
     if len(body.new_password) < 8:
-        raise HTTPException(status_code=400, detail="Password di almeno 8 caratteri")
+        raise HTTPException(status_code=400, detail=coded_detail("auth_password_too_short"))
     settings_repo.set_setting(session, "auth_password_hash", auth.hash_password(body.new_password))

@@ -247,7 +247,7 @@ class Unit3dTrackerAdapter(TrackerAdapter):
             with open(torrent_path, "rb") as f:
                 torrent_bytes = f.read()
         except OSError as exc:
-            raise UploadError(f"Impossibile leggere il .torrent da caricare: {exc}") from exc
+            raise UploadError(f"Could not read the .torrent to upload: {exc}") from exc
         files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}
 
         self._rate_limiter.wait()
@@ -261,14 +261,14 @@ class Unit3dTrackerAdapter(TrackerAdapter):
             response.raise_for_status()
             response_data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
-            raise UploadError(f"Upload UNIT3D fallito: {exc}") from exc
+            raise UploadError(f"UNIT3D upload failed: {exc}") from exc
 
         if not response_data.get("success"):
-            raise UploadError(f"Upload UNIT3D rifiutato dal tracker: {response_data.get('message', response_data)}")
+            raise UploadError(f"UNIT3D upload rejected by the tracker: {response_data.get('message', response_data)}")
 
         match = self._TORRENT_ID_RE.search(response_data.get("data", ""))
         if not match:
-            raise UploadError(f"Risposta upload UNIT3D senza id torrent riconoscibile: {response_data!r}")
+            raise UploadError(f"UNIT3D upload response has no recognizable torrent id: {response_data!r}")
         return match.group(1)
 
     def _get(self, path: str, params: dict | None = None) -> httpx.Response:
@@ -279,7 +279,7 @@ class Unit3dTrackerAdapter(TrackerAdapter):
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise UploadError(f"Richiesta al tracker UNIT3D fallita: {exc}") from exc
+            raise UploadError(f"Request to the UNIT3D tracker failed: {exc}") from exc
         return response
 
     def _to_candidate(self, item: dict) -> TorrentCandidate:

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app import scheduler as scheduler_module
 from app import settings_repo
+from app.api_errors import coded_detail
 from app.deps import get_session
 
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
@@ -41,7 +42,8 @@ def set_schedule(body: ScheduleUpdateRequest, request: Request, session: Session
 
             CronTrigger.from_crontab(cron)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=f"Espressione cron non valida: {exc}") from exc
+            detail = coded_detail("invalid_cron_expression", message=str(exc))
+            raise HTTPException(status_code=422, detail=detail) from exc
 
     settings_repo.set_setting(session, scheduler_module.SETTING_KEY, cron or "")
     scheduler_module.reschedule(

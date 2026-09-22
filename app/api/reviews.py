@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import review
+from app.api_errors import coded_detail
 from app.deps import get_session
 from app.executor import ExecutionError
 from app.models import Candidate, MatchReview, SeedJob
@@ -54,7 +55,7 @@ class SeedJobResponse(BaseModel):
 def _get_review_or_404(session: Session, review_id: int) -> MatchReview:
     row = session.get(MatchReview, review_id)
     if row is None:
-        raise HTTPException(status_code=404, detail=f"Review {review_id} non trovata")
+        raise HTTPException(status_code=404, detail=coded_detail("review_not_found", id=review_id))
     return row
 
 
@@ -86,7 +87,7 @@ def list_failed(session: Session = Depends(get_session)):
 def retry_failed(seed_job_id: int, session: Session = Depends(get_session)):
     seed_job = session.get(SeedJob, seed_job_id)
     if seed_job is None:
-        raise HTTPException(status_code=404, detail=f"SeedJob {seed_job_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("seed_job_not_found", id=seed_job_id))
     try:
         result = review.retry_failed(session, seed_job)
     except ExecutionError as exc:

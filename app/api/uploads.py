@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app import adapter_factory, upload
 from app.adapter_factory import ImageHostConfigError, TmdbApiKeyMissingError
 from app.adapters.tracker.base import UploadError
+from app.api_errors import coded_detail, from_coded_error
 from app.deps import get_session
 from app.fs_scope import ScopeViolation, resolve_scoped
 from app.models import Disk, TorrentClient, Tracker, TrackerUploadProfile, UploadJob
@@ -80,14 +81,14 @@ class UploadResponse(BaseModel):
 def _get_upload_or_404(session: Session, upload_id: int) -> UploadJob:
     job = session.get(UploadJob, upload_id)
     if job is None:
-        raise HTTPException(status_code=404, detail=f"upload_job {upload_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("upload_job_not_found", id=upload_id))
     return job
 
 
 def _get_tracker_or_404(session: Session, tracker_id: int) -> Tracker:
     tracker = session.get(Tracker, tracker_id)
     if tracker is None:
-        raise HTTPException(status_code=404, detail=f"Tracker {tracker_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("tracker_not_found", id=tracker_id))
     return tracker
 
 
@@ -105,14 +106,14 @@ def get_upload(upload_id: int, session: Session = Depends(get_session)):
 def create_upload(body: UploadCreateRequest, session: Session = Depends(get_session)):
     disk = session.get(Disk, body.disk_id)
     if disk is None:
-        raise HTTPException(status_code=404, detail=f"Disk {body.disk_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("disk_not_found", id=body.disk_id))
     tracker = _get_tracker_or_404(session, body.tracker_id)
     try:
         source_path = resolve_scoped(disk.root_path, body.relative_path)
     except ScopeViolation as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=from_coded_error(exc)) from exc
     if not os.path.isfile(source_path):
-        raise HTTPException(status_code=400, detail=f"Non è un file: {body.relative_path!r}")
+        raise HTTPException(status_code=400, detail=coded_detail("not_a_file", path=body.relative_path))
 
     try:
         resolver = adapter_factory.build_media_resolver(session)
@@ -129,17 +130,17 @@ def prepare_upload(upload_id: int, request: Request, session: Session = Depends(
     tracker = _get_tracker_or_404(session, job.tracker_id)
     profile = session.get(TrackerUploadProfile, tracker.id)
     if profile is None:
-        raise HTTPException(status_code=400, detail=f"Tracker {tracker.label!r} non ha un profilo di upload")
+        raise HTTPException(status_code=400, detail=coded_detail("tracker_no_upload_profile", tracker=tracker.label))
     try:
         image_host_chain = adapter_factory.build_image_host_chain(session)
     except ImageHostConfigError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=from_coded_error(exc)) from exc
 
     data_dir = request.app.state.settings.data_dir
     try:
         job = upload.prepare(session, job, tracker, profile, image_host_chain, data_dir)
     except UploadPreparationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=from_coded_error(exc)) from exc
     return UploadResponse.from_model(job)
 
 
@@ -158,7 +159,7 @@ def patch_upload(upload_id: int, body: UploadPatchRequest, session: Session = De
 def dupe_check(upload_id: int, session: Session = Depends(get_session)):
     job = _get_upload_or_404(session, upload_id)
     if job.tmdb_id is None:
-        raise HTTPException(status_code=400, detail="upload_job senza tmdb_id: imposta prima l'identificazione")
+        raise HTTPException(status_code=400, detail=coded_detail("upload_missing_tmdb_id"))
     tracker = _get_tracker_or_404(session, job.tracker_id)
     tracker_adapter = adapter_factory.build_tracker_adapter(tracker)
     try:
@@ -180,24 +181,24 @@ def confirm_upload(upload_id: int, body: UploadConfirmRequest, session: Session 
     job = _get_upload_or_404(session, upload_id)
     if job.status != "ready":
         raise HTTPException(
-            status_code=400, detail=f"upload_job in stato {job.status!r}, atteso 'ready' (esegui prima /prepare)"
+            status_code=400, detail=coded_detail("upload_job_wrong_status", status=job.status)
         )
     tracker = _get_tracker_or_404(session, job.tracker_id)
     profile = session.get(TrackerUploadProfile, tracker.id)
     if profile is None:
-        raise HTTPException(status_code=400, detail=f"Tracker {tracker.label!r} non ha un profilo di upload")
+        raise HTTPException(status_code=400, detail=coded_detail("tracker_no_upload_profile", tracker=tracker.label))
     tracker_adapter = adapter_factory.build_tracker_adapter(tracker)
 
     try:
         job = upload.submit(session, job, tracker_adapter, profile)
     except UploadPreparationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=from_coded_error(exc)) from exc
     except UploadError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     torrent_client = session.get(TorrentClient, body.torrent_client_id)
     if torrent_client is None:
-        raise HTTPException(status_code=404, detail=f"TorrentClient {body.torrent_client_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("torrent_client_not_found", id=body.torrent_client_id))
     try:
         client_adapter = adapter_factory.build_torrent_client_adapter(torrent_client)
         import os

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api_errors import CodedError, coded_detail, from_coded_error
 from app.deps import get_session
 from app.fs_scope import ScopeViolation, resolve_scoped
 from app.models import Disk
@@ -89,18 +90,18 @@ class AvailableMountsResponse(BaseModel):
     mounts: list[str]
 
 
-class DiskValidationError(ValueError):
+class DiskValidationError(CodedError):
     pass
 
 
-class DiskConflictError(ValueError):
+class DiskConflictError(CodedError):
     pass
 
 
 def _get_disk_or_404(session: Session, disk_id: int) -> Disk:
     disk = session.get(Disk, disk_id)
     if disk is None:
-        raise HTTPException(status_code=404, detail=f"Disco {disk_id} non trovato")
+        raise HTTPException(status_code=404, detail=coded_detail("disk_not_found", id=disk_id))
     return disk
 
 
@@ -129,24 +130,22 @@ def list_available_mounts(scan_root: str, used_paths: set[str]) -> list[str]:
 
 def create_disk(session: Session, label: str, root_path: str, scan_root: str) -> Disk:
     if not os.path.isdir(root_path):
-        raise DiskValidationError(f"root_path non è una cartella raggiungibile: {root_path}")
+        raise DiskValidationError("disk_root_path_not_a_directory", path=root_path)
     if not is_within_scan_root(root_path, scan_root):
-        raise DiskValidationError(
-            f"root_path deve essere contenuto in disk_scan_root ({scan_root})"
-        )
+        raise DiskValidationError("disk_root_path_outside_scan_root", scan_root=scan_root)
     disk = Disk(label=label, root_path=root_path)
     session.add(disk)
     try:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise DiskConflictError(f"Esiste già un disco con root_path {root_path!r}") from exc
+        raise DiskConflictError("disk_root_path_conflict", path=root_path) from exc
     return disk
 
 
 def verify_disk(session: Session, disk: Disk) -> VerifyResponse:
     if not os.path.isdir(disk.root_path):
-        raise HTTPException(status_code=404, detail=f"root_path non raggiungibile: {disk.root_path}")
+        raise HTTPException(status_code=404, detail=coded_detail("disk_root_path_unreachable", path=disk.root_path))
 
     current_st_dev = os.stat(disk.root_path).st_dev
 
@@ -162,9 +161,9 @@ def verify_disk(session: Session, disk: Disk) -> VerifyResponse:
         return VerifyResponse(
             consistent=False,
             warning=(
-                f"st_dev cambiato per il disco '{disk.label}' "
-                f"({disk.st_dev} -> {current_st_dev}): possibile disco rimontato "
-                "o sostituito. Verificare prima di procedere con hardlink."
+                f"st_dev changed for disk '{disk.label}' "
+                f"({disk.st_dev} -> {current_st_dev}): the disk may have been remounted "
+                "or replaced. Verify before proceeding with hardlinks."
             ),
         )
 
@@ -180,7 +179,7 @@ def _resolve_or_400(disk: Disk, relative: str) -> str:
     try:
         return resolve_scoped(disk.root_path, relative)
     except ScopeViolation as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=from_coded_error(exc)) from exc
 
 
 @router.get("/available-mounts", response_model=AvailableMountsResponse)
@@ -196,7 +195,7 @@ def browse(disk_id: int, path: str = "", session: Session = Depends(get_session)
     candidate = _resolve_or_400(disk, path)
 
     if not os.path.isdir(candidate):
-        raise HTTPException(status_code=404, detail=f"Percorso non trovato: {path!r}")
+        raise HTTPException(status_code=404, detail=coded_detail("path_not_found", path=path))
 
     entries = sorted(
         (BrowseEntry(name=e.name, is_dir=e.is_dir()) for e in os.scandir(candidate)),
@@ -215,7 +214,7 @@ def mkdir(disk_id: int, body: MkdirRequest, session: Session = Depends(get_sessi
     candidate = _resolve_or_400(disk, body.path)
 
     if os.path.exists(candidate):
-        raise HTTPException(status_code=409, detail=f"La cartella esiste già: {body.path!r}")
+        raise HTTPException(status_code=409, detail=coded_detail("folder_already_exists", path=body.path))
 
     os.makedirs(candidate)
     return MkdirResponse(path=_relative_to_root(disk.root_path, candidate), created=True)
@@ -237,9 +236,9 @@ def create_disk_endpoint(body: DiskCreateRequest, request: Request, session: Ses
     try:
         disk = create_disk(session, body.label, body.root_path, request.app.state.settings.disk_scan_root)
     except DiskValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=from_coded_error(exc)) from exc
     except DiskConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=from_coded_error(exc)) from exc
     return DiskResponse.from_model(disk)
 
 

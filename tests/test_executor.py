@@ -145,7 +145,7 @@ def test_execute_media_to_torrent_fails_on_cross_device(db_session, tmp_path, mo
 
     monkeypatch.setattr(executor.os, "stat", fake_stat)
 
-    with pytest.raises(executor.ExecutionError, match="device diversi"):
+    with pytest.raises(executor.ExecutionError, match="different devices"):
         executor.execute_review(db_session, match_review, FakeAdapter())
 
 

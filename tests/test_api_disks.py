@@ -43,6 +43,14 @@ def test_browse_rejects_path_traversal(client):
     response = client.get(f"/api/disks/{disk_id}/browse", params={"path": "../../etc"})
 
     assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "path_outside_scope"
+
+
+def test_get_disk_not_found_returns_coded_error(client):
+    response = client.get("/api/disks/999999/browse")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == {"code": "disk_not_found", "params": {"id": 999999}}
 
 
 def test_update_disk_torrent_client_root_path(client):

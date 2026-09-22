@@ -20,6 +20,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app import settings_repo
+from app.api_errors import coded_detail
 from app.crypto import SecretKeyMissingError
 from app.deps import get_session
 
@@ -96,5 +97,5 @@ def require_auth(request: Request, session: Session = Depends(get_session)) -> s
         return None
     username = authenticated_username(request, session)
     if username is None:
-        raise HTTPException(status_code=401, detail="Autenticazione richiesta")
+        raise HTTPException(status_code=401, detail=coded_detail("auth_required"))
     return username

@@ -18,6 +18,7 @@ from app import mediainfo_util, screenshots, settings_repo, torrent_create
 from app.adapters.image_host.base import ImageHostAdapter, ImageHostError
 from app.adapters.media_resolver.base import MediaResolverAdapter
 from app.adapters.tracker.base import TorrentCandidate, TrackerAdapter, UploadError, UploadFields
+from app.api_errors import CodedError
 from app.content_type_guess import guess_content_type_from_guessit
 from app.models import Tracker, TrackerUploadProfile, UploadJob
 
@@ -34,9 +35,11 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TYPE_GUESS = "ENCODE"
 
 
-class UploadPreparationError(Exception):
+class UploadPreparationError(CodedError):
     """Errore non recuperabile prima ancora di provare l'invio — es. tracker
-    senza announce_url configurato, o senza un profilo di upload."""
+    senza announce_url configurato, o senza un profilo di upload. Sollevata
+    solo prima di scrivere su job.error_message (mai catturata per essere
+    ri-memorizzata come testo), quindi può restare un CodedError puro."""
 
 
 def _guess_content_type(source_path: str) -> str:
@@ -98,7 +101,7 @@ def prepare(
     descrizione). Porta la riga a status='ready' — mai oltre, submit()
     richiede sempre la conferma umana esplicita a monte."""
     if not tracker.announce_url:
-        raise UploadPreparationError(f"Tracker {tracker.label!r} senza announce_url configurato")
+        raise UploadPreparationError("tracker_missing_announce_url", tracker=tracker.label)
 
     job_dir = os.path.join(data_dir, "uploads", str(job.id))
     os.makedirs(job_dir, exist_ok=True)
@@ -163,10 +166,7 @@ def submit(
     esplicita (docs/SPEC.md: "non negoziabile quanto il recheck forzato del
     reseeding"). app/api/uploads.py è l'unico chiamante previsto."""
     if job.category_id is None or job.type_id is None or job.resolution_id is None or job.tmdb_id is None:
-        raise UploadPreparationError(
-            "upload_job incompleto: category_id/type_id/resolution_id/tmdb_id devono essere "
-            "tutti risolti (o corretti manualmente) prima dell'invio"
-        )
+        raise UploadPreparationError("upload_job_incomplete")
     fields = UploadFields(
         name=os.path.basename(job.source_path),
         description=job.description_rendered or "",

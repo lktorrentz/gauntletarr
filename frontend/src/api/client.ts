@@ -3,6 +3,7 @@ import type { FetchResponse } from 'openapi-fetch'
 import type { MediaType } from 'openapi-typescript-helpers'
 
 import { clearToken, getToken } from '@/lib/authToken'
+import { t } from '@/lib/i18n'
 
 import type { components, paths } from './schema'
 
@@ -34,14 +35,20 @@ api.use({
 
 /**
  * Estrae `data` da una risposta openapi-fetch, o lancia un Error col
- * messaggio di FastAPI (`{"detail": "..."}`) se la richiesta è fallita —
- * così ogni mutation può semplicemente fare `await unwrap(api.POST(...))`
- * e lasciare che TanStack Query gestisca l'errore, senza ripetere questo
- * controllo in ogni hook. Tipizzato esattamente come il valore di ritorno
- * di api.GET/POST/... (FetchResponse di openapi-fetch), non una forma
+ * messaggio d'errore se la richiesta è fallita — così ogni mutation può
+ * semplicemente fare `await unwrap(api.POST(...))` e lasciare che
+ * TanStack Query gestisca l'errore, senza ripetere questo controllo in
+ * ogni hook. Tipizzato esattamente come il valore di ritorno di
+ * api.GET/POST/... (FetchResponse di openapi-fetch), non una forma
  * scritta a mano — altrimenti TS non riesce a inferire T correttamente
  * (weak-type check su un'unione discriminata senza proprietà realmente
  * in comune tra i due rami).
+ *
+ * Il backend (app/api_errors.py) restituisce `{"detail": {"code", "params"}}`
+ * per ogni errore autorato — mai testo libero — tradotto qui in inglese via
+ * t('errors.' + code, params). Un `detail` stringa semplice (validazione
+ * pydantic 422, o un messaggio già in inglese proveniente da un servizio
+ * esterno) passa invece così com'è.
  */
 export async function unwrap<T extends Record<string | number, unknown>, O, M extends MediaType>(
   promise: Promise<FetchResponse<T, O, M>>,
@@ -49,6 +56,10 @@ export async function unwrap<T extends Record<string | number, unknown>, O, M ex
   const { data, error } = await promise
   if (error !== undefined) {
     const detail = (error as { detail?: unknown } | undefined)?.detail
+    if (detail !== null && typeof detail === 'object' && 'code' in detail && typeof detail.code === 'string') {
+      const { code, params } = detail as { code: string; params?: Record<string, unknown> }
+      throw new Error(t(`errors.${code}`, params))
+    }
     throw new Error(typeof detail === 'string' ? detail : JSON.stringify(error))
   }
   return data as NonNullable<typeof data>
