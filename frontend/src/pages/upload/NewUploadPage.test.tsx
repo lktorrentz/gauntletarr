@@ -25,22 +25,22 @@ vi.mock('@/api/hooks/uploads', () => ({
 }))
 
 describe('CreateUploadForm', () => {
-  it('keeps "Crea bozza" disabled until tracker, disk and file are all chosen', async () => {
+  it('keeps "Create draft" disabled until tracker, disk and file are all chosen', async () => {
     const user = userEvent.setup()
     render(<CreateUploadForm onCreated={() => {}} />)
 
-    const submit = screen.getByRole('button', { name: 'Crea bozza' })
+    const submit = screen.getByRole('button', { name: 'Create draft' })
     expect(submit).toBeDisabled()
 
-    await user.click(screen.getByText('Scegli un tracker…'))
+    await user.click(screen.getByText('Choose a tracker…'))
     await user.click(await screen.findByRole('option', { name: 'Tracker A' }))
     expect(submit).toBeDisabled()
 
-    await user.click(screen.getByText('Scegli un disco…'))
+    await user.click(screen.getByText('Choose a disk…'))
     await user.click(await screen.findByRole('option', { name: 'Disco A' }))
     expect(submit).toBeDisabled()
 
-    await user.click(screen.getByText('Scegli un file…'))
+    await user.click(screen.getByText('Choose a file…'))
     await user.click(await screen.findByText('Movie.2024.1080p.WEB.mkv'))
     expect(submit).toBeEnabled()
 

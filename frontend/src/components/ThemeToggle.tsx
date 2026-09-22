@@ -3,6 +3,7 @@ import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { t } from '@/lib/i18n'
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
@@ -19,7 +20,7 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon-sm"
-      title={isDark ? 'Passa al tema chiaro' : 'Passa al tema scuro'}
+      title={isDark ? t('layout.switchToLightTheme') : t('layout.switchToDarkTheme')}
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
     >
       {isDark ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}

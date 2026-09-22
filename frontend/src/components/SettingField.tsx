@@ -5,6 +5,7 @@ import { useSetSetting, useSetting } from '@/api/hooks/settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { t } from '@/lib/i18n'
 
 export function SettingField({
   settingKey,
@@ -35,10 +36,10 @@ export function SettingField({
   function save() {
     setSetting.mutate(value, {
       onSuccess: () => {
-        toast.success(`${label} salvato.`)
+        toast.success(t('common.itemSaved', { item: label }))
         setDraft(null)
       },
-      onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+      onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
     })
   }
 
@@ -52,12 +53,12 @@ export function SettingField({
           id={settingKey}
           type={type}
           value={value}
-          placeholder={isPending ? 'Caricamento…' : placeholder}
+          placeholder={isPending ? t('common.loading') : placeholder}
           onChange={(e) => setDraft(e.target.value)}
           className="h-8"
         />
         <Button variant="outline" size="sm" disabled={setSetting.isPending} onClick={save}>
-          Salva
+          {t('common.save')}
         </Button>
       </div>
     )
@@ -72,11 +73,11 @@ export function SettingField({
           id={settingKey}
           type={type}
           value={value}
-          placeholder={isPending ? 'Caricamento…' : placeholder}
+          placeholder={isPending ? t('common.loading') : placeholder}
           onChange={(e) => setDraft(e.target.value)}
         />
         <Button variant="outline" disabled={setSetting.isPending} onClick={save}>
-          Salva
+          {t('common.save')}
         </Button>
       </div>
     </div>

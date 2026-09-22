@@ -30,13 +30,14 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { t } from '@/lib/i18n'
 import { selectLabel } from '@/lib/utils'
 
 type TorrentClient = Schemas['TorrentClientResponse']
 
 const ADAPTER_TYPES = [
   { value: 'qbittorrent', label: 'qBittorrent' },
-  { value: 'qui', label: 'qui (gestore multi-istanza per qBittorrent)' },
+  { value: 'qui', label: t('torrentClients.quiLabel') },
 ]
 
 function AddTorrentClientDialog() {
@@ -76,7 +77,7 @@ function AddTorrentClientDialog() {
           setOpen(false)
           reset()
         },
-        onError: (error) => toast.error(`Creazione fallita: ${error.message}`),
+        onError: (error) => toast.error(t('torrentClients.creationFailed', { message: error.message })),
       },
     )
   }
@@ -85,18 +86,18 @@ function AddTorrentClientDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button><PlusIcon className="size-4" />Aggiungi client</Button>} />
+      <DialogTrigger render={<Button><PlusIcon className="size-4" />{t('torrentClients.addClient')}</Button>} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Aggiungi client torrent</DialogTitle>
+          <DialogTitle>{t('torrentClients.addTorrentClient')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="tc-label">Etichetta</Label>
+            <Label htmlFor="tc-label">{t('torrentClients.label')}</Label>
             <Input id="tc-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="qbit" />
           </div>
           <div className="grid gap-1.5">
-            <Label>Tipo</Label>
+            <Label>{t('torrentClients.type')}</Label>
             <Select value={adapterType} onValueChange={(v) => setAdapterType(v as 'qbittorrent' | 'qui')}>
               <SelectTrigger>
                 <SelectValue>
@@ -111,10 +112,10 @@ function AddTorrentClientDialog() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">Deluge/Transmission/rutorrent pianificati, non ancora disponibili.</p>
+            <p className="text-xs text-muted-foreground">{t('torrentClients.plannedAdapters')}</p>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="tc-base-url">URL</Label>
+            <Label htmlFor="tc-base-url">{t('torrentClients.url')}</Label>
             <Input
               id="tc-base-url"
               value={baseUrl}
@@ -125,37 +126,35 @@ function AddTorrentClientDialog() {
           {isQui ? (
             <>
               <div className="grid gap-1.5">
-                <Label htmlFor="tc-api-token">API key</Label>
+                <Label htmlFor="tc-api-token">{t('torrentClients.apiKey')}</Label>
                 <Input
                   id="tc-api-token"
                   type="password"
                   value={apiToken}
                   onChange={(e) => setApiToken(e.target.value)}
-                  placeholder="Impostazioni → API Keys in qui"
+                  placeholder={t('torrentClients.apiKeyPlaceholder')}
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="tc-qui-instance-id">Istanza</Label>
+                <Label htmlFor="tc-qui-instance-id">{t('torrentClients.instance')}</Label>
                 <Input
                   id="tc-qui-instance-id"
                   type="number"
                   value={quiInstanceId}
                   onChange={(e) => setQuiInstanceId(e.target.value)}
-                  placeholder="id numerico dell'istanza qBittorrent gestita da qui"
+                  placeholder={t('torrentClients.instanceIdPlaceholder')}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Un deployment qui gestisce più istanze: questo client punta a una sola (mai scelta a runtime).
-                </p>
+                <p className="text-xs text-muted-foreground">{t('torrentClients.instanceHelp')}</p>
               </div>
             </>
           ) : (
             <>
               <div className="grid gap-1.5">
-                <Label htmlFor="tc-username">Utente</Label>
+                <Label htmlFor="tc-username">{t('torrentClients.username')}</Label>
                 <Input id="tc-username" value={username} onChange={(e) => setUsername(e.target.value)} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="tc-password">Password</Label>
+                <Label htmlFor="tc-password">{t('torrentClients.password')}</Label>
                 <Input id="tc-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
             </>
@@ -163,7 +162,7 @@ function AddTorrentClientDialog() {
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={!canSubmit || createTorrentClient.isPending}>
-            Crea
+            {t('torrentClients.create')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -201,42 +200,42 @@ function EditTorrentClientDialog({ tc }: { tc: TorrentClient }) {
           setPassword('')
           setApiToken('')
         },
-        onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+        onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
       },
     )
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title="Modifica"><PencilIcon className="size-4" /></Button>} />
+      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title={t('common.edit')}><PencilIcon className="size-4" /></Button>} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Modifica client torrent</DialogTitle>
-          <DialogDescription>Tipo ({tc.adapter_type}) non modificabile — elimina e ricrea per cambiarlo.</DialogDescription>
+          <DialogTitle>{t('torrentClients.editTorrentClient')}</DialogTitle>
+          <DialogDescription>{t('torrentClients.typeNotEditable', { type: tc.adapter_type })}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="tc-edit-label">Etichetta</Label>
+            <Label htmlFor="tc-edit-label">{t('torrentClients.label')}</Label>
             <Input id="tc-edit-label" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="tc-edit-base-url">URL</Label>
+            <Label htmlFor="tc-edit-base-url">{t('torrentClients.url')}</Label>
             <Input id="tc-edit-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
           </div>
           {isQui ? (
             <>
               <div className="grid gap-1.5">
-                <Label htmlFor="tc-edit-api-token">API key</Label>
+                <Label htmlFor="tc-edit-api-token">{t('torrentClients.apiKey')}</Label>
                 <Input
                   id="tc-edit-api-token"
                   type="password"
                   value={apiToken}
                   onChange={(e) => setApiToken(e.target.value)}
-                  placeholder="Lascia vuoto per non cambiarla"
+                  placeholder={t('torrentClients.leaveEmptyToKeep')}
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="tc-edit-qui-instance-id">Istanza</Label>
+                <Label htmlFor="tc-edit-qui-instance-id">{t('torrentClients.instance')}</Label>
                 <Input
                   id="tc-edit-qui-instance-id"
                   type="number"
@@ -248,17 +247,17 @@ function EditTorrentClientDialog({ tc }: { tc: TorrentClient }) {
           ) : (
             <>
               <div className="grid gap-1.5">
-                <Label htmlFor="tc-edit-username">Utente</Label>
+                <Label htmlFor="tc-edit-username">{t('torrentClients.username')}</Label>
                 <Input id="tc-edit-username" value={username} onChange={(e) => setUsername(e.target.value)} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="tc-edit-password">Password</Label>
+                <Label htmlFor="tc-edit-password">{t('torrentClients.password')}</Label>
                 <Input
                   id="tc-edit-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Lascia vuoto per non cambiarla"
+                  placeholder={t('torrentClients.leaveEmptyToKeep')}
                 />
               </div>
             </>
@@ -266,7 +265,7 @@ function EditTorrentClientDialog({ tc }: { tc: TorrentClient }) {
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={!label || !baseUrl || updateTorrentClient.isPending}>
-            Salva
+            {t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -280,12 +279,12 @@ function TestButton({ id }: { id: number }) {
     <Button
       variant="ghost"
       size="icon-sm"
-      title="Test connessione"
+      title={t('torrentClients.testConnection')}
       onClick={() =>
         test.mutate(id, {
           onSuccess: (result) => {
-            if (result.status === 'ok') toast.success(`Connesso — ${result.torrents_found} torrent trovati.`)
-            else toast.error(result.error ?? 'Connessione fallita.')
+            if (result.status === 'ok') toast.success(t('torrentClients.connectedSuccess', { count: result.torrents_found }))
+            else toast.error(result.error ?? t('torrentClients.connectionFailed'))
           },
         })
       }
@@ -303,10 +302,10 @@ function DisksDialog({ torrentClientId, diskIds }: { torrentClientId: number; di
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title="Dischi abilitati"><HardDriveIcon className="size-4" /></Button>} />
+      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title={t('torrentClients.enabledDisks')}><HardDriveIcon className="size-4" /></Button>} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Dischi abilitati per questo client</DialogTitle>
+          <DialogTitle>{t('torrentClients.enabledDisksForClient')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-2">
           {disks?.map((disk) => {
@@ -324,7 +323,7 @@ function DisksDialog({ torrentClientId, diskIds }: { torrentClientId: number; di
               </div>
             )
           })}
-          {disks?.length === 0 && <p className="text-sm text-muted-foreground">Nessun disco configurato.</p>}
+          {disks?.length === 0 && <p className="text-sm text-muted-foreground">{t('torrentClients.noDisksConfigured')}</p>}
         </div>
       </DialogContent>
     </Dialog>
@@ -349,11 +348,11 @@ export function TorrentClientsSection() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Etichetta</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>URL</TableHead>
-              <TableHead>Dischi</TableHead>
-              <TableHead>Abilitato</TableHead>
+              <TableHead>{t('torrentClients.label')}</TableHead>
+              <TableHead>{t('torrentClients.type')}</TableHead>
+              <TableHead>{t('torrentClients.url')}</TableHead>
+              <TableHead>{t('torrentClients.disks')}</TableHead>
+              <TableHead>{t('torrentClients.enabled')}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -361,7 +360,7 @@ export function TorrentClientsSection() {
             {isPending && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                  Caricamento…
+                  {t('common.loading')}
                 </TableCell>
               </TableRow>
             )}
@@ -376,7 +375,7 @@ export function TorrentClientsSection() {
                 </TableCell>
                 <TableCell className="font-mono text-xs">{tc.base_url}</TableCell>
                 <TableCell className="flex flex-wrap gap-1">
-                  {tc.disk_ids.length === 0 && <span className="text-xs text-muted-foreground">nessuno</span>}
+                  {tc.disk_ids.length === 0 && <span className="text-xs text-muted-foreground">{t('torrentClients.none')}</span>}
                   {tc.disk_ids.map((id) => (
                     <Badge key={id} variant="secondary">
                       {diskLabel(id)}
@@ -393,7 +392,7 @@ export function TorrentClientsSection() {
                   <TestButton id={tc.id} />
                   <DisksDialog torrentClientId={tc.id} diskIds={tc.disk_ids} />
                   <EditTorrentClientDialog tc={tc} />
-                  <Button variant="ghost" size="icon-sm" title="Elimina" onClick={() => deleteTorrentClient.mutate(tc.id)}>
+                  <Button variant="ghost" size="icon-sm" title={t('common.delete')} onClick={() => deleteTorrentClient.mutate(tc.id)}>
                     <TrashIcon className="size-4" />
                   </Button>
                 </TableCell>
@@ -402,7 +401,7 @@ export function TorrentClientsSection() {
             {torrentClients?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                  Nessun client torrent configurato.
+                  {t('torrentClients.noClientsConfigured')}
                 </TableCell>
               </TableRow>
             )}

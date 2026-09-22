@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useAuth } from '@/contexts/AuthContext'
+import { t } from '@/lib/i18n'
 import {
   Sidebar,
   SidebarContent,
@@ -24,13 +25,13 @@ import { cn } from '@/lib/utils'
 import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
 
 function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return 'mai'
+  if (!iso) return t('layout.timeNever')
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
-  if (minutes < 1) return 'adesso'
-  if (minutes < 60) return `${minutes} min fa`
+  if (minutes < 1) return t('layout.timeNow')
+  if (minutes < 60) return t('layout.timeMinutesAgo', { minutes })
   const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} h fa`
-  return `${Math.round(hours / 24)} g fa`
+  if (hours < 24) return t('layout.timeHoursAgo', { hours })
+  return t('layout.timeDaysAgo', { days: Math.round(hours / 24) })
 }
 
 function StatBox({ dotClassName, label, value }: { dotClassName: string; label: string; value: string }) {
@@ -60,28 +61,28 @@ function AppSidebarFooter() {
       <div className="grid grid-cols-2 gap-1.5">
         <StatBox
           dotClassName="bg-emerald-500"
-          label="Salute"
+          label={t('layout.health')}
           value={dashboard ? `${Math.round(dashboard.health_pct)}/100` : '—'}
         />
         <StatBox
           dotClassName="bg-amber-500"
-          label="Da rivedere"
+          label={t('layout.toReview')}
           value={dashboard ? String(dashboard.pending_review) : '—'}
         />
       </div>
       <p className="font-mono text-[11px] text-muted-foreground">
-        ultima run {relativeTime(dashboard?.last_run?.finished_at)}
+        {t('layout.lastRun', { time: relativeTime(dashboard?.last_run?.finished_at) })}
       </p>
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <a href="/docs" target="_blank" rel="noreferrer" className="hover:underline">
-          API docs
+          {t('layout.apiDocs')}
         </a>
         <span>v{health?.version ?? '…'}</span>
       </div>
       <div className="flex items-center justify-between border-t pt-2">
         <ThemeToggle />
         {username && (
-          <Button variant="ghost" size="icon-sm" title={`Esci (${username})`} onClick={logout}>
+          <Button variant="ghost" size="icon-sm" title={t('layout.logout', { username })} onClick={logout}>
             <LogOutIcon className="size-4" />
           </Button>
         )}

@@ -1,0 +1,17 @@
+export const dashboard = {
+  'dashboard.libraryHealth': 'Library health',
+  'dashboard.seedingOfTotal': '{seeding} GB seeding of {total} GB total',
+  'dashboard.healthHistory': 'Health history',
+  'dashboard.notEnoughHistory': 'Not enough history yet.',
+  'dashboard.unresolved': 'Unresolved',
+  'dashboard.ignored': 'Ignored',
+  'dashboard.pendingReview': 'Pending review',
+  'dashboard.failed': 'Failed',
+  'dashboard.lastRunMatches': 'Last run: matches',
+  'dashboard.lastRunAutoExecuted': 'Last run: auto-executed',
+  'dashboard.drafts': 'Drafts',
+  'dashboard.ready': 'Ready',
+  'dashboard.uploaded': 'Uploaded',
+  'dashboard.whatsNew': "What's new",
+  'dashboard.nothingNew': 'Nothing new.',
+} as const

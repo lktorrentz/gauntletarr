@@ -18,17 +18,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 function CandidateAudit({ mediaItemId }: { mediaItemId: number }) {
   const { data, isPending } = useCandidateAudit(mediaItemId)
 
-  if (isPending) return <p className="p-3 text-xs text-muted-foreground">Caricamento candidati…</p>
+  if (isPending) return <p className="p-3 text-xs text-muted-foreground">{t('reseeding.loadingCandidates')}</p>
 
   return (
     <div className="grid gap-1.5 border-t bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">
-        Tutti i candidati valutati per questo contenuto:
+        {t('reseeding.allCandidatesEvaluated')}
       </p>
       {data?.map((c) => (
         <div key={c.id} className="flex items-center justify-between gap-2 text-xs">
@@ -60,26 +61,30 @@ function ReviewRow({ review }: { review: NonNullable<ReturnType<typeof useReview
             <Badge variant="secondary">{review.direction}</Badge>
             <span>{(review.confidence * 100).toFixed(0)}%</span>
             {review.ambiguity_reason && <span>{review.ambiguity_reason}</span>}
-            {review.status === 'auto_approved' && <Badge>auto-approvato</Badge>}
+            {review.status === 'auto_approved' && <Badge>{t('reseeding.autoApproved')}</Badge>}
           </div>
         </div>
         <Button
           size="sm"
           variant="outline"
           onClick={() =>
-            approve.mutate(review.id, { onError: (error) => toast.error(`Approvazione fallita: ${error.message}`) })
+            approve.mutate(review.id, {
+              onError: (error) => toast.error(t('reseeding.approveFailed', { message: error.message })),
+            })
           }
         >
-          Approva
+          {t('reseeding.approve')}
         </Button>
         <Button
           size="sm"
           variant="ghost"
           onClick={() =>
-            reject.mutate(review.id, { onError: (error) => toast.error(`Rifiuto fallito: ${error.message}`) })
+            reject.mutate(review.id, {
+              onError: (error) => toast.error(t('reseeding.rejectFailed', { message: error.message })),
+            })
           }
         >
-          Rifiuta
+          {t('reseeding.reject')}
         </Button>
       </div>
       <CollapsibleContent>
@@ -98,11 +103,11 @@ function ReviewCard() {
         <CardTitle>Review</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        {isPending && <p className="p-3 text-sm text-muted-foreground">Caricamento…</p>}
+        {isPending && <p className="p-3 text-sm text-muted-foreground">{t('common.loading')}</p>}
         {reviews?.map((r) => (
           <ReviewRow key={r.id} review={r} />
         ))}
-        {reviews?.length === 0 && <p className="p-3 text-sm text-muted-foreground">Nessuna review in attesa.</p>}
+        {reviews?.length === 0 && <p className="p-3 text-sm text-muted-foreground">{t('reseeding.noPendingReviews')}</p>}
       </CardContent>
     </Card>
   )
@@ -119,31 +124,31 @@ function RunsCard() {
         <Button
           onClick={() =>
             triggerRun.mutate(undefined, {
-              onError: (error) => toast.error(`Avvio fallito: ${error.message}`),
+              onError: (error) => toast.error(t('reseeding.runFailed', { message: error.message })),
             })
           }
           disabled={triggerRun.isPending}
         >
           <PlayIcon className="size-4" />
-          Esegui ora
+          {t('reseeding.runNow')}
         </Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Iniziata</TableHead>
-              <TableHead>Fase</TableHead>
-              <TableHead>Scansionati</TableHead>
-              <TableHead>Errori</TableHead>
+              <TableHead>{t('reseeding.type')}</TableHead>
+              <TableHead>{t('reseeding.started')}</TableHead>
+              <TableHead>{t('reseeding.phase')}</TableHead>
+              <TableHead>{t('reseeding.scanned')}</TableHead>
+              <TableHead>{t('reseeding.errors')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isPending && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  Caricamento…
+                  {t('common.loading')}
                 </TableCell>
               </TableRow>
             )}
@@ -157,7 +162,7 @@ function RunsCard() {
                   {run.current_phase ? (
                     <Badge>{run.current_phase}</Badge>
                   ) : (
-                    <span className="text-xs text-muted-foreground">terminata</span>
+                    <span className="text-xs text-muted-foreground">{t('reseeding.finished')}</span>
                   )}
                 </TableCell>
                 <TableCell>{run.items_scanned}</TableCell>
@@ -167,7 +172,7 @@ function RunsCard() {
             {runs?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  Nessuna run ancora eseguita.
+                  {t('reseeding.noRunsYet')}
                 </TableCell>
               </TableRow>
             )}
@@ -189,7 +194,7 @@ function FailedJobRow({ job }: { job: NonNullable<ReturnType<typeof useFailedSee
           <ChevronRightIcon className={cn('size-4 text-muted-foreground transition-transform', open && 'rotate-90')} />
         </CollapsibleTrigger>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Candidate #{job.candidate_id}</p>
+          <p className="text-sm font-medium">{t('reseeding.candidateHash', { id: job.candidate_id })}</p>
           <p className="truncate text-xs text-destructive">{job.error_message}</p>
         </div>
         <Button
@@ -197,8 +202,8 @@ function FailedJobRow({ job }: { job: NonNullable<ReturnType<typeof useFailedSee
           variant="outline"
           onClick={() =>
             retry.mutate(job.id, {
-              onSuccess: () => toast.success('Retry completato.'),
-              onError: (error) => toast.error(`Retry fallito: ${error.message}`),
+              onSuccess: () => toast.success(t('reseeding.retryCompleted')),
+              onError: (error) => toast.error(t('reseeding.retryFailed', { message: error.message })),
             })
           }
         >
@@ -230,15 +235,15 @@ function FailedJobsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Esecuzioni fallite</CardTitle>
-        <CardDescription>Clicca una riga per il dettaglio completo dell'errore.</CardDescription>
+        <CardTitle>{t('reseeding.failedJobs')}</CardTitle>
+        <CardDescription>{t('reseeding.failedJobsHint')}</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
-        {isPending && <p className="p-3 text-sm text-muted-foreground">Caricamento…</p>}
+        {isPending && <p className="p-3 text-sm text-muted-foreground">{t('common.loading')}</p>}
         {data?.map((job) => (
           <FailedJobRow key={job.id} job={job} />
         ))}
-        {data?.length === 0 && <p className="p-3 text-sm text-muted-foreground">Nessuna esecuzione fallita.</p>}
+        {data?.length === 0 && <p className="p-3 text-sm text-muted-foreground">{t('reseeding.noFailedJobs')}</p>}
       </CardContent>
     </Card>
   )
@@ -255,8 +260,9 @@ function ScheduleCard() {
       <CardHeader>
         <CardTitle>Schedule</CardTitle>
         <CardDescription>
-          Espressione cron standard a 5 campi (es. <code>0 */6 * * *</code> ogni 6 ore). Vuoto = nessuna run
-          automatica.
+          {t('reseeding.cronHintPre')}
+          <code>0 */6 * * *</code>
+          {t('reseeding.cronHintPost')}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex items-center gap-2">
@@ -266,17 +272,17 @@ function ScheduleCard() {
           onClick={() =>
             setSchedule.mutate(cron || null, {
               onSuccess: () => {
-                toast.success(cron ? 'Schedule impostato.' : 'Schedule disabilitato.')
+                toast.success(cron ? t('reseeding.scheduleSet') : t('reseeding.scheduleDisabled'))
                 setDraft(null)
               },
-              onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+              onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
             })
           }
         >
-          Salva
+          {t('common.save')}
         </Button>
         <Badge variant={schedule?.enabled ? 'default' : 'secondary'}>
-          {schedule?.enabled ? 'attivo' : 'disattivo'}
+          {schedule?.enabled ? t('reseeding.scheduleActive') : t('reseeding.scheduleInactive')}
         </Badge>
       </CardContent>
     </Card>

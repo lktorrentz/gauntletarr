@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { t } from '@/lib/i18n'
 import { DiskBrowserDialog } from '@/pages/config/DiskBrowserDialog'
 
 type Disk = Schemas['DiskResponse']
@@ -45,21 +46,21 @@ function AddDiskDialog() {
           setLabel('')
           setRootPath('')
         },
-        onError: (error) => toast.error(`Creazione disco fallita: ${error.message}`),
+        onError: (error) => toast.error(t('disks.createDiskFailed', { message: error.message })),
       },
     )
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button><PlusIcon className="size-4" />Aggiungi disco</Button>} />
+      <DialogTrigger render={<Button><PlusIcon className="size-4" />{t('disks.addDisk')}</Button>} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Aggiungi disco</DialogTitle>
+          <DialogTitle>{t('disks.addDisk')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="disk-label">Etichetta</Label>
+            <Label htmlFor="disk-label">{t('disks.label')}</Label>
             <Input id="disk-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="main" />
           </div>
           <div className="grid gap-1.5">
@@ -70,17 +71,14 @@ function AddDiskDialog() {
               onChange={(e) => setRootPath(e.target.value)}
               placeholder="/data/disk1"
             />
-            <p className="text-xs text-muted-foreground">
-              Precompilato con disk_scan_root — lascialo così con un mount unico (es. /data), altrimenti scrivi il
-              path del disco specifico.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('disks.rootPathHelp')}</p>
           </div>
           {mounts?.mounts.length ? (
             <div className="grid gap-1.5">
-              <Label>Oppure scegli tra le sottocartelle non ancora registrate</Label>
+              <Label>{t('disks.chooseSubfolder')}</Label>
               <Select value={rootPath} onValueChange={setRootPath}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Sottocartella di disk_scan_root…" />
+                  <SelectValue placeholder={t('disks.subfolderPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {mounts.mounts.map((m) => (
@@ -90,15 +88,13 @@ function AddDiskDialog() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Un aiuto solo per il caso multi-disco (un mount per disco fisico, es. /mnt/disk1).
-              </p>
+              <p className="text-xs text-muted-foreground">{t('disks.multiDiskHelp')}</p>
             </div>
           ) : null}
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={!label || !rootPath || createDisk.isPending}>
-            Crea
+            {t('disks.create')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -112,14 +108,14 @@ function VerifyButton({ diskId }: { diskId: number }) {
     <Button
       variant="ghost"
       size="icon-sm"
-      title="Verifica hardlink (st_dev)"
+      title={t('disks.verifyHardlink')}
       onClick={() =>
         verify.mutate(diskId, {
           onSuccess: (result) => {
-            if (result.consistent) toast.success('Disco consistente.')
-            else toast.warning(result.warning ?? 'Disco non più consistente.')
+            if (result.consistent) toast.success(t('disks.diskConsistent'))
+            else toast.warning(result.warning ?? t('disks.diskInconsistent'))
           },
-          onError: (error) => toast.error(`Verifica fallita: ${error.message}`),
+          onError: (error) => toast.error(t('disks.verificationFailed', { message: error.message })),
         })
       }
     >
@@ -152,7 +148,7 @@ function RelPathCell({
         className="font-mono text-xs text-muted-foreground hover:underline"
         onClick={() => setBrowserOpen(true)}
       >
-        {value || '— imposta —'}
+        {value || t('disks.setPath')}
       </button>
       <DiskBrowserDialog
         diskId={diskId}
@@ -184,22 +180,22 @@ function EditDiskDialog({ disk }: { disk: Disk }) {
       },
       {
         onSuccess: () => setOpen(false),
-        onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+        onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
       },
     )
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title="Modifica"><PencilIcon className="size-4" /></Button>} />
+      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title={t('common.edit')}><PencilIcon className="size-4" /></Button>} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Modifica disco</DialogTitle>
-          <DialogDescription>root_path non modificabile — elimina e ricrea il disco per cambiarlo.</DialogDescription>
+          <DialogTitle>{t('disks.editDisk')}</DialogTitle>
+          <DialogDescription>{t('disks.rootPathNotEditable')}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="disk-edit-label">Etichetta</Label>
+            <Label htmlFor="disk-edit-label">{t('disks.label')}</Label>
             <Input id="disk-edit-label" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
@@ -207,36 +203,29 @@ function EditDiskDialog({ disk }: { disk: Disk }) {
             <Input value={disk.root_path} disabled />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="disk-edit-new-torrent-rel-path">Cartella per i nuovi hardlink (opzionale)</Label>
+            <Label htmlFor="disk-edit-new-torrent-rel-path">{t('disks.newHardlinkFolderLabel')}</Label>
             <Input
               id="disk-edit-new-torrent-rel-path"
               value={newTorrentRelPath}
               onChange={(e) => setNewTorrentRelPath(e.target.value)}
-              placeholder="torrents/nuovi"
+              placeholder="torrents/new"
             />
-            <p className="text-xs text-muted-foreground">
-              Sottocartella di root_path dove creare un NUOVO hardlink (e il save_path per il client) — non
-              restringe mai la ricerca "già in seeding", che resta su tutta la cartella seeding. Vuoto = usa la
-              cartella seeding stessa.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('disks.newHardlinkFolderHelp')}</p>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="disk-edit-client-root">Percorso lato client torrent</Label>
+            <Label htmlFor="disk-edit-client-root">{t('disks.torrentClientPathLabel')}</Label>
             <Input
               id="disk-edit-client-root"
               value={torrentClientRootPath}
               onChange={(e) => setTorrentClientRootPath(e.target.value)}
               placeholder="/mnt/disk1"
             />
-            <p className="text-xs text-muted-foreground">
-              Solo se il client torrent vede questo stesso disco fisico con un path diverso da root_path (mount o
-              container diversi) — lascia vuoto se root_path è lo stesso path che il client usa.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('disks.torrentClientPathHelp')}</p>
           </div>
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={!label || updateDisk.isPending}>
-            Salva
+            {t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -258,10 +247,10 @@ export function DisksSection() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Etichetta</TableHead>
+              <TableHead>{t('disks.label')}</TableHead>
               <TableHead>root_path</TableHead>
-              <TableHead>Cartella media</TableHead>
-              <TableHead>Cartella seeding</TableHead>
+              <TableHead>{t('disks.mediaFolder')}</TableHead>
+              <TableHead>{t('disks.seedingFolder')}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -269,7 +258,7 @@ export function DisksSection() {
             {isPending && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  Caricamento…
+                  {t('common.loading')}
                 </TableCell>
               </TableRow>
             )}
@@ -278,20 +267,20 @@ export function DisksSection() {
                 <TableCell className="font-medium">{disk.label}</TableCell>
                 <TableCell className="font-mono text-xs">{disk.root_path}</TableCell>
                 <TableCell>
-                  <RelPathCell diskId={disk.id} value={disk.media_rel_path} field="media_rel_path" title="Cartella media" />
+                  <RelPathCell diskId={disk.id} value={disk.media_rel_path} field="media_rel_path" title={t('disks.mediaFolder')} />
                 </TableCell>
                 <TableCell>
                   <RelPathCell
                     diskId={disk.id}
                     value={disk.torrents_rel_path}
                     field="torrents_rel_path"
-                    title="Cartella di seeding (torrents_rel_path)"
+                    title={t('disks.seedingFolderDialogTitle')}
                   />
                 </TableCell>
                 <TableCell className="flex justify-end gap-1">
                   <VerifyButton diskId={disk.id} />
                   <EditDiskDialog disk={disk} />
-                  <Button variant="ghost" size="icon-sm" title="Elimina" onClick={() => deleteDisk.mutate(disk.id)}>
+                  <Button variant="ghost" size="icon-sm" title={t('common.delete')} onClick={() => deleteDisk.mutate(disk.id)}>
                     <TrashIcon className="size-4" />
                   </Button>
                 </TableCell>
@@ -300,7 +289,7 @@ export function DisksSection() {
             {disks?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  Nessun disco configurato.
+                  {t('disks.noDisksConfigured')}
                 </TableCell>
               </TableRow>
             )}

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useLibraryItems } from '@/api/hooks/library'
 import type { Schemas } from '@/api/client'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 type MediaItemOverview = Schemas['MediaItemOverview']
@@ -22,7 +23,7 @@ function itemLabel(item: {
   season_number: number | null
   episode_number: number | null
 }) {
-  const base = `${item.content_type === 'tv' ? 'TV' : 'Film'} #${item.tmdb_id}`
+  const base = `${item.content_type === 'tv' ? 'TV' : t('library.movie')} #${item.tmdb_id}`
   if (item.season_number != null && item.episode_number != null) {
     return `${base} — S${String(item.season_number).padStart(2, '0')}E${String(item.episode_number).padStart(2, '0')}`
   }
@@ -75,18 +76,18 @@ export function PosterView() {
 
   const items = useMemo(() => (data ?? []).filter((item) => item.content_type === contentType), [data, contentType])
 
-  if (isPending) return <p className="text-sm text-muted-foreground">Caricamento…</p>
+  if (isPending) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
 
   return (
     <div className="grid gap-4">
       <Tabs value={contentType} onValueChange={(v) => setContentType(v as 'movie' | 'tv')}>
         <TabsList>
-          <TabsTrigger value="movie">Film</TabsTrigger>
+          <TabsTrigger value="movie">{t('library.movie')}</TabsTrigger>
           <TabsTrigger value="tv">TV</TabsTrigger>
         </TabsList>
       </Tabs>
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nessun contenuto risolto in questa categoria.</p>
+        <p className="text-sm text-muted-foreground">{t('library.noResolvedContent')}</p>
       ) : (
         <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
           {items.map((item) => (

@@ -8,15 +8,16 @@ import { toast } from 'sonner'
 import { useSetSetting, useSetting } from '@/api/hooks/settings'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 // Deve restare in sync con adapter_factory.DEFAULT_IMAGE_HOST_PRIORITY e
 // con gli host realmente implementati (app/adapters/image_host/).
 const KNOWN_HOSTS: Record<string, string> = {
   ptpimg: 'PTPImg',
-  imgbox: 'Imgbox (nessuna api_key richiesta)',
+  imgbox: `Imgbox (${t('uploadSettings.noApiKeyRequired')})`,
   imgbb: 'ImgBB',
-  pixhost: 'Pixhost (nessuna api_key richiesta)',
+  pixhost: `Pixhost (${t('uploadSettings.noApiKeyRequired')})`,
   lensdump: 'Lensdump',
   ptscreens: 'PTScreens',
   onlyimage: 'OnlyImage',
@@ -60,12 +61,12 @@ function SortableRow({ id, label, onDisable }: { id: string; label: string; onDi
         {...attributes}
         {...listeners}
         className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
-        aria-label={`Trascina per riordinare ${label}`}
+        aria-label={t('uploadSettings.dragToReorder', { label })}
       >
         <GripVerticalIcon className="size-4" />
       </button>
       <span className="flex-1">{label}</span>
-      <Button variant="ghost" size="icon-sm" title="Disabilita" onClick={onDisable}>
+      <Button variant="ghost" size="icon-sm" title={t('uploadSettings.disable')} onClick={onDisable}>
         <XIcon className="size-3.5" />
       </Button>
     </div>
@@ -85,7 +86,7 @@ export function ImageHostPriorityField() {
     setSetting.mutate(next.join(','), {
       onSuccess: () => toast.success(message),
       onError: (error) => {
-        toast.error(`Salvataggio fallito: ${error.message}`)
+        toast.error(t('common.saveFailed', { message: error.message }))
         setDraft(null)
       },
     })
@@ -96,15 +97,13 @@ export function ImageHostPriorityField() {
     if (!over || active.id === over.id) return
     const oldIndex = order.indexOf(String(active.id))
     const newIndex = order.indexOf(String(over.id))
-    save(arrayMove(order, oldIndex, newIndex), 'Ordine di priorità salvato.')
+    save(arrayMove(order, oldIndex, newIndex), t('uploadSettings.priorityOrderSaved'))
   }
 
   return (
     <div className="grid gap-1.5">
-      <Label>Ordine di priorità host immagini</Label>
-      <p className="text-xs text-muted-foreground">
-        Trascina per riordinare — si prova il primo, se fallisce si passa al successivo.
-      </p>
+      <Label>{t('uploadSettings.priorityOrderLabel')}</Label>
+      <p className="text-xs text-muted-foreground">{t('uploadSettings.priorityOrderHelp')}</p>
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <div className="grid gap-1.5">
@@ -113,7 +112,9 @@ export function ImageHostPriorityField() {
                 key={key}
                 id={key}
                 label={KNOWN_HOSTS[key]}
-                onDisable={() => save(order.filter((k) => k !== key), `${KNOWN_HOSTS[key]} disabilitato.`)}
+                onDisable={() =>
+                  save(order.filter((k) => k !== key), t('uploadSettings.hostDisabled', { host: KNOWN_HOSTS[key] }))
+                }
               />
             ))}
           </div>
@@ -126,7 +127,7 @@ export function ImageHostPriorityField() {
               key={key}
               variant="outline"
               size="sm"
-              onClick={() => save([...order, key], `${KNOWN_HOSTS[key]} abilitato.`)}
+              onClick={() => save([...order, key], t('uploadSettings.hostEnabled', { host: KNOWN_HOSTS[key] }))}
             >
               + {KNOWN_HOSTS[key]}
             </Button>

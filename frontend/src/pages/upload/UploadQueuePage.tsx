@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { t } from '@/lib/i18n'
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   draft: 'outline',
@@ -25,7 +26,7 @@ export function UploadQueuePage() {
         <CardTitle>Upload</CardTitle>
         <Button onClick={() => navigate('/upload/new')}>
           <PlusIcon className="size-4" />
-          Nuovo upload
+          {t('upload.newUpload')}
         </Button>
       </CardHeader>
       <CardContent>
@@ -33,7 +34,7 @@ export function UploadQueuePage() {
           <TableHeader>
             <TableRow>
               <TableHead>File</TableHead>
-              <TableHead>Stato</TableHead>
+              <TableHead>{t('upload.status')}</TableHead>
               <TableHead>torrent_id_remote</TableHead>
             </TableRow>
           </TableHeader>
@@ -41,7 +42,7 @@ export function UploadQueuePage() {
             {isPending && (
               <TableRow>
                 <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
-                  Caricamento…
+                  {t('common.loading')}
                 </TableCell>
               </TableRow>
             )}
@@ -57,7 +58,7 @@ export function UploadQueuePage() {
             {data?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
-                  Nessun upload ancora creato.
+                  {t('upload.noUploadsYet')}
                 </TableCell>
               </TableRow>
             )}

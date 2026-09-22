@@ -1,0 +1,15 @@
+export const layout = {
+  'layout.switchToLightTheme': 'Switch to light theme',
+  'layout.switchToDarkTheme': 'Switch to dark theme',
+  'layout.openMenu': 'Open menu',
+  'layout.health': 'Health',
+  'layout.toReview': 'To review',
+  'layout.lastRun': 'last run {time}',
+  'layout.timeNever': 'never',
+  'layout.timeNow': 'just now',
+  'layout.timeMinutesAgo': '{minutes} min ago',
+  'layout.timeHoursAgo': '{hours} h ago',
+  'layout.timeDaysAgo': '{days} d ago',
+  'layout.apiDocs': 'API docs',
+  'layout.logout': 'Log out ({username})',
+} as const

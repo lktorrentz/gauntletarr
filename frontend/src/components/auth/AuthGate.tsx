@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { t } from '@/lib/i18n'
 
 function CenteredCard({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
@@ -29,33 +30,33 @@ function SetupScreen() {
   const setup = useSetup()
 
   return (
-    <CenteredCard title="The Media Gauntlet*rr" description="Crea l'account amministratore — un solo utente, mai basic auth.">
+    <CenteredCard title="The Media Gauntlet*rr" description={t('auth.setupDescription')}>
       <form
         className="grid gap-3"
         onSubmit={(e) => {
           e.preventDefault()
           setup.mutate(
             { username, password },
-            { onError: (error) => toast.error(`Creazione fallita: ${error.message}`) },
+            { onError: (error) => toast.error(t('auth.creationFailed', { message: error.message })) },
           )
         }}
       >
         <div className="grid gap-1.5">
-          <Label htmlFor="setup-username">Username</Label>
+          <Label htmlFor="setup-username">{t('auth.username')}</Label>
           <Input id="setup-username" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="setup-password">Password</Label>
+          <Label htmlFor="setup-password">{t('auth.password')}</Label>
           <Input
             id="setup-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Almeno 8 caratteri"
+            placeholder={t('auth.passwordMinChars')}
           />
         </div>
         <Button type="submit" disabled={!username || password.length < 8 || setup.isPending}>
-          Crea account
+          {t('auth.createAccount')}
         </Button>
       </form>
     </CenteredCard>
@@ -68,27 +69,27 @@ function LoginScreen() {
   const login = useLogin()
 
   return (
-    <CenteredCard title="The Media Gauntlet*rr" description="Accedi per continuare.">
+    <CenteredCard title="The Media Gauntlet*rr" description={t('auth.loginDescription')}>
       <form
         className="grid gap-3"
         onSubmit={(e) => {
           e.preventDefault()
           login.mutate(
             { username, password },
-            { onError: () => toast.error('Credenziali non valide.') },
+            { onError: () => toast.error(t('auth.invalidCredentialsToast')) },
           )
         }}
       >
         <div className="grid gap-1.5">
-          <Label htmlFor="login-username">Username</Label>
+          <Label htmlFor="login-username">{t('auth.username')}</Label>
           <Input id="login-username" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="login-password">Password</Label>
+          <Label htmlFor="login-password">{t('auth.password')}</Label>
           <Input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <Button type="submit" disabled={!username || !password || login.isPending}>
-          Accedi
+          {t('auth.signIn')}
         </Button>
       </form>
     </CenteredCard>

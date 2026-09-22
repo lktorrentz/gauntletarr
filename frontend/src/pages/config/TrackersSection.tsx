@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { t } from '@/lib/i18n'
 import { selectLabel } from '@/lib/utils'
 import { UploadProfileDialog } from '@/pages/config/UploadProfileDialog'
 
@@ -59,26 +60,26 @@ function AddTrackerDialog() {
           setOpen(false)
           reset()
         },
-        onError: (error) => toast.error(`Creazione fallita: ${error.message}`),
+        onError: (error) => toast.error(t('trackers.createFailed', { message: error.message })),
       },
     )
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button><PlusIcon className="size-4" />Aggiungi tracker</Button>} />
+      <DialogTrigger render={<Button><PlusIcon className="size-4" />{t('trackers.addTracker')}</Button>} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Aggiungi tracker</DialogTitle>
+          <DialogTitle>{t('trackers.addTracker')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label>Preset</Label>
+            <Label>{t('trackers.preset')}</Label>
             <Select value={presetKey} onValueChange={applyPreset}>
               <SelectTrigger>
-                <SelectValue placeholder="Tracker esistente o personalizzato…">
+                <SelectValue placeholder={t('trackers.presetPlaceholder')}>
                   {(v: string | null) =>
-                    selectLabel(bundled, v, (p) => p.key, (p) => p.label, 'Tracker esistente o personalizzato…')
+                    selectLabel(bundled, v, (p) => p.key, (p) => p.label, t('trackers.presetPlaceholder'))
                   }
                 </SelectValue>
               </SelectTrigger>
@@ -90,21 +91,18 @@ function AddTrackerDialog() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              Precompila etichetta e URL API — restano modificabili, e un tracker non in lista si configura
-              compilando i campi sotto a mano.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('trackers.presetHelp')}</p>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="t-label">Etichetta</Label>
+            <Label htmlFor="t-label">{t('trackers.label')}</Label>
             <Input id="t-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="mytracker" />
           </div>
           <div className="grid gap-1.5">
-            <Label>Tipo</Label>
+            <Label>{t('trackers.type')}</Label>
             <Input value="unit3d" disabled />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="t-base-url">URL API</Label>
+            <Label htmlFor="t-base-url">{t('trackers.apiUrl')}</Label>
             <Input
               id="t-base-url"
               value={baseUrl}
@@ -113,11 +111,11 @@ function AddTrackerDialog() {
             />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="t-api-token">API token</Label>
+            <Label htmlFor="t-api-token">{t('trackers.apiToken')}</Label>
             <Input id="t-api-token" value={apiToken} onChange={(e) => setApiToken(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="t-announce-url">Announce URL (solo per upload)</Label>
+            <Label htmlFor="t-announce-url">{t('trackers.announceUrl')}</Label>
             <Input
               id="t-announce-url"
               value={announceUrl}
@@ -128,7 +126,7 @@ function AddTrackerDialog() {
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={!label || !baseUrl || !apiToken || createTracker.isPending}>
-            Crea
+            {t('trackers.create')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -162,43 +160,43 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
           setOpen(false)
           setApiToken('')
         },
-        onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+        onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
       },
     )
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title="Modifica"><PencilIcon className="size-4" /></Button>} />
+      <DialogTrigger render={<Button variant="ghost" size="icon-sm" title={t('common.edit')}><PencilIcon className="size-4" /></Button>} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Modifica tracker</DialogTitle>
-          <DialogDescription>Tipo (unit3d) non modificabile — elimina e ricrea per cambiarlo.</DialogDescription>
+          <DialogTitle>{t('trackers.editTracker')}</DialogTitle>
+          <DialogDescription>{t('trackers.editTypeLocked')}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="t-edit-label">Etichetta</Label>
+            <Label htmlFor="t-edit-label">{t('trackers.label')}</Label>
             <Input id="t-edit-label" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="t-edit-base-url">URL API</Label>
+            <Label htmlFor="t-edit-base-url">{t('trackers.apiUrl')}</Label>
             <Input id="t-edit-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="t-edit-api-token">API token</Label>
+            <Label htmlFor="t-edit-api-token">{t('trackers.apiToken')}</Label>
             <Input
               id="t-edit-api-token"
               value={apiToken}
               onChange={(e) => setApiToken(e.target.value)}
-              placeholder="Lascia vuoto per non cambiarlo"
+              placeholder={t('trackers.leaveBlank')}
             />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="t-edit-announce-url">Announce URL (solo per upload)</Label>
+            <Label htmlFor="t-edit-announce-url">{t('trackers.announceUrl')}</Label>
             <Input id="t-edit-announce-url" value={announceUrl} onChange={(e) => setAnnounceUrl(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="t-edit-rate-limit">Richieste/min</Label>
+            <Label htmlFor="t-edit-rate-limit">{t('trackers.rateLimit')}</Label>
             <Input
               id="t-edit-rate-limit"
               type="number"
@@ -209,7 +207,7 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={!label || !baseUrl || updateTracker.isPending}>
-            Salva
+            {t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -226,17 +224,17 @@ export function TrackersSection() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Trackers</CardTitle>
+        <CardTitle>{t('trackers.title')}</CardTitle>
         <AddTrackerDialog />
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Etichetta</TableHead>
-              <TableHead>URL API</TableHead>
-              <TableHead>Announce URL</TableHead>
-              <TableHead>Abilitato</TableHead>
+              <TableHead>{t('trackers.label')}</TableHead>
+              <TableHead>{t('trackers.apiUrl')}</TableHead>
+              <TableHead>{t('trackers.announceUrlColumn')}</TableHead>
+              <TableHead>{t('trackers.enabled')}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -244,7 +242,7 @@ export function TrackersSection() {
             {isPending && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  Caricamento…
+                  {t('common.loading')}
                 </TableCell>
               </TableRow>
             )}
@@ -265,13 +263,13 @@ export function TrackersSection() {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    title="Profilo di upload"
+                    title={t('trackers.uploadProfile')}
                     onClick={() => setProfileTrackerId(tracker.id)}
                   >
                     <SettingsIcon className="size-4" />
                   </Button>
                   <EditTrackerDialog tracker={tracker} />
-                  <Button variant="ghost" size="icon-sm" title="Elimina" onClick={() => deleteTracker.mutate(tracker.id)}>
+                  <Button variant="ghost" size="icon-sm" title={t('common.delete')} onClick={() => deleteTracker.mutate(tracker.id)}>
                     <TrashIcon className="size-4" />
                   </Button>
                 </TableCell>
@@ -280,7 +278,7 @@ export function TrackersSection() {
             {trackers?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  Nessun tracker configurato.
+                  {t('trackers.noTrackers')}
                 </TableCell>
               </TableRow>
             )}

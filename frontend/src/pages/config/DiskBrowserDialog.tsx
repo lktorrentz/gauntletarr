@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { t } from '@/lib/i18n'
 
 /** Selettore scoped-per-disco (app/fs_scope.py), due modalità:
  * - "folder" (default): naviga e seleziona la cartella corrente — usato
@@ -55,7 +56,7 @@ export function DiskBrowserDialog({
         setNewFolderName('')
         setPath(target)
       },
-      onError: (error) => toast.error(`Creazione cartella fallita: ${error.message}`),
+      onError: (error) => toast.error(t('disks.createFolderFailed', { message: error.message })),
     })
   }
 
@@ -74,7 +75,7 @@ export function DiskBrowserDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {mode === 'file' ? 'Naviga fino al file e selezionalo.' : 'Naviga fino alla cartella e selezionala.'}
+            {mode === 'file' ? t('disks.navigateToFile') : t('disks.navigateToFolder')}
           </DialogDescription>
         </DialogHeader>
 
@@ -93,8 +94,8 @@ export function DiskBrowserDialog({
         </div>
 
         <div className="max-h-64 overflow-auto rounded border">
-          {isPending && <p className="p-3 text-sm text-muted-foreground">Caricamento…</p>}
-          {isError && <p className="p-3 text-sm text-destructive">Impossibile leggere questa cartella.</p>}
+          {isPending && <p className="p-3 text-sm text-muted-foreground">{t('common.loading')}</p>}
+          {isError && <p className="p-3 text-sm text-destructive">{t('disks.cannotReadFolder')}</p>}
           {folders.map((entry) => (
             <button
               key={entry.name}
@@ -116,7 +117,7 @@ export function DiskBrowserDialog({
             </button>
           ))}
           {folders.length === 0 && files.length === 0 && (
-            <p className="p-3 text-sm text-muted-foreground">Cartella vuota.</p>
+            <p className="p-3 text-sm text-muted-foreground">{t('disks.emptyFolder')}</p>
           )}
         </div>
 
@@ -124,7 +125,7 @@ export function DiskBrowserDialog({
           <>
             <div className="flex items-center gap-2">
               <Input
-                placeholder="Nome nuova cartella"
+                placeholder={t('disks.newFolderNamePlaceholder')}
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
               />
@@ -140,7 +141,7 @@ export function DiskBrowserDialog({
                   onOpenChange(false)
                 }}
               >
-                Seleziona "{path || '/'}"
+                {t('disks.selectPath', { path: path || '/' })}
               </Button>
             </DialogFooter>
           </>

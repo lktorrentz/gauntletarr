@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { t } from '@/lib/i18n'
 import { selectLabel } from '@/lib/utils'
 
 function jsonField(value: Record<string, number>) {
@@ -56,7 +57,7 @@ export function UploadProfileDialog({
     try {
       return JSON.parse(raw) as Record<string, number>
     } catch {
-      toast.error(`${label} non è JSON valido`)
+      toast.error(t('trackers.invalidJson', { label }))
       return null
     }
   }
@@ -75,7 +76,7 @@ export function UploadProfileDialog({
           setResolutionMapDraft(null)
           setDescriptionTemplateDraft(null)
         },
-        onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+        onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
       },
     )
   }
@@ -84,21 +85,21 @@ export function UploadProfileDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Profilo di upload — {trackerLabel}</DialogTitle>
+          <DialogTitle>{t('trackers.uploadProfileTitle', { trackerLabel })}</DialogTitle>
         </DialogHeader>
 
-        {isPending && <p className="text-sm text-muted-foreground">Caricamento…</p>}
+        {isPending && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
 
         {!isPending && !profile && (
           <div className="grid gap-3">
-            <p className="text-sm text-muted-foreground">
-              Questo tracker non fa ancora upload. Parti da un profilo bundlato o creane uno vuoto.
-            </p>
+            <p className="text-sm text-muted-foreground">{t('trackers.noProfileYet')}</p>
             <div className="flex items-center gap-2">
               <Select value={bundledKey} onValueChange={setBundledKey}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Profilo bundlato…">
-                    {(v: string | null) => selectLabel(bundled, v, (p) => p.key, (p) => p.label, 'Profilo bundlato…')}
+                  <SelectValue placeholder={t('trackers.bundledProfilePlaceholder')}>
+                    {(v: string | null) =>
+                      selectLabel(bundled, v, (p) => p.key, (p) => p.label, t('trackers.bundledProfilePlaceholder'))
+                    }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -110,11 +111,11 @@ export function UploadProfileDialog({
                 </SelectContent>
               </Select>
               <Button disabled={!bundledKey} onClick={() => createProfile.mutate({ profile_key: bundledKey })}>
-                Usa profilo
+                {t('trackers.useProfile')}
               </Button>
             </div>
             <Button variant="outline" onClick={() => createProfile.mutate({ profile_key: null })}>
-              Profilo custom vuoto
+              {t('trackers.emptyCustomProfile')}
             </Button>
           </div>
         )}
@@ -123,8 +124,7 @@ export function UploadProfileDialog({
           <div className="grid gap-3">
             {profile.source_profile_key && (
               <p className="text-xs text-muted-foreground">
-                Copiato dal profilo bundlato "{profile.source_profile_key}" — riverifica gli id contro il tuo account
-                prima del primo upload reale.
+                {t('trackers.copiedFromBundled', { key: profile.source_profile_key })}
               </p>
             )}
             <div className="grid gap-1.5">
@@ -140,7 +140,7 @@ export function UploadProfileDialog({
               <Textarea rows={5} className="font-mono text-xs" value={resolutionMap} onChange={(e) => setResolutionMapDraft(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
-              <Label>Template descrizione (Jinja2)</Label>
+              <Label>{t('trackers.descriptionTemplate')}</Label>
               <Textarea
                 rows={4}
                 className="font-mono text-xs"
@@ -149,7 +149,7 @@ export function UploadProfileDialog({
               />
             </div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="up-anon">Anonymous di default</Label>
+              <Label htmlFor="up-anon">{t('trackers.defaultAnonymous')}</Label>
               <Switch
                 id="up-anon"
                 checked={profile.default_anonymous}
@@ -157,7 +157,7 @@ export function UploadProfileDialog({
               />
             </div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="up-personal">Personal release di default</Label>
+              <Label htmlFor="up-personal">{t('trackers.defaultPersonalRelease')}</Label>
               <Switch
                 id="up-personal"
                 checked={profile.default_personal_release}
@@ -166,10 +166,10 @@ export function UploadProfileDialog({
             </div>
             <div className="flex justify-between">
               <Button variant="destructive" onClick={() => deleteProfile.mutate()}>
-                Elimina profilo
+                {t('trackers.deleteProfile')}
               </Button>
               <Button onClick={save} disabled={updateProfile.isPending}>
-                Salva
+                {t('common.save')}
               </Button>
             </div>
           </div>

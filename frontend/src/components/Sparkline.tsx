@@ -1,9 +1,11 @@
+import { t } from '@/lib/i18n'
+
 /** Sparkline SVG minimale, senza dipendenze — sufficiente per lo storico
  * della salute libreria (docs/SPEC.md §10), non serve una libreria di
  * grafici completa per un solo indicatore. */
 export function Sparkline({ points, max = 100 }: { points: number[]; max?: number }) {
   if (points.length < 2) {
-    return <p className="text-xs text-muted-foreground">Non ancora abbastanza storico.</p>
+    return <p className="text-xs text-muted-foreground">{t('dashboard.notEnoughHistory')}</p>
   }
   const width = 240
   const height = 48

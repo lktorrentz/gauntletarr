@@ -1,15 +1,14 @@
 import { SettingField } from '@/components/SettingField'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { t } from '@/lib/i18n'
 
 export function AutoApproveSection() {
   return (
     <div className="grid max-w-xl gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Soglie di auto-approvazione</CardTitle>
-          <CardDescription>
-            Confidence minima (0.0-1.0) sopra la quale un match viene eseguito automaticamente, per direzione.
-          </CardDescription>
+          <CardTitle>{t('integrations.autoApproveThresholdsTitle')}</CardTitle>
+          <CardDescription>{t('integrations.autoApproveThresholdsDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <SettingField

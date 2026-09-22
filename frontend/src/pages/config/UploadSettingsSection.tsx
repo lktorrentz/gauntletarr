@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { t } from '@/lib/i18n'
 import { ImageHostPriorityField } from '@/pages/config/ImageHostPriorityField'
 
 function TonemapSwitch() {
@@ -17,11 +18,8 @@ function TonemapSwitch() {
   return (
     <div className="flex items-center justify-between">
       <div className="grid gap-0.5">
-        <Label htmlFor="upload-tonemap">Tonemap HDR negli screenshot</Label>
-        <p className="text-xs text-muted-foreground">
-          Converte HDR→SDR (algoritmo mobius) prima di catturare gli screenshot — senza, una sorgente HDR risulta
-          lavata/scura una volta interpretata come SDR.
-        </p>
+        <Label htmlFor="upload-tonemap">{t('uploadSettings.tonemapLabel')}</Label>
+        <p className="text-xs text-muted-foreground">{t('uploadSettings.tonemapDescription')}</p>
       </div>
       <Switch
         id="upload-tonemap"
@@ -40,11 +38,8 @@ function DescriptionHeaderField() {
 
   return (
     <div className="grid gap-1.5">
-      <Label>Intestazione descrizione</Label>
-      <p className="text-xs text-muted-foreground">
-        Testo (es. BBCode) anteposto alla descrizione generata dal template del tracker — vuoto per non aggiungere
-        nulla.
-      </p>
+      <Label>{t('uploadSettings.descriptionHeaderLabel')}</Label>
+      <p className="text-xs text-muted-foreground">{t('uploadSettings.descriptionHeaderHelp')}</p>
       <Textarea rows={3} className="font-mono text-xs" value={value} onChange={(e) => setDraft(e.target.value)} />
       <button
         type="button"
@@ -52,14 +47,14 @@ function DescriptionHeaderField() {
         onClick={() =>
           setSetting.mutate(value, {
             onSuccess: () => {
-              toast.success('Intestazione salvata.')
+              toast.success(t('uploadSettings.descriptionHeaderSaved'))
               setDraft(null)
             },
-            onError: (error) => toast.error(`Salvataggio fallito: ${error.message}`),
+            onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
           })
         }
       >
-        Salva intestazione
+        {t('uploadSettings.saveHeaderButton')}
       </button>
     </div>
   )
@@ -70,14 +65,14 @@ export function UploadSettingsSection() {
     <div className="grid gap-6">
       <Card className="max-w-xl">
         <CardHeader>
-          <CardTitle>Screenshot</CardTitle>
-          <CardDescription>Applicate al prossimo upload preparato, non retroattive su quelli già pronti.</CardDescription>
+          <CardTitle>{t('uploadSettings.screenshotsTitle')}</CardTitle>
+          <CardDescription>{t('uploadSettings.screenshotsDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <SettingField
             settingKey="upload_screenshot_count"
-            label="Numero di screenshot"
-            description="Frame equidistanti, esclude il primo/ultimo 5% della durata."
+            label={t('uploadSettings.screenshotCountLabel')}
+            description={t('uploadSettings.screenshotCountDescription')}
             type="number"
             placeholder="4"
           />
@@ -87,7 +82,7 @@ export function UploadSettingsSection() {
 
       <Card className="max-w-xl">
         <CardHeader>
-          <CardTitle>Descrizione</CardTitle>
+          <CardTitle>{t('uploadSettings.descriptionTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <DescriptionHeaderField />
@@ -96,11 +91,8 @@ export function UploadSettingsSection() {
 
       <Card className="max-w-4xl">
         <CardHeader>
-          <CardTitle>Host immagini</CardTitle>
-          <CardDescription>
-            Priorità e stato a sinistra, chiavi API a destra — si prova il primo host abilitato, se fallisce si
-            passa al successivo. Imgbox e Pixhost non ne richiedono.
-          </CardDescription>
+          <CardTitle>{t('uploadSettings.imageHostsTitle')}</CardTitle>
+          <CardDescription>{t('uploadSettings.imageHostsDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2">
           <ImageHostPriorityField />

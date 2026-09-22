@@ -5,6 +5,7 @@ import { HardlinkInfo } from '@/components/HardlinkInfo'
 import { StateBadge } from '@/components/StateBadge'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 export interface TreeFileEntry {
@@ -81,7 +82,7 @@ function FileRow({ node, depth }: { node: TreeNode; depth: number }) {
     >
       <span className="min-w-0 flex-1 truncate font-mono text-xs">{node.name}</span>
       <HardlinkInfo linkedPaths={file.linked_paths} />
-      {file.excluded && <Badge variant="outline" className="text-[10px]">escluso</Badge>}
+      {file.excluded && <Badge variant="outline" className="text-[10px]">{t('library.excluded')}</Badge>}
       <StateBadge state={file.state} />
     </div>
   )
@@ -114,7 +115,7 @@ export function FileTree({
   })
 
   if (filtered.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nessun file corrisponde ai filtri correnti.</p>
+    return <p className="text-sm text-muted-foreground">{t('library.noFilesMatchFilters')}</p>
   }
 
   return (
