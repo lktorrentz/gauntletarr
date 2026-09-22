@@ -86,20 +86,32 @@ CREATE TABLE IF NOT EXISTS disk_torrent_client (
 -- reasoning as tracker/torrent_client, even though no concrete adapter
 -- consumes these yet (media_resolver's SOURCE lists "sonarr"/"radarr" as
 -- future values) — the storage is prepared ahead of the adapter.
+-- priority/timeout_seconds/basic_auth_* left nullable (no DEFAULT), even
+-- though the app applies 0/15 defaults in Python: migrate_schema() (app/db.py)
+-- only knows how to ALTER TABLE ADD COLUMN additive nullable columns, so the
+-- model and this fresh-install schema must agree on that shape.
 CREATE TABLE IF NOT EXISTS radarr_instance (
-    id          INTEGER PRIMARY KEY,
-    label       TEXT NOT NULL,
-    base_url    TEXT NOT NULL,
-    api_key     TEXT NOT NULL,          -- encrypted at rest
-    enabled     BOOLEAN NOT NULL DEFAULT 1
+    id                    INTEGER PRIMARY KEY,
+    label                 TEXT NOT NULL,
+    base_url              TEXT NOT NULL,
+    api_key               TEXT NOT NULL,    -- encrypted at rest
+    enabled               BOOLEAN NOT NULL DEFAULT 1,
+    priority              INTEGER,          -- higher = queried first, once a resolver adapter exists; null = 0
+    timeout_seconds       INTEGER,          -- null = app default (15s)
+    basic_auth_username   TEXT,             -- for Radarr behind a reverse proxy with HTTP basic auth
+    basic_auth_password   TEXT              -- encrypted at rest
 );
 
 CREATE TABLE IF NOT EXISTS sonarr_instance (
-    id          INTEGER PRIMARY KEY,
-    label       TEXT NOT NULL,
-    base_url    TEXT NOT NULL,
-    api_key     TEXT NOT NULL,          -- encrypted at rest
-    enabled     BOOLEAN NOT NULL DEFAULT 1
+    id                    INTEGER PRIMARY KEY,
+    label                 TEXT NOT NULL,
+    base_url              TEXT NOT NULL,
+    api_key               TEXT NOT NULL,    -- encrypted at rest
+    enabled               BOOLEAN NOT NULL DEFAULT 1,
+    priority              INTEGER,
+    timeout_seconds       INTEGER,
+    basic_auth_username   TEXT,
+    basic_auth_password   TEXT              -- encrypted at rest
 );
 
 CREATE TABLE IF NOT EXISTS app_settings (

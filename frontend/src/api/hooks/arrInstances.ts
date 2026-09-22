@@ -36,6 +36,13 @@ export function useDeleteRadarrInstance() {
   })
 }
 
+export function useTestRadarrInstance() {
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(api.POST('/api/radarr-instances/{instance_id}/test', { params: { path: { instance_id: id } } })),
+  })
+}
+
 export function useSonarrInstances() {
   return useQuery({
     queryKey: ['sonarr-instances'],
@@ -66,5 +73,12 @@ export function useDeleteSonarrInstance() {
     mutationFn: (id: number) =>
       unwrap(api.DELETE('/api/sonarr-instances/{instance_id}', { params: { path: { instance_id: id } } })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sonarr-instances'] }),
+  })
+}
+
+export function useTestSonarrInstance() {
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(api.POST('/api/sonarr-instances/{instance_id}/test', { params: { path: { instance_id: id } } })),
   })
 }

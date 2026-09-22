@@ -143,6 +143,15 @@ class RadarrInstance(Base):
     base_url: Mapped[str] = mapped_column(nullable=False)
     api_key: Mapped[str] = mapped_column(EncryptedString, nullable=False)
     enabled: Mapped[bool] = mapped_column(nullable=False, server_default=text("1"))
+    # Colonne aggiunte dopo la creazione della tabella: nullable e senza
+    # server_default, perché migrate_schema() (app/db.py) sa solo fare
+    # ALTER TABLE ADD COLUMN additivi su colonne nullable — il default
+    # "vero" (0 / 15) si applica lato Python in from_model(), stesso
+    # trattamento di Disk.new_torrent_rel_path.
+    priority: Mapped[int | None]  # più alto = interrogato prima, quando esisterà un resolver che li consuma
+    timeout_seconds: Mapped[int | None]
+    basic_auth_username: Mapped[str | None]  # per Radarr dietro un reverse proxy con HTTP basic auth
+    basic_auth_password: Mapped[str | None] = mapped_column(EncryptedString)
 
 
 class SonarrInstance(Base):
@@ -156,6 +165,10 @@ class SonarrInstance(Base):
     base_url: Mapped[str] = mapped_column(nullable=False)
     api_key: Mapped[str] = mapped_column(EncryptedString, nullable=False)
     enabled: Mapped[bool] = mapped_column(nullable=False, server_default=text("1"))
+    priority: Mapped[int | None]
+    timeout_seconds: Mapped[int | None]
+    basic_auth_username: Mapped[str | None]
+    basic_auth_password: Mapped[str | None] = mapped_column(EncryptedString)
 
 
 class AppSetting(Base):

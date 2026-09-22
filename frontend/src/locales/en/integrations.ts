@@ -13,4 +13,15 @@ export const integrations = {
   'integrations.instanceApiKey': 'API key',
   'integrations.instanceEnabled': 'Enabled',
   'integrations.createInstanceFailed': 'Could not add instance: {message}',
+
+  'integrations.priority': 'Priority',
+  'integrations.priorityHelp': 'Higher values are queried first, once a resolver uses these.',
+  'integrations.timeoutSeconds': 'Timeout (seconds)',
+  'integrations.basicAuth': 'HTTP basic auth',
+  'integrations.basicAuthDescription': 'For an instance sitting behind a reverse proxy with basic authentication.',
+  'integrations.basicAuthUsername': 'Username',
+  'integrations.basicAuthPassword': 'Password',
+  'integrations.testConnection': 'Test connection',
+  'integrations.connectedSuccess': 'Connected — v{version}.',
+  'integrations.connectionFailed': 'Connection failed: {message}',
 } as const

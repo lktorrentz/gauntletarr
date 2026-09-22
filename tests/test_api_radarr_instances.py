@@ -4,8 +4,12 @@ def test_create_list_update_delete_radarr_instance(client):
         json={"label": "Main Radarr", "base_url": "http://radarr:7878", "api_key": "secret"},
     )
     assert create.status_code == 201
-    instance_id = create.json()["id"]
-    assert "api_key" not in create.json()  # mai esposto in risposta
+    body = create.json()
+    instance_id = body["id"]
+    assert "api_key" not in body  # mai esposto in risposta
+    assert "basic_auth_password" not in body
+    assert body["priority"] == 0  # default applicato lato Python
+    assert body["timeout_seconds"] == 15
 
     listed = client.get("/api/radarr-instances").json()
     assert any(i["id"] == instance_id for i in listed)
@@ -17,6 +21,51 @@ def test_create_list_update_delete_radarr_instance(client):
     delete = client.delete(f"/api/radarr-instances/{instance_id}")
     assert delete.status_code == 204
     assert client.get("/api/radarr-instances").json() == []
+
+
+def test_create_with_priority_timeout_and_basic_auth(client):
+    create = client.post(
+        "/api/radarr-instances",
+        json={
+            "label": "Behind proxy", "base_url": "http://radarr.internal", "api_key": "secret",
+            "priority": 10, "timeout_seconds": 30,
+            "basic_auth_username": "proxyuser", "basic_auth_password": "proxypass",
+        },
+    )
+    assert create.status_code == 201
+    body = create.json()
+    assert body["priority"] == 10
+    assert body["timeout_seconds"] == 30
+    assert body["basic_auth_username"] == "proxyuser"
+    assert "basic_auth_password" not in body
+
+
+def test_clearing_basic_auth_username_removes_it(client):
+    create = client.post(
+        "/api/radarr-instances",
+        json={
+            "label": "x", "base_url": "http://radarr", "api_key": "k",
+            "basic_auth_username": "user", "basic_auth_password": "pass",
+        },
+    )
+    instance_id = create.json()["id"]
+
+    update = client.patch(f"/api/radarr-instances/{instance_id}", json={"basic_auth_username": ""})
+    assert update.json()["basic_auth_username"] is None
+
+
+def test_test_connection_reports_error_on_unreachable_instance(client):
+    create = client.post(
+        "/api/radarr-instances",
+        json={"label": "x", "base_url": "http://radarr.invalid.example", "api_key": "k", "timeout_seconds": 1},
+    )
+    instance_id = create.json()["id"]
+
+    response = client.post(f"/api/radarr-instances/{instance_id}/test")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["error"]
 
 
 def test_supports_multiple_instances(client):
