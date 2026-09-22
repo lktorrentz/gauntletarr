@@ -17,13 +17,28 @@ apply_schema(). migrate_schema() colma questo gap confrontando le colonne
 attese (dai modelli SQLAlchemy) con quelle realmente presenti e
 aggiungendo quelle mancanti via ALTER TABLE — va chiamata sempre, ad ogni
 avvio, dopo apply_schema(). Stesso pattern di ratio-guardian/app/db.py.
-"""
 
+migrate_legacy_media_path_id() copre l'unico caso finora in cui questo
+schema è cambiato in un modo che apply_schema()/migrate_schema() non
+sanno gestire: il commit 5fd42fc ha eliminato la tabella media_path e la
+sua FK NOT NULL media_file.media_path_id, sostituendole con
+disk.media_rel_path. Un DB creato PRIMA di quel commit conserva ancora
+la vecchia forma (la CREATE TABLE IF NOT EXISTS di apply_schema non
+tocca una tabella già esistente, e migrate_schema sa solo aggiungere
+colonne, mai rimuoverle) — ogni scan da allora falliva silenziosamente
+al primo INSERT in media_file, perché il codice attuale non valorizza
+più quella colonna (bug riportato dall'utente sulla sua istanza Unraid
+reale, con dati che NON si possono semplicemente ricreare da zero come
+si è sempre fatto finora per un'istanza di sviluppo)."""
+
+import logging
 from pathlib import Path
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "docs" / "schema.sql"
 
@@ -42,6 +57,74 @@ def _configure_sqlite(dbapi_connection, _connection_record):
 def make_engine(db_path: str) -> Engine:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     return create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+
+
+def migrate_legacy_media_path_id(engine: Engine) -> None:
+    """Ricostruisce media_file senza la colonna legacy media_path_id, se
+    presente — vedi la nota in cima al file. Va chiamata PRIMA di
+    apply_schema(): quest'ultima non ricrea mai una tabella già esistente,
+    quindi deve trovare media_file già rinominata via ALTER TABLE ... RENAME
+    per poter ricreare quella corretta con CREATE TABLE IF NOT EXISTS.
+
+    PRAGMA foreign_keys=OFF per tutta la durata: SQLite riscrive
+    automaticamente le REFERENCES di altre tabelle verso una tabella
+    rinominata SOLO quando le foreign key sono attive. Con le FK spente, il
+    RENAME sotto lascia intatto il testo "REFERENCES media_file(id)" in
+    seed_file/match_review/upload_job, che dopo la ricostruzione torna a
+    puntare correttamente alla nuova media_file (stessi id delle righe
+    originali, copiati esplicitamente) — nessuna di quelle tabelle va
+    toccata."""
+    inspector = inspect(engine)
+    if not inspector.has_table("media_file"):
+        return
+    existing_columns = {col["name"] for col in inspector.get_columns("media_file")}
+    if "media_path_id" not in existing_columns:
+        return
+
+    logger.warning(
+        "Migrazione legacy: media_file.media_path_id (pre-5fd42fc) rimosso, "
+        "dati preservati con gli stessi id"
+    )
+    raw_conn = engine.raw_connection()
+    try:
+        raw_conn.executescript("""
+            PRAGMA foreign_keys=OFF;
+            ALTER TABLE media_file RENAME TO media_file_legacy;
+            CREATE TABLE media_file (
+                id                      INTEGER PRIMARY KEY,
+                disk_id                 INTEGER NOT NULL REFERENCES disk(id) ON DELETE CASCADE,
+                relative_path           TEXT NOT NULL,
+                size_bytes              INTEGER NOT NULL,
+                st_dev                  INTEGER NOT NULL,
+                inode                   INTEGER NOT NULL,
+                nlink                   INTEGER,
+                content_hash            TEXT,
+                media_item_id           INTEGER REFERENCES media_item(id) ON DELETE SET NULL,
+                resolver_source         TEXT,
+                mediainfo_unique_id     TEXT,
+                last_scan_id            INTEGER NOT NULL REFERENCES run_log(id),
+                last_seen_at            TIMESTAMP NOT NULL,
+                UNIQUE(disk_id, relative_path)
+            );
+            INSERT INTO media_file (
+                id, disk_id, relative_path, size_bytes, st_dev, inode, nlink,
+                content_hash, media_item_id, resolver_source, mediainfo_unique_id,
+                last_scan_id, last_seen_at
+            )
+            SELECT
+                id, disk_id, relative_path, size_bytes, st_dev, inode, nlink,
+                content_hash, media_item_id, resolver_source, mediainfo_unique_id,
+                last_scan_id, last_seen_at
+            FROM media_file_legacy;
+            DROP TABLE media_file_legacy;
+            DROP TABLE IF EXISTS media_path;
+            CREATE INDEX IF NOT EXISTS idx_media_file_media_item_id ON media_file(media_item_id);
+            CREATE INDEX IF NOT EXISTS idx_media_file_hardlink ON media_file(disk_id, st_dev, inode);
+            PRAGMA foreign_keys=ON;
+        """)
+        raw_conn.commit()
+    finally:
+        raw_conn.close()
 
 
 def apply_schema(engine: Engine, schema_path: Path = SCHEMA_PATH) -> None:

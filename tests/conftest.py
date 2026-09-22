@@ -18,6 +18,7 @@ def db_session(tmp_path, monkeypatch):
     crypto_module._fernet.cache_clear()
 
     engine = db_module.make_engine(str(tmp_path / "test.db"))
+    db_module.migrate_legacy_media_path_id(engine)
     db_module.apply_schema(engine)
     db_module.migrate_schema(engine)
     session_factory = db_module.make_session_factory(engine)

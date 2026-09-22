@@ -33,6 +33,7 @@ async def lifespan(app: FastAPI):
     settings = load_settings()
     add_file_handler(Path(settings.data_dir) / "logs")
     engine = db.make_engine(settings.db_path)
+    db.migrate_legacy_media_path_id(engine)
     db.apply_schema(engine)
     db.migrate_schema(engine)
     session_factory = db.make_session_factory(engine)
