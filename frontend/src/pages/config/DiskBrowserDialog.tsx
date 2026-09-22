@@ -1,4 +1,4 @@
-import { FolderIcon, FolderPlusIcon } from 'lucide-react'
+import { FileIcon, FolderIcon, FolderPlusIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -14,21 +14,27 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 
-/** Selettore di cartella scoped-per-disco (app/fs_scope.py) — riusato sia
- * per una MediaPath sia per torrents_rel_path (docs/SPEC.md §4), mai un
- * campo testo libero: un path sbagliato darebbe solo un 400 al submit. */
+/** Selettore scoped-per-disco (app/fs_scope.py), due modalità:
+ * - "folder" (default): naviga e seleziona la cartella corrente — usato
+ *   per una MediaPath o torrents_rel_path (docs/SPEC.md §4).
+ * - "file": naviga e seleziona un file specifico — usato per scegliere
+ *   il file sorgente di un nuovo upload (docs/SPEC.md §9). Nessun campo
+ *   path testo libero in nessuna delle due modalità: un path sbagliato
+ *   darebbe solo un 400 al submit. */
 export function DiskBrowserDialog({
   diskId,
   open,
   onOpenChange,
   onSelect,
   title,
+  mode = 'folder',
 }: {
   diskId: number
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelect: (relativePath: string) => void
   title: string
+  mode?: 'folder' | 'file'
 }) {
   const [path, setPath] = useState('')
   const [newFolderName, setNewFolderName] = useState('')
@@ -53,12 +59,23 @@ export function DiskBrowserDialog({
     })
   }
 
+  function selectFile(name: string) {
+    onSelect(path ? `${path}/${name}` : name)
+    onOpenChange(false)
+  }
+
+  const entries = data?.entries ?? []
+  const folders = entries.filter((e) => e.is_dir)
+  const files = mode === 'file' ? entries.filter((e) => !e.is_dir) : []
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Naviga fino alla cartella e selezionala.</DialogDescription>
+          <DialogDescription>
+            {mode === 'file' ? 'Naviga fino al file e selezionalo.' : 'Naviga fino alla cartella e selezionala.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
@@ -78,44 +95,56 @@ export function DiskBrowserDialog({
         <div className="max-h-64 overflow-auto rounded border">
           {isPending && <p className="p-3 text-sm text-muted-foreground">Caricamento…</p>}
           {isError && <p className="p-3 text-sm text-destructive">Impossibile leggere questa cartella.</p>}
-          {data?.entries
-            .filter((e) => e.is_dir)
-            .map((entry) => (
-              <button
-                key={entry.name}
-                className="flex w-full items-center gap-2 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted"
-                onClick={() => setPath(path ? `${path}/${entry.name}` : entry.name)}
-              >
-                <FolderIcon className="size-4 text-muted-foreground" />
-                {entry.name}
-              </button>
-            ))}
-          {data?.entries.filter((e) => e.is_dir).length === 0 && (
-            <p className="p-3 text-sm text-muted-foreground">Nessuna sottocartella.</p>
+          {folders.map((entry) => (
+            <button
+              key={entry.name}
+              className="flex w-full items-center gap-2 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted"
+              onClick={() => setPath(path ? `${path}/${entry.name}` : entry.name)}
+            >
+              <FolderIcon className="size-4 text-muted-foreground" />
+              {entry.name}
+            </button>
+          ))}
+          {files.map((entry) => (
+            <button
+              key={entry.name}
+              className="flex w-full items-center gap-2 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted"
+              onClick={() => selectFile(entry.name)}
+            >
+              <FileIcon className="size-4 text-muted-foreground" />
+              {entry.name}
+            </button>
+          ))}
+          {folders.length === 0 && files.length === 0 && (
+            <p className="p-3 text-sm text-muted-foreground">Cartella vuota.</p>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Nome nuova cartella"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-          />
-          <Button variant="outline" size="icon" onClick={createFolder} disabled={mkdir.isPending}>
-            <FolderPlusIcon className="size-4" />
-          </Button>
-        </div>
+        {mode === 'folder' && (
+          <>
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Nome nuova cartella"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+              />
+              <Button variant="outline" size="icon" onClick={createFolder} disabled={mkdir.isPending}>
+                <FolderPlusIcon className="size-4" />
+              </Button>
+            </div>
 
-        <DialogFooter>
-          <Button
-            onClick={() => {
-              onSelect(path)
-              onOpenChange(false)
-            }}
-          >
-            Seleziona "{path || '/'}"
-          </Button>
-        </DialogFooter>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  onSelect(path)
+                  onOpenChange(false)
+                }}
+              >
+                Seleziona "{path || '/'}"
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

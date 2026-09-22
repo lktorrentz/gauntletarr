@@ -161,7 +161,10 @@ def dupe_check(upload_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=400, detail="upload_job senza tmdb_id: imposta prima l'identificazione")
     tracker = _get_tracker_or_404(session, job.tracker_id)
     tracker_adapter = adapter_factory.build_tracker_adapter(tracker)
-    candidates = upload.dupe_check(job.tmdb_id, tracker_adapter)
+    try:
+        candidates = upload.dupe_check(job.tmdb_id, tracker_adapter)
+    except UploadError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [
         DupeCandidateResponse(torrent_id_remote=c.torrent_id_remote, name=c.name, size_bytes=c.size_bytes)
         for c in candidates

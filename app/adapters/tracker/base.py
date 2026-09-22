@@ -273,10 +273,13 @@ class Unit3dTrackerAdapter(TrackerAdapter):
 
     def _get(self, path: str, params: dict | None = None) -> httpx.Response:
         self._rate_limiter.wait()
-        response = self._client.get(
-            path, params=params, headers={"Authorization": f"Bearer {self.api_token}"}
-        )
-        response.raise_for_status()
+        try:
+            response = self._client.get(
+                path, params=params, headers={"Authorization": f"Bearer {self.api_token}"}
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise UploadError(f"Richiesta al tracker UNIT3D fallita: {exc}") from exc
         return response
 
     def _to_candidate(self, item: dict) -> TorrentCandidate:

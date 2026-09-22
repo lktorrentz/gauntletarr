@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.adapters.tracker.base import NotSupportedError, Unit3dTrackerAdapter
+from app.adapters.tracker.base import NotSupportedError, Unit3dTrackerAdapter, UploadError
 
 
 def _adapter(handler, **kwargs):
@@ -103,5 +103,5 @@ def test_raises_on_http_error():
     handler = lambda request: httpx.Response(401, json={})  # noqa: E731
     adapter = _adapter(handler)
 
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(UploadError):
         adapter.search_by_tmdb(1)

@@ -1,5 +1,5 @@
 from app import adapter_factory, upload
-from app.adapters.tracker.base import TorrentCandidate
+from app.adapters.tracker.base import TorrentCandidate, UploadError
 from app.models import Disk, Tracker
 
 
@@ -193,3 +193,23 @@ def test_dupe_check_returns_candidates(client, tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == [{"torrent_id_remote": "1", "name": "Existing.2024.mkv", "size_bytes": 123}]
+
+
+def test_dupe_check_maps_tracker_error_to_502(client, tmp_path, monkeypatch):
+    disk_id, tracker_id = _setup_disk_and_tracker(client, tmp_path)
+    created = client.post(
+        "/api/uploads",
+        json={"disk_id": disk_id, "relative_path": "media/Movie.2024.1080p.WEB.mkv", "tracker_id": tracker_id},
+    ).json()
+    client.patch(f"/api/uploads/{created['id']}", json={"tmdb_id": 157336})
+
+    class _FailingTrackerAdapter:
+        def search_by_tmdb(self, tmdb_id):
+            raise UploadError("Richiesta al tracker UNIT3D fallita: connessione rifiutata")
+
+    monkeypatch.setattr(adapter_factory, "build_tracker_adapter", lambda tracker: _FailingTrackerAdapter())
+
+    response = client.get(f"/api/uploads/{created['id']}/dupe-check")
+
+    assert response.status_code == 502
+    assert "tracker" in response.json()["detail"].lower()

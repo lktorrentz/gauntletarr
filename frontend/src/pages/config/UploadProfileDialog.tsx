@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { selectLabel } from '@/lib/utils'
 
 function jsonField(value: Record<string, number>) {
   return JSON.stringify(value, null, 2)
@@ -96,7 +97,9 @@ export function UploadProfileDialog({
             <div className="flex items-center gap-2">
               <Select value={bundledKey} onValueChange={setBundledKey}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Profilo bundlato…" />
+                  <SelectValue placeholder="Profilo bundlato…">
+                    {(v: string | null) => selectLabel(bundled, v, (p) => p.key, (p) => p.label, 'Profilo bundlato…')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {bundled?.map((p) => (

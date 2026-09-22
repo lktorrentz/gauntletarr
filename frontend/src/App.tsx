@@ -10,6 +10,8 @@ import { TrackersPage } from '@/pages/config/TrackersPage'
 import { SettingsPage } from '@/pages/config/SettingsPage'
 import { RunsPage } from '@/pages/reseeding/RunsPage'
 import { ReviewPage } from '@/pages/reseeding/ReviewPage'
+import { NewUploadPage } from '@/pages/upload/NewUploadPage'
+import { UploadQueuePage } from '@/pages/upload/UploadQueuePage'
 import { TreeViewPage } from '@/pages/library/TreeViewPage'
 import { GridViewPage } from '@/pages/library/GridViewPage'
 import { OrphanedPage } from '@/pages/library/OrphanedPage'
@@ -27,6 +29,8 @@ const overrides: Record<string, ReactNode> = {
   '/library/orphaned': <OrphanedPage />,
   '/reseeding/review': <ReviewPage />,
   '/reseeding/runs': <RunsPage />,
+  '/upload/new': <NewUploadPage />,
+  '/upload/queue': <UploadQueuePage />,
   '/config/disks': <DisksPage />,
   '/config/torrent-clients': <TorrentClientsPage />,
   '/config/trackers': <TrackersPage />,
@@ -43,6 +47,7 @@ function App() {
         {ALL_ITEMS.map((item) => (
           <Route key={item.to} path={item.to} element={overrides[item.to] ?? <ComingSoon title={item.title} />} />
         ))}
+        <Route path="/upload/:jobId" element={<NewUploadPage />} />
       </Route>
     </Routes>
   )

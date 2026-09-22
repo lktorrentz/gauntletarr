@@ -10,6 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DiskBrowserDialog } from '@/pages/config/DiskBrowserDialog'
+import { selectLabel } from '@/lib/utils'
+
+const CONTENT_TYPE_LABELS = [
+  { value: 'movie', label: 'Film' },
+  { value: 'tv', label: 'TV' },
+]
 
 export function MediaPathsDialog({
   diskId,
@@ -86,7 +92,9 @@ export function MediaPathsDialog({
         <div className="flex items-center gap-2">
           <Select value={contentType} onValueChange={(v) => setContentType(v as 'movie' | 'tv')}>
             <SelectTrigger className="w-28">
-              <SelectValue />
+              <SelectValue>
+                {(v: string | null) => selectLabel(CONTENT_TYPE_LABELS, v, (o) => o.value, (o) => o.label, 'Film')}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="movie">Film</SelectItem>
