@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ServiceLogo } from '@/components/ServiceLogo'
 import { SettingField } from '@/components/SettingField'
 import { t } from '@/lib/i18n'
 
@@ -6,9 +7,12 @@ export function MetadataSection() {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
-        <CardHeader>
-          <CardTitle>{t('metadata.tmdbTitle')}</CardTitle>
-          <CardDescription>{t('metadata.tmdbDescription')}</CardDescription>
+        <CardHeader className="flex flex-row items-center gap-3">
+          <ServiceLogo src="/logos/tmdb.svg" alt="TMDB" />
+          <div>
+            <CardTitle>{t('metadata.tmdbTitle')}</CardTitle>
+            <CardDescription>{t('metadata.tmdbDescription')}</CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <SettingField
@@ -21,9 +25,12 @@ export function MetadataSection() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{t('metadata.tvdbTitle')}</CardTitle>
-          <CardDescription>{t('metadata.tvdbDescription')}</CardDescription>
+        <CardHeader className="flex flex-row items-center gap-3">
+          <ServiceLogo src="/logos/tvdb.svg" alt="TVDB" />
+          <div>
+            <CardTitle>{t('metadata.tvdbTitle')}</CardTitle>
+            <CardDescription>{t('metadata.tvdbDescription')}</CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <SettingField

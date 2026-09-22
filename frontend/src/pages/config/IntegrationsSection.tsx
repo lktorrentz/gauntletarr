@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ServiceLogo } from '@/components/ServiceLogo'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { t } from '@/lib/i18n'
@@ -197,6 +198,7 @@ function EditArrInstanceDialog({
 
 function ArrInstancesCard({
   title,
+  logoSrc,
   urlPlaceholder,
   instances,
   isPending,
@@ -205,6 +207,7 @@ function ArrInstancesCard({
   deleteMutation,
 }: {
   title: string
+  logoSrc: string
   urlPlaceholder: string
   instances: ArrInstance[] | undefined
   isPending: boolean
@@ -215,9 +218,12 @@ function ArrInstancesCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{t('integrations.notYetUsedDescription')}</CardDescription>
+        <div className="flex items-center gap-3">
+          <ServiceLogo src={logoSrc} alt={title} />
+          <div>
+            <CardTitle>{title}</CardTitle>
+            <CardDescription>{t('integrations.notYetUsedDescription')}</CardDescription>
+          </div>
         </div>
         <AddArrInstanceDialog urlPlaceholder={urlPlaceholder} createMutation={createMutation} />
       </CardHeader>
@@ -291,6 +297,7 @@ export function IntegrationsSection() {
     <div className="grid gap-6">
       <ArrInstancesCard
         title="Radarr"
+        logoSrc="/logos/radarr.svg"
         urlPlaceholder="http://radarr:7878"
         instances={radarrInstances}
         isPending={radarrPending}
@@ -301,6 +308,7 @@ export function IntegrationsSection() {
 
       <ArrInstancesCard
         title="Sonarr"
+        logoSrc="/logos/sonarr.svg"
         urlPlaceholder="http://sonarr:8989"
         instances={sonarrInstances}
         isPending={sonarrPending}
