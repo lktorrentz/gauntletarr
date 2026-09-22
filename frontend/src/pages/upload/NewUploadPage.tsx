@@ -212,7 +212,7 @@ function ReadyStep({ jobId }: { jobId: number }) {
         <CardHeader>
           <CardTitle>Campi risolti</CardTitle>
           <CardDescription>
-            type_id è sempre un guess best-effort da guessit — verificalo prima di confermare (docs/SPEC.md §9).
+            type_id è sempre un guess best-effort da guessit — verificalo prima di confermare.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid max-w-2xl grid-cols-4 gap-3">
@@ -323,7 +323,7 @@ function ReadyStep({ jobId }: { jobId: number }) {
       <Card>
         <CardHeader>
           <CardTitle>Dupe-check</CardTitle>
-          <CardDescription>Verifica esplicita sul tracker prima di procedere (docs/SPEC.md §9).</CardDescription>
+          <CardDescription>Verifica esplicita sul tracker prima di procedere.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2">
           <Button variant="outline" className="w-fit" onClick={() => dupeCheck.refetch()} disabled={dupeCheck.isFetching}>

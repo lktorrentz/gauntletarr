@@ -83,8 +83,7 @@ export function SettingsPage() {
         <CardHeader>
           <CardTitle>Host immagini (upload)</CardTitle>
           <CardDescription>
-            Ordine di priorità e chiavi per gli screenshot di upload (docs/SPEC.md §9). Imgbox non richiede una
-            chiave.
+            Ordine di priorità e chiavi per gli screenshot di upload. Imgbox non richiede una chiave.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -108,8 +107,7 @@ export function SettingsPage() {
         <CardHeader>
           <CardTitle>Soglie di auto-approvazione</CardTitle>
           <CardDescription>
-            Confidence minima (0.0-1.0) sopra la quale un match viene eseguito automaticamente, per direzione
-            (docs/SPEC.md §8).
+            Confidence minima (0.0-1.0) sopra la quale un match viene eseguito automaticamente, per direzione.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">

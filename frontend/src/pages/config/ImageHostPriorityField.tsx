@@ -80,7 +80,7 @@ export function ImageHostPriorityField() {
     <div className="grid gap-1.5">
       <Label>Ordine di priorità host immagini</Label>
       <p className="text-xs text-muted-foreground">
-        Trascina per riordinare — si prova il primo, se fallisce si passa al successivo (docs/SPEC.md §9).
+        Trascina per riordinare — si prova il primo, se fallisce si passa al successivo.
       </p>
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <SortableContext items={order} strategy={verticalListSortingStrategy}>

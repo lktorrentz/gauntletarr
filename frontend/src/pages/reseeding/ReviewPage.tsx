@@ -18,7 +18,7 @@ function CandidateAudit({ mediaItemId }: { mediaItemId: number }) {
   return (
     <div className="grid gap-1.5 border-t bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">
-        Tutti i candidati valutati per questo contenuto (audit, docs/SPEC.md §6):
+        Tutti i candidati valutati per questo contenuto:
       </p>
       {data?.map((c) => (
         <div key={c.id} className="flex items-center justify-between gap-2 text-xs">

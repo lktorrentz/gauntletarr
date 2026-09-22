@@ -92,7 +92,7 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="none">
       <SidebarHeader className="px-3 py-3">
         <span className="text-sm font-semibold tracking-tight">The Media Gauntlet*rr</span>
       </SidebarHeader>
