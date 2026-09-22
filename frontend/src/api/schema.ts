@@ -1030,6 +1030,16 @@ export interface components {
             finished_at: string | null;
             /** Health Snapshot */
             health_snapshot: number;
+            /** Items Scanned */
+            items_scanned: number;
+            /** Matches Found */
+            matches_found: number;
+            /** Auto Executed */
+            auto_executed: number;
+            /** Pending Review */
+            pending_review: number;
+            /** Errors */
+            errors: number;
         };
         /** LastRunSummary */
         LastRunSummary: {

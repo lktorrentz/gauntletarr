@@ -48,6 +48,11 @@ class HistoryPoint(BaseModel):
     run_type: str
     finished_at: datetime | None
     health_snapshot: float
+    items_scanned: int
+    matches_found: int
+    auto_executed: int
+    pending_review: int
+    errors: int
 
 
 class WhatsNewItem(BaseModel):
@@ -87,7 +92,11 @@ def get_history(limit: int = 30, session: Session = Depends(get_session)):
         .all()
     )
     return [
-        HistoryPoint(run_id=r.id, run_type=r.run_type, finished_at=r.finished_at, health_snapshot=r.health_snapshot)
+        HistoryPoint(
+            run_id=r.id, run_type=r.run_type, finished_at=r.finished_at, health_snapshot=r.health_snapshot,
+            items_scanned=r.items_scanned, matches_found=r.matches_found, auto_executed=r.auto_executed,
+            pending_review=r.pending_review, errors=r.errors,
+        )
         for r in runs
     ]
 

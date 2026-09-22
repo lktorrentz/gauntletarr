@@ -2,6 +2,7 @@ export const dashboard = {
   'dashboard.libraryHealth': 'Library health',
   'dashboard.seedingOfTotal': '{seeding} GB seeding of {total} GB total',
   'dashboard.healthHistory': 'Health history',
+  'dashboard.healthHistoryDescription': 'Health snapshot at the end of each run',
   'dashboard.notEnoughHistory': 'Not enough history yet.',
   'dashboard.unresolved': 'Unresolved',
   'dashboard.ignored': 'Ignored',
@@ -14,4 +15,29 @@ export const dashboard = {
   'dashboard.uploaded': 'Uploaded',
   'dashboard.whatsNew': "What's new",
   'dashboard.nothingNew': 'Nothing new.',
+
+  // Hero KPI cards
+  'dashboard.healthImproving': 'Improving vs previous run',
+  'dashboard.healthDeclining': 'Declining vs previous run',
+  'dashboard.healthStable': 'Stable vs previous run',
+  'dashboard.healthNoHistory': 'No previous run to compare',
+  'dashboard.reviewsAwaitingDecision': 'Reviews awaiting a decision',
+  'dashboard.backlogGrowing': 'Backlog growing',
+  'dashboard.backlogShrinking': 'Backlog shrinking',
+  'dashboard.backlogStable': 'Backlog stable',
+  'dashboard.autoExecutedLastRun': 'Auto-executed (last run)',
+  'dashboard.aboveConfidenceThreshold': 'Matches above the confidence threshold',
+  'dashboard.moreAutoExecuted': 'More than the previous run',
+  'dashboard.fewerAutoExecuted': 'Fewer than the previous run',
+  'dashboard.sameAutoExecuted': 'Same as the previous run',
+  'dashboard.errorsLastRun': 'Errors (last run)',
+  'dashboard.failuresLastRun': 'Failures during the last run',
+  'dashboard.moreErrors': 'More than the previous run',
+  'dashboard.fewerErrors': 'Fewer than the previous run',
+  'dashboard.sameErrors': 'Same as the previous run',
+
+  // Chart
+  'dashboard.last10Runs': 'Last 10 runs',
+  'dashboard.last30Runs': 'Last 30 runs',
+  'dashboard.last90Runs': 'Last 90 runs',
 } as const

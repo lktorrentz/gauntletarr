@@ -46,6 +46,11 @@ def test_dashboard_reflects_run_log(client):
     history = client.get("/api/dashboard/history").json()
     assert len(history) == 1
     assert history[0]["health_snapshot"] == 80.0
+    assert history[0]["items_scanned"] == 5
+    assert history[0]["matches_found"] == 2
+    assert history[0]["auto_executed"] == 1
+    assert history[0]["pending_review"] == 1
+    assert history[0]["errors"] == 0
 
 
 def test_schedule_defaults_to_disabled(client):
