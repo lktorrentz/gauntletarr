@@ -24,7 +24,7 @@ import { UploadSettingsSection } from '@/pages/config/UploadSettingsSection'
 
 export function ConfigurationPage() {
   return (
-    <Tabs defaultValue="application" orientation="vertical">
+    <Tabs defaultValue="application" orientation="vertical" className="gap-6">
       <TabsList className="w-56 shrink-0 items-stretch gap-1 bg-transparent p-0">
         <TabsTrigger value="application" className="justify-start gap-2 px-3 py-2">
           <InfoIcon />

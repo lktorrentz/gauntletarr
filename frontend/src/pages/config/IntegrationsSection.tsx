@@ -405,11 +405,13 @@ function ArrInstancesCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex gap-3">
           <ServiceLogo src={logoSrc} alt={title} />
           <div>
             <CardTitle>{title}</CardTitle>
-            <CardDescription>{t('integrations.notYetUsedDescription')}</CardDescription>
+            <div>
+              <CardDescription>{t('integrations.notYetUsedDescription')}</CardDescription>
+            </div>
           </div>
         </div>
         <AddArrInstanceDialog urlPlaceholder={urlPlaceholder} createMutation={createMutation} />

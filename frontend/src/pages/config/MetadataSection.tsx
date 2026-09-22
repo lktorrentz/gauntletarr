@@ -7,7 +7,7 @@ export function MetadataSection() {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
-        <CardHeader className="flex flex-row items-center gap-3">
+        <CardHeader className="flex flex-row gap-3">
           <ServiceLogo src="/logos/tmdb.svg" alt="TMDB" />
           <div>
             <CardTitle>{t('metadata.tmdbTitle')}</CardTitle>
@@ -25,7 +25,7 @@ export function MetadataSection() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center gap-3">
+        <CardHeader className="flex flex-row gap-3">
           <ServiceLogo src="/logos/tvdb.svg" alt="TVDB" />
           <div>
             <CardTitle>{t('metadata.tvdbTitle')}</CardTitle>
