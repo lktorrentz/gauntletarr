@@ -9,6 +9,7 @@ import { TorrentClientsPage } from '@/pages/config/TorrentClientsPage'
 import { TrackersPage } from '@/pages/config/TrackersPage'
 import { SettingsPage } from '@/pages/config/SettingsPage'
 import { RunsPage } from '@/pages/reseeding/RunsPage'
+import { ReviewPage } from '@/pages/reseeding/ReviewPage'
 import { TreeViewPage } from '@/pages/library/TreeViewPage'
 import { GridViewPage } from '@/pages/library/GridViewPage'
 import { OrphanedPage } from '@/pages/library/OrphanedPage'
@@ -24,6 +25,7 @@ const overrides: Record<string, ReactNode> = {
   '/library/tree': <TreeViewPage />,
   '/library/grid': <GridViewPage />,
   '/library/orphaned': <OrphanedPage />,
+  '/reseeding/review': <ReviewPage />,
   '/reseeding/runs': <RunsPage />,
   '/config/disks': <DisksPage />,
   '/config/torrent-clients': <TorrentClientsPage />,

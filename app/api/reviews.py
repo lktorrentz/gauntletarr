@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 class ReviewResponse(BaseModel):
     id: int
     candidate_id: int
+    media_item_id: int
     media_file_id: int | None
     seed_file_id: int | None
     status: str
@@ -28,7 +29,8 @@ class ReviewResponse(BaseModel):
     @classmethod
     def from_model(cls, r: MatchReview) -> "ReviewResponse":
         return cls(
-            id=r.id, candidate_id=r.candidate_id, media_file_id=r.media_file_id, seed_file_id=r.seed_file_id,
+            id=r.id, candidate_id=r.candidate_id, media_item_id=r.candidate.media_item_id,
+            media_file_id=r.media_file_id, seed_file_id=r.seed_file_id,
             status=r.status, direction=r.candidate.direction, confidence=r.candidate.confidence,
             candidate_name=r.candidate.name, ambiguity_reason=r.candidate.ambiguity_reason,
         )
@@ -92,16 +94,28 @@ def retry_failed(seed_job_id: int, session: Session = Depends(get_session)):
     return SeedJobResponse.from_model(result)
 
 
-@router.get("/candidates/{media_item_id}")
+class CandidateAuditResponse(BaseModel):
+    id: int
+    tracker_id: int
+    name: str
+    direction: str
+    confidence: float
+    size_match: bool | None
+    mediainfo_match: bool | None
+    piece_verified: bool | None
+    ambiguity_reason: str | None
+
+
+@router.get("/candidates/{media_item_id}", response_model=list[CandidateAuditResponse])
 def list_candidates_for_media_item(media_item_id: int, session: Session = Depends(get_session)):
     """Sola lettura, per audit: ogni candidate valutato per un media_item,
     non solo quello scelto per la review (docs/SPEC.md sezione 6)."""
     rows = session.query(Candidate).filter_by(media_item_id=media_item_id).order_by(Candidate.confidence.desc()).all()
     return [
-        {
-            "id": c.id, "tracker_id": c.tracker_id, "name": c.name, "direction": c.direction,
-            "confidence": c.confidence, "size_match": c.size_match, "mediainfo_match": c.mediainfo_match,
-            "piece_verified": c.piece_verified, "ambiguity_reason": c.ambiguity_reason,
-        }
+        CandidateAuditResponse(
+            id=c.id, tracker_id=c.tracker_id, name=c.name, direction=c.direction,
+            confidence=c.confidence, size_match=c.size_match, mediainfo_match=c.mediainfo_match,
+            piece_verified=c.piece_verified, ambiguity_reason=c.ambiguity_reason,
+        )
         for c in rows
     ]

@@ -751,6 +751,27 @@ export interface components {
             /** Adapter Type */
             adapter_type: string;
         };
+        /** CandidateAuditResponse */
+        CandidateAuditResponse: {
+            /** Id */
+            id: number;
+            /** Tracker Id */
+            tracker_id: number;
+            /** Name */
+            name: string;
+            /** Direction */
+            direction: string;
+            /** Confidence */
+            confidence: number;
+            /** Size Match */
+            size_match: boolean | null;
+            /** Mediainfo Match */
+            mediainfo_match: boolean | null;
+            /** Piece Verified */
+            piece_verified: boolean | null;
+            /** Ambiguity Reason */
+            ambiguity_reason: string | null;
+        };
         /** DashboardResponse */
         DashboardResponse: {
             /** Health Pct */
@@ -938,6 +959,8 @@ export interface components {
             id: number;
             /** Candidate Id */
             candidate_id: number;
+            /** Media Item Id */
+            media_item_id: number;
             /** Media File Id */
             media_file_id: number | null;
             /** Seed File Id */
@@ -2570,7 +2593,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CandidateAuditResponse"][];
                 };
             };
             /** @description Validation Error */
