@@ -127,4 +127,10 @@
   html {
     @apply font-sans;
     }
+  /* Tailwind v4 preflight dropped v3's default button cursor: pointer —
+     ripristinato qui (fix ufficiale della migration guide) invece di
+     aggiungere cursor-pointer a ogni singolo componente. */
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+    }
 }
