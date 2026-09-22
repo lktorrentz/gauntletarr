@@ -26,7 +26,7 @@ cd gauntletarr
 cp .env.example .env
 ```
 
-Edit `.env` and set `APP_SECRET_KEY` — it encrypts credentials (tracker tokens, torrent client passwords) at rest in the database. Generate one with:
+Edit `.env` and set `APP_SECRET_KEY` — it encrypts credentials (tracker tokens, torrent client passwords) at rest in the database, and signs the login session token. Generate one with:
 
 ```bash
 openssl rand -base64 32 | tr '+/' '-_'
@@ -37,6 +37,8 @@ Edit `docker-compose.yml` if your library isn't at `./data` relative to the comp
 ```bash
 docker compose up -d
 ```
+
+On first visit, the web UI asks you to create the admin account (single user, JWT-based — never HTTP basic auth). Until you do, every page and API endpoint stays open, exactly like earlier versions with no login at all — so upgrading an existing instance never locks you out unannounced.
 
 On first start, the container creates `config/config.yaml` from [`config.example.yaml`](config.example.yaml) if it doesn't already exist. Everything except `disk_scan_root`/`data_dir` (disks, media paths, trackers, torrent clients, thresholds, the schedule) lives in the app's own database and is configured through the API below — no file editing, no restart needed for any of it.
 

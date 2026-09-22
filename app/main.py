@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from pydantic import BaseModel
 
-from app import db, scheduler, startup_checks
+from app import auth, db, scheduler, startup_checks
+from app.api.auth import router as auth_router
 from app.api.dashboard import router as dashboard_router
 from app.api.disks import router as disks_router
 from app.api.library import router as library_router
@@ -46,18 +47,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="The Media Gauntlet*rr", lifespan=lifespan)
 
-# API JSON pura sotto /api/* fin dall'inizio (docs/SPEC.md §10)
-app.include_router(disks_router)
-app.include_router(media_paths_router)
-app.include_router(runs_router)
-app.include_router(library_router)
-app.include_router(torrent_clients_router)
-app.include_router(settings_router)
-app.include_router(trackers_router)
-app.include_router(reviews_router)
-app.include_router(schedule_router)
-app.include_router(dashboard_router)
-app.include_router(uploads_router)
+# /api/auth/* è l'unico router mai protetto da require_auth (altrimenti
+# nessuno potrebbe mai autenticarsi la prima volta) — vedi app/api/auth.py.
+app.include_router(auth_router)
+
+# API JSON pura sotto /api/* fin dall'inizio (docs/SPEC.md §10). Protette da
+# require_auth, che però lascia passare tutto finché nessun login è stato
+# configurato (app/auth.py) — un'istanza esistente senza login impostato
+# continua a funzionare esattamente come prima di questa fase.
+_protected = Depends(auth.require_auth)
+app.include_router(disks_router, dependencies=[_protected])
+app.include_router(media_paths_router, dependencies=[_protected])
+app.include_router(runs_router, dependencies=[_protected])
+app.include_router(library_router, dependencies=[_protected])
+app.include_router(torrent_clients_router, dependencies=[_protected])
+app.include_router(settings_router, dependencies=[_protected])
+app.include_router(trackers_router, dependencies=[_protected])
+app.include_router(reviews_router, dependencies=[_protected])
+app.include_router(schedule_router, dependencies=[_protected])
+app.include_router(dashboard_router, dependencies=[_protected])
+app.include_router(uploads_router, dependencies=[_protected])
 
 
 class HealthResponse(BaseModel):

@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 
 import App from './App.tsx'
+import { AuthGate } from '@/components/auth/AuthGate'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import './index.css'
@@ -16,9 +17,11 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <AuthGate>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </AuthGate>
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>

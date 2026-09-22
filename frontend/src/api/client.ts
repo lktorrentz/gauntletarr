@@ -2,6 +2,8 @@ import createClient from 'openapi-fetch'
 import type { FetchResponse } from 'openapi-fetch'
 import type { MediaType } from 'openapi-typescript-helpers'
 
+import { clearToken, getToken } from '@/lib/authToken'
+
 import type { components, paths } from './schema'
 
 export type Schemas = components['schemas']
@@ -12,6 +14,23 @@ export type Schemas = components['schemas']
 // statico di FastAPI (produzione, stesso container) funzionano identici
 // senza bisogno di CORS.
 export const api = createClient<paths>({ baseUrl: '' })
+
+// Allega il token a ogni richiesta se presente — un'istanza senza login
+// mai configurato (app/auth.py) non ne ha uno, e ogni endpoint resta
+// raggiungibile esattamente come prima di questa fase. Su 401 il token
+// viene scartato: AuthGate lo rileva al prossimo controllo e rimanda al
+// login, invece di continuare a rimandare un token ormai invalido/scaduto.
+api.use({
+  onRequest({ request }) {
+    const token = getToken()
+    if (token) request.headers.set('Authorization', `Bearer ${token}`)
+    return request
+  },
+  onResponse({ response }) {
+    if (response.status === 401) clearToken()
+    return response
+  },
+})
 
 /**
  * Estrae `data` da una risposta openapi-fetch, o lancia un Error col

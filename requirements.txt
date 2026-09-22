@@ -13,4 +13,5 @@ jinja2
 python-multipart
 pyyaml
 cryptography
+pyjwt
 supervisor
