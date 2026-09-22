@@ -1,0 +1,84 @@
+"""Esclusioni: file che non vanno mostrati (di default) né conteggiati
+nelle statistiche di Library/Torrent — un concetto distinto dallo stato
+"ignored" già esistente (client_torrent_file senza hardlink, sezione 3):
+qui si tratta di file spazzatura (nfo scena, sample, file incompleti di
+un client) che non sono contenuto reale, indipendentemente dal loro stato
+seeding/orfano.
+
+Sintassi pattern (fnmatch, case-insensitive), applicata sia al nome file
+sia al relative_path intero — un pattern senza "/" matcha ovunque nel path
+(qualunque segmento), uno con "/" matcha solo quel percorso relativo:
+  *.nfo          -> qualunque file .nfo, a qualunque profondità
+  sample/*       -> qualunque file dentro una cartella "sample"
+  *.!qb          -> file incompleti qBittorrent (case-insensitive)
+"""
+
+import fnmatch
+from dataclasses import dataclass
+
+# Preset per file "sidecar" dei client torrent più comuni — l'estensione
+# temporanea che ciascun client aggiunge a un file non ancora completo.
+# Non sono file di stato del client (.fastresume etc, quelli vivono nella
+# config dir del client, mai dentro la cartella dei torrent) ma sidecar
+# per-file dentro il contenuto stesso.
+CLIENT_INCOMPLETE_PRESETS: dict[str, list[str]] = {
+    "qbittorrent_incomplete": ["*.!qb"],
+    "utorrent_incomplete": ["*.!ut"],
+    "bitcomet_incomplete": ["*.bc!"],
+}
+
+# Spazzatura tipica di una release scena/tracker, mai il contenuto vero.
+SCENE_JUNK_PRESET = "scene_junk"
+
+PRESETS: dict[str, list[str]] = {
+    **CLIENT_INCOMPLETE_PRESETS,
+    SCENE_JUNK_PRESET: [
+        "*.nfo", "*.sfv", "*.txt", "*.diz",
+        "sample/*", "sample.*", "*-sample.*",
+        "proof/*",
+        "screens/*", "screenshots/*",
+        "*thumbs.db", "*.ds_store",
+    ],
+}
+
+
+@dataclass
+class CompiledExclusions:
+    patterns: list[str]
+
+    def is_excluded(self, relative_path: str) -> bool:
+        if not self.patterns:
+            return False
+        normalized = relative_path.replace("\\", "/").lower()
+        filename = normalized.rsplit("/", 1)[-1]
+        for pattern in self.patterns:
+            p = pattern.lower()
+            if "/" not in p:
+                if fnmatch.fnmatch(filename, p):
+                    return True
+                continue
+            # Un pattern con "/" matcha da qualunque profondità, non solo
+            # dalla radice — "sample/*" deve prendere sia "sample/x.mkv"
+            # sia "Movie/sample/x.mkv", non solo il primo.
+            if fnmatch.fnmatch(normalized, p) or fnmatch.fnmatch(normalized, f"*/{p}"):
+                return True
+        return False
+
+
+def parse_custom_patterns(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [line.strip() for line in raw.splitlines() if line.strip()]
+
+
+def parse_preset_keys(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [key.strip() for key in raw.split(",") if key.strip()]
+
+
+def compile_exclusions(custom_patterns_raw: str | None, enabled_presets_raw: str | None) -> CompiledExclusions:
+    patterns = list(parse_custom_patterns(custom_patterns_raw))
+    for key in parse_preset_keys(enabled_presets_raw):
+        patterns.extend(PRESETS.get(key, []))
+    return CompiledExclusions(patterns=patterns)

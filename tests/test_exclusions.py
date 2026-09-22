@@ -1,0 +1,56 @@
+from app.exclusions import compile_exclusions, parse_custom_patterns, parse_preset_keys
+
+
+def test_parse_custom_patterns_strips_blank_lines():
+    assert parse_custom_patterns("*.nfo\n\n  *.sfv  \n") == ["*.nfo", "*.sfv"]
+
+
+def test_parse_custom_patterns_handles_none_and_empty():
+    assert parse_custom_patterns(None) == []
+    assert parse_custom_patterns("") == []
+
+
+def test_parse_preset_keys_splits_csv():
+    assert parse_preset_keys("scene_junk, qbittorrent_incomplete") == ["scene_junk", "qbittorrent_incomplete"]
+
+
+def test_custom_pattern_matches_extension_anywhere():
+    exclusions = compile_exclusions("*.nfo", None)
+    assert exclusions.is_excluded("Movie.2024/Movie.2024.nfo")
+    assert not exclusions.is_excluded("Movie.2024/Movie.2024.mkv")
+
+
+def test_custom_pattern_with_slash_matches_full_relative_path():
+    exclusions = compile_exclusions("sample/*", None)
+    assert exclusions.is_excluded("Movie.2024/sample/preview.mkv")
+    assert not exclusions.is_excluded("Movie.2024/Movie.2024.mkv")
+
+
+def test_no_patterns_excludes_nothing():
+    exclusions = compile_exclusions(None, None)
+    assert not exclusions.is_excluded("anything/at/all.nfo")
+
+
+def test_preset_qbittorrent_incomplete():
+    exclusions = compile_exclusions(None, "qbittorrent_incomplete")
+    assert exclusions.is_excluded("Movie.2024/Movie.2024.mkv.!qb")
+    assert not exclusions.is_excluded("Movie.2024/Movie.2024.mkv")
+
+
+def test_preset_scene_junk_covers_samples_and_nfo():
+    exclusions = compile_exclusions(None, "scene_junk")
+    assert exclusions.is_excluded("Movie.2024/Movie.2024.nfo")
+    assert exclusions.is_excluded("Movie.2024/sample/preview.mkv")
+    assert not exclusions.is_excluded("Movie.2024/Movie.2024.mkv")
+
+
+def test_custom_and_preset_patterns_combine():
+    exclusions = compile_exclusions("*.custom-junk", "qbittorrent_incomplete")
+    assert exclusions.is_excluded("x.custom-junk")
+    assert exclusions.is_excluded("x.mkv.!qb")
+    assert not exclusions.is_excluded("x.mkv")
+
+
+def test_matching_is_case_insensitive():
+    exclusions = compile_exclusions("*.NFO", None)
+    assert exclusions.is_excluded("movie/readme.nfo")

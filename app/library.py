@@ -18,10 +18,28 @@ Definizione usata qui (coerente con la tabella di SPEC.md sezione 3):
 
 from sqlalchemy.orm import Session
 
+from app.exclusions import CompiledExclusions
 from app.models import ClientTorrentFile, MediaFile, MediaItem, SeedFile
 
+_NO_EXCLUSIONS = CompiledExclusions(patterns=[])
 
-def media_file_states(session: Session, disk_id: int | None = None) -> list[dict]:
+
+def _media_file_to_seed_paths(session: Session) -> dict[int, list[str]]:
+    """media_file_id -> relative_path di ogni seed_file hardlinkato ad esso
+    (spesso più di uno, cross-seed) — la stessa relazione che il motore di
+    matching stabilisce già (seed_file.media_file_id), qui solo riletta al
+    contrario per l'hover "hardlink" della UI (Fase 9)."""
+    linked: dict[int, list[str]] = {}
+    for sf in session.query(SeedFile.media_file_id, SeedFile.relative_path).filter(
+        SeedFile.media_file_id.isnot(None)
+    ).all():
+        linked.setdefault(sf.media_file_id, []).append(sf.relative_path)
+    return linked
+
+
+def media_file_states(
+    session: Session, disk_id: int | None = None, exclusions: CompiledExclusions = _NO_EXCLUSIONS
+) -> list[dict]:
     query = session.query(MediaFile)
     if disk_id is not None:
         query = query.filter_by(disk_id=disk_id)
@@ -37,6 +55,7 @@ def media_file_states(session: Session, disk_id: int | None = None) -> list[dict
         .filter(SeedFile.media_file_id.isnot(None), SeedFile.id.in_(tracked_seed_file_ids))
         .all()
     } if tracked_seed_file_ids else set()
+    linked_paths = _media_file_to_seed_paths(session)
 
     return [
         {
@@ -45,12 +64,16 @@ def media_file_states(session: Session, disk_id: int | None = None) -> list[dict
             "relative_path": mf.relative_path,
             "size_bytes": mf.size_bytes,
             "state": "seeding" if mf.id in seeding_media_file_ids else "orphan_media",
+            "excluded": exclusions.is_excluded(mf.relative_path),
+            "linked_paths": linked_paths.get(mf.id, []),
         }
         for mf in query.order_by(MediaFile.relative_path).all()
     ]
 
 
-def seed_file_states(session: Session, disk_id: int | None = None) -> list[dict]:
+def seed_file_states(
+    session: Session, disk_id: int | None = None, exclusions: CompiledExclusions = _NO_EXCLUSIONS
+) -> list[dict]:
     query = session.query(SeedFile)
     if disk_id is not None:
         query = query.filter_by(disk_id=disk_id)
@@ -59,6 +82,9 @@ def seed_file_states(session: Session, disk_id: int | None = None) -> list[dict]
         row[0] for row in session.query(ClientTorrentFile.seed_file_id).filter(
             ClientTorrentFile.seed_file_id.isnot(None)
         ).all()
+    }
+    media_paths_by_id = {
+        row[0]: row[1] for row in session.query(MediaFile.id, MediaFile.relative_path).all()
     }
 
     def _state(sf: SeedFile) -> str:
@@ -74,18 +100,24 @@ def seed_file_states(session: Session, disk_id: int | None = None) -> list[dict]
             "size_bytes": sf.size_bytes,
             "media_file_id": sf.media_file_id,
             "state": _state(sf),
+            "excluded": exclusions.is_excluded(sf.relative_path),
+            "linked_paths": [media_paths_by_id[sf.media_file_id]] if sf.media_file_id in media_paths_by_id else [],
         }
         for sf in query.order_by(SeedFile.relative_path).all()
     ]
 
 
-def media_items_overview(session: Session, disk_id: int | None = None) -> list[dict]:
-    """Vista Libreria (docs/SPEC.md sezione 7): un media_item per riga, con
-    tutti i suoi media_file fisici raggruppati sotto e lo stato di ciascuno.
-    Stessa risorsa per la vista ad albero e a griglia — differiscono solo
-    nel rendering lato frontend (`?view=tree|grid`, non ancora costruito
-    in questa fase, che resta API-only)."""
-    states_by_id = {s["id"]: s["state"] for s in media_file_states(session, disk_id=disk_id)}
+def media_items_overview(
+    session: Session, disk_id: int | None = None, exclusions: CompiledExclusions = _NO_EXCLUSIONS
+) -> list[dict]:
+    """Vista Libreria (sezione 7): un media_item per riga, con tutti i suoi
+    media_file fisici raggruppati sotto e lo stato di ciascuno. Stessa
+    risorsa per la vista poster e ad albero — differiscono solo nel
+    rendering lato frontend."""
+    file_states = media_file_states(session, disk_id=disk_id, exclusions=exclusions)
+    states_by_id = {s["id"]: s["state"] for s in file_states}
+    excluded_by_id = {s["id"]: s["excluded"] for s in file_states}
+    linked_by_id = {s["id"]: s["linked_paths"] for s in file_states}
 
     query = session.query(MediaFile).filter(MediaFile.media_item_id.isnot(None))
     if disk_id is not None:
@@ -118,6 +150,8 @@ def media_items_overview(session: Session, disk_id: int | None = None) -> list[d
                     "disk_id": mf.disk_id,
                     "relative_path": mf.relative_path,
                     "state": states_by_id.get(mf.id, "orphan_media"),
+                    "excluded": excluded_by_id.get(mf.id, False),
+                    "linked_paths": linked_by_id.get(mf.id, []),
                 }
                 for mf in files_by_item[item.id]
             ],
@@ -126,10 +160,11 @@ def media_items_overview(session: Session, disk_id: int | None = None) -> list[d
     ]
 
 
-def unmatched_media_files(session: Session, disk_id: int | None = None) -> list[dict]:
-    """media_file senza alcuna identità risolta (`unmatched`, docs/SPEC.md
-    sezione 3) — mai in media_items_overview, che parte sempre da un
-    media_item."""
+def unmatched_media_files(
+    session: Session, disk_id: int | None = None, exclusions: CompiledExclusions = _NO_EXCLUSIONS
+) -> list[dict]:
+    """media_file senza alcuna identità risolta ("unmatched", sezione 3) —
+    mai in media_items_overview, che parte sempre da un media_item."""
     query = session.query(MediaFile).filter(MediaFile.media_item_id.is_(None))
     if disk_id is not None:
         query = query.filter_by(disk_id=disk_id)
@@ -137,6 +172,7 @@ def unmatched_media_files(session: Session, disk_id: int | None = None) -> list[
         {
             "id": mf.id, "disk_id": mf.disk_id, "relative_path": mf.relative_path,
             "size_bytes": mf.size_bytes, "state": "unmatched",
+            "excluded": exclusions.is_excluded(mf.relative_path), "linked_paths": [],
         }
         for mf in query.order_by(MediaFile.relative_path).all()
     ]

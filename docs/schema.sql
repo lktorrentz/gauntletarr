@@ -155,6 +155,8 @@ CREATE TABLE IF NOT EXISTS media_file (
     st_dev                  INTEGER NOT NULL,       -- "as of last scan" — never trusted beyond last_scan_id
     inode                   INTEGER NOT NULL,       -- ditto — the filesystem reassigns inodes over time
     nlink                   INTEGER,                -- >1 = hardlinked somewhere, a quick first signal
+    content_hash            TEXT,                   -- fast partial-content hash (app/duplicates.py), to find
+                                                      -- unintentional same-content copies across different inodes
     media_item_id           INTEGER REFERENCES media_item(id) ON DELETE SET NULL,     -- resolved by the resolver
     resolver_source         TEXT,                   -- "filename_parser" | "sonarr" | "radarr"
     mediainfo_unique_id     TEXT,                    -- computed on demand, cached

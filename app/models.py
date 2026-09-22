@@ -216,6 +216,10 @@ class MediaFile(Base):
     st_dev: Mapped[int] = mapped_column(nullable=False)
     inode: Mapped[int] = mapped_column(nullable=False)
     nlink: Mapped[int | None]
+    # Fast partial-content hash (app/duplicates.py) — per trovare copie non
+    # intenzionali dello stesso contenuto su inode diversi, mai per il
+    # matching col tracker (quello resta mediainfo_unique_id sotto).
+    content_hash: Mapped[str | None]
     media_item_id: Mapped[int | None] = mapped_column(ForeignKey("media_item.id", ondelete="SET NULL"))
     resolver_source: Mapped[str | None]
     mediainfo_unique_id: Mapped[str | None]

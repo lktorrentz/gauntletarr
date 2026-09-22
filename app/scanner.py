@@ -25,6 +25,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.db_utils import bulk_upsert
+from app.duplicates import compute_fast_hash
 from app.models import Disk, MediaFile, RunLog, SeedFile
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,10 @@ def scan_disk(session: Session, disk: Disk, run: RunLog) -> dict[str, int]:
                 "st_dev": st.st_dev,
                 "inode": st.st_ino,
                 "nlink": st.st_nlink,
+                # Costo limitato a 128KB/file indipendentemente dalla dimensione
+                # (app/duplicates.py) — ricalcolato a ogni scan, nessuna cache
+                # incrementale ancora: un'ottimizzazione futura, non bloccante.
+                "content_hash": compute_fast_hash(full_path),
                 "last_scan_id": run.id,
                 "last_seen_at": now,
             })
@@ -75,7 +80,10 @@ def scan_disk(session: Session, disk: Disk, run: RunLog) -> dict[str, int]:
     bulk_upsert(
         session, MediaFile.__table__, media_rows,
         conflict_cols=["disk_id", "relative_path"],
-        update_cols=["media_path_id", "size_bytes", "st_dev", "inode", "nlink", "last_scan_id", "last_seen_at"],
+        update_cols=[
+            "media_path_id", "size_bytes", "st_dev", "inode", "nlink", "content_hash",
+            "last_scan_id", "last_seen_at",
+        ],
     )
     session.commit()
 

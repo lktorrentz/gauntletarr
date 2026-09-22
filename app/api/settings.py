@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import settings_repo
 from app.deps import get_session
+from app.exclusions import PRESETS
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -19,6 +20,19 @@ class SettingUpdateRequest(BaseModel):
 class SettingResponse(BaseModel):
     key: str
     value: str | None
+
+
+class ExclusionPresetResponse(BaseModel):
+    key: str
+    patterns: list[str]
+
+
+@router.get("/exclusion-presets/available", response_model=list[ExclusionPresetResponse])
+def list_exclusion_presets():
+    """Preset pronti per esclusioni note (sidecar dei client torrent più
+    comuni + spazzatura tipica di release scena) — l'utente li abilita in
+    Impostazioni senza doverne conoscere i pattern esatti."""
+    return [ExclusionPresetResponse(key=key, patterns=patterns) for key, patterns in PRESETS.items()]
 
 
 @router.get("/{key}", response_model=SettingResponse)

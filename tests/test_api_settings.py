@@ -20,3 +20,10 @@ def test_set_overwrites_previous_value(client):
 
     response = client.get("/api/settings/tmdb_api_key")
     assert response.json()["value"] == "second"
+
+
+def test_exclusion_presets_available_lists_known_presets(client):
+    response = client.get("/api/settings/exclusion-presets/available")
+    assert response.status_code == 200
+    keys = {p["key"] for p in response.json()}
+    assert {"scene_junk", "qbittorrent_incomplete", "utorrent_incomplete", "bitcomet_incomplete"} <= keys

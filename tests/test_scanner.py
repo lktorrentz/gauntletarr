@@ -6,7 +6,7 @@ con/senza hardlink.
 import os
 
 from app import library, pipeline, scanner
-from app.models import Disk, MediaPath
+from app.models import Disk, MediaFile, MediaPath
 
 
 def _make_disk(db_session, tmp_path, torrents_rel_path="torrents"):
@@ -139,3 +139,13 @@ def test_disk_without_torrents_rel_path_only_scans_media(db_session, tmp_path):
 
     assert len(library.media_file_states(db_session)) == 1
     assert library.seed_file_states(db_session) == []
+
+
+def test_scan_populates_content_hash(db_session, tmp_path):
+    disk, _media_path, root = _make_disk(db_session, tmp_path)
+    (root / "media" / "movies" / "Movie.2024.mkv").write_bytes(b"fake video content")
+
+    _run_scan(db_session, disk)
+
+    mf = db_session.query(MediaFile).one()
+    assert mf.content_hash is not None
