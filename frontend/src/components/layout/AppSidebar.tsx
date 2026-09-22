@@ -15,11 +15,15 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarRail,
+  SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
@@ -57,7 +61,7 @@ function AppSidebarFooter() {
   const { username, logout } = useAuth()
 
   return (
-    <SidebarFooter className="gap-2 border-t px-3 py-3">
+    <SidebarFooter className="gap-2 border-t px-3 py-3 group-data-[collapsible=icon]:hidden">
       <div className="grid grid-cols-2 gap-1.5">
         <StatBox
           dotClassName="bg-emerald-500"
@@ -105,16 +109,26 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible="none">
+    <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader className="px-4 py-4">
-        <span className="text-base font-semibold tracking-tight">The Media Gauntlet*rr</span>
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <img src="/favicon.svg" alt="" className="size-8 shrink-0" />
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-2 group-data-[collapsible=icon]:hidden">
+            <span className="truncate text-base font-semibold tracking-tight">The Media Gauntlet*rr</span>
+            <SidebarTrigger />
+          </div>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="px-2 py-0.5">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton render={<Link to={NAV_DASHBOARD.to} />} isActive={location.pathname === NAV_DASHBOARD.to}>
+                <SidebarMenuButton
+                  render={<Link to={NAV_DASHBOARD.to} />}
+                  isActive={location.pathname === NAV_DASHBOARD.to}
+                  tooltip={NAV_DASHBOARD.title}
+                >
                   <NAV_DASHBOARD.icon className="size-4" />
                   {NAV_DASHBOARD.title}
                 </SidebarMenuButton>
@@ -136,7 +150,11 @@ export function AppSidebar() {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
-                      <SidebarMenuButton render={<Link to={item.to} />} isActive={isActive}>
+                      <SidebarMenuButton
+                        render={<Link to={item.to} />}
+                        isActive={isActive}
+                        tooltip={group.title}
+                      >
                         <group.icon className="size-4" />
                         {group.title}
                       </SidebarMenuButton>
@@ -149,37 +167,48 @@ export function AppSidebar() {
 
           const open = openGroups.has(group.title)
           return (
-            <Collapsible key={group.title} open={open} onOpenChange={() => toggleGroup(group.title)}>
-              <SidebarGroup className="px-2 py-0.5">
-                <SidebarGroupLabel render={<CollapsibleTrigger className="w-full cursor-pointer justify-between" />}>
-                  <span className="flex items-center gap-2">
-                    <group.icon className="size-4" />
-                    <span>{group.title}</span>
-                  </span>
-                  <ChevronRightIcon className={cn('size-4 transition-transform', open && 'rotate-90')} />
-                </SidebarGroupLabel>
-                <CollapsibleContent>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {group.items.map((item) => (
-                        <SidebarMenuItem key={item.to}>
-                          <SidebarMenuButton
-                            render={<Link to={item.to} />}
-                            isActive={location.pathname === item.to}
-                          >
-                            {item.title}
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </CollapsibleContent>
-              </SidebarGroup>
-            </Collapsible>
+            <SidebarGroup key={group.title} className="px-2 py-0.5">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <Collapsible open={open} onOpenChange={() => toggleGroup(group.title)}>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        render={<CollapsibleTrigger className="w-full cursor-pointer" />}
+                        tooltip={group.title}
+                      >
+                        <group.icon className="size-4" />
+                        <span className="flex-1">{group.title}</span>
+                        <ChevronRightIcon
+                          className={cn(
+                            'size-4 shrink-0 transition-transform group-data-[collapsible=icon]:hidden',
+                            open && 'rotate-90'
+                          )}
+                        />
+                      </SidebarMenuButton>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {group.items.map((item) => (
+                            <SidebarMenuSubItem key={item.to}>
+                              <SidebarMenuSubButton
+                                render={<Link to={item.to} />}
+                                isActive={location.pathname === item.to}
+                              >
+                                {item.title}
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           )
         })}
       </SidebarContent>
       <AppSidebarFooter />
+      <SidebarRail />
     </Sidebar>
   )
 }
