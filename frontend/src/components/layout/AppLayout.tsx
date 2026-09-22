@@ -1,20 +1,23 @@
-import { MenuIcon } from 'lucide-react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 
 import { AppSidebar } from '@/components/layout/AppSidebar'
-import { Button } from '@/components/ui/button'
-import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar'
-import { t } from '@/lib/i18n'
+import { Separator } from '@/components/ui/separator'
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { resolveSectionTitle } from '@/lib/nav'
 
-function MobileTopbar() {
-  const { toggleSidebar } = useSidebar()
+function TopHeader() {
+  const location = useLocation()
+  const { parent, title } = resolveSectionTitle(location.pathname)
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3 md:hidden">
-      <Button variant="ghost" size="icon-sm" title={t('layout.openMenu')} onClick={toggleSidebar}>
-        <MenuIcon className="size-4" />
-      </Button>
-      <span className="text-sm font-semibold tracking-tight">The Media Gauntlet*rr</span>
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+      <SidebarTrigger />
+      <Separator orientation="vertical" className="h-4" />
+      <div className="flex items-center gap-1.5 text-sm">
+        {parent && <span className="text-muted-foreground">{parent}</span>}
+        {parent && <span className="text-muted-foreground">/</span>}
+        <span className="font-medium">{title}</span>
+      </div>
     </header>
   )
 }
@@ -24,7 +27,7 @@ export function AppLayout() {
     <SidebarProvider className="h-svh">
       <AppSidebar />
       <SidebarInset className="h-svh overflow-hidden">
-        <MobileTopbar />
+        <TopHeader />
         <div className="flex-1 overflow-auto p-6">
           <Outlet />
         </div>

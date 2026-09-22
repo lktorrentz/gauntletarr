@@ -1,7 +1,6 @@
 export const layout = {
   'layout.switchToLightTheme': 'Switch to light theme',
   'layout.switchToDarkTheme': 'Switch to dark theme',
-  'layout.openMenu': 'Open menu',
   'layout.health': 'Health',
   'layout.toReview': 'To review',
   'layout.lastRun': 'last run {time}',

@@ -23,7 +23,6 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarRail,
-  SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
@@ -109,15 +108,9 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader className="px-4 py-4">
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          <img src="/favicon.svg" alt="" className="size-8 shrink-0" />
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-2 group-data-[collapsible=icon]:hidden">
-            <span className="truncate text-base font-semibold tracking-tight">The Media Gauntlet*rr</span>
-            <SidebarTrigger />
-          </div>
-        </div>
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="px-4 py-4 group-data-[collapsible=icon]:hidden">
+        <span className="truncate text-base font-semibold tracking-tight">The Media Gauntlet*rr</span>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="px-2 py-0.5">

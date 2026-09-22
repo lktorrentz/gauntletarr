@@ -70,3 +70,24 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [{ title: 'Configuration', to: '/config' }],
   },
 ]
+
+export interface SectionTitle {
+  parent?: string
+  title: string
+}
+
+// Titolo della sezione corrente mostrato nella topbar della main view
+// (icona per collassare la sidebar + titolo), su tutte le pagine e non
+// solo sulla Dashboard. Per i gruppi con più voci (solo Library, vedi
+// sopra) mostra anche il genitore come breadcrumb ("Library / Poster view").
+export function resolveSectionTitle(pathname: string): SectionTitle {
+  if (pathname === NAV_DASHBOARD.to) return { title: NAV_DASHBOARD.title }
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) {
+      if (pathname === item.to || pathname.startsWith(`${item.to}/`)) {
+        return group.items.length === 1 ? { title: group.title } : { parent: group.title, title: item.title }
+      }
+    }
+  }
+  return { title: NAV_DASHBOARD.title }
+}
