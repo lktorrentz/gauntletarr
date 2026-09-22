@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.adapters.torrent_client.base import TorrentClientAdapter
 from app.fs_scope import ScopeViolation, resolve_scoped
-from app.models import Disk, MatchReview, SeedJob
+from app.models import Disk, DiskTorrentClient, MatchReview, SeedJob
 
 logger = logging.getLogger(__name__)
 
@@ -30,19 +30,30 @@ class ExecutionError(Exception):
     """Errore esplicito che impedisce l'esecuzione — mai un fallimento silente."""
 
 
-def _client_visible_path(disk: Disk, local_path: str) -> str:
-    """Traduce un path lato Gauntletarr nel path equivalente visto dal
+def _client_visible_path(session: Session, disk: Disk, torrent_client_id: int | None, local_path: str) -> str:
+    """Traduce un path lato Gauntletarr nel path equivalente visto DA QUESTO
     client torrent, quando i due girano in container/mount diversi per lo
-    stesso disco fisico (disk.torrent_client_root_path configurato). Se
-    non configurato, assume che client e Gauntletarr vedano lo stesso path."""
-    if not disk.torrent_client_root_path:
+    stesso disco fisico (disk_torrent_client.torrent_client_root_path per
+    la coppia (disk, torrent_client_id) — non un campo del disco: client
+    diversi sullo stesso disco possono vederlo a path diversi). Se
+    torrent_client_id è None, o nessuna riga/override esiste per quella
+    coppia, assume che client e Gauntletarr vedano lo stesso path."""
+    root_override = None
+    if torrent_client_id is not None:
+        link = (
+            session.query(DiskTorrentClient)
+            .filter_by(disk_id=disk.id, torrent_client_id=torrent_client_id)
+            .one_or_none()
+        )
+        root_override = link.torrent_client_root_path if link else None
+    if not root_override:
         return local_path
     root_real = os.path.realpath(disk.root_path)
     local_real = os.path.realpath(local_path)
     if local_real != root_real and not local_real.startswith(root_real + os.sep):
         return local_path  # fuori dal disco: non dovrebbe succedere, non tocchiamo nulla
     relative = os.path.relpath(local_real, root_real)
-    return disk.torrent_client_root_path if relative == "." else os.path.join(disk.torrent_client_root_path, relative)
+    return root_override if relative == "." else os.path.join(root_override, relative)
 
 
 def _check_same_filesystem(source_path: str, torrents_root: str) -> None:
@@ -55,14 +66,18 @@ def _check_same_filesystem(source_path: str, torrents_root: str) -> None:
         )
 
 
-def execute_review(session: Session, review: MatchReview, adapter: TorrentClientAdapter) -> SeedJob:
+def execute_review(
+    session: Session, review: MatchReview, adapter: TorrentClientAdapter, torrent_client_id: int | None = None
+) -> SeedJob:
     candidate = review.candidate
     if candidate.direction == "media_to_torrent":
-        return _execute_media_to_torrent(session, review, adapter)
-    return _execute_torrent_to_client(session, review, adapter)
+        return _execute_media_to_torrent(session, review, adapter, torrent_client_id)
+    return _execute_torrent_to_client(session, review, adapter, torrent_client_id)
 
 
-def _execute_media_to_torrent(session: Session, review: MatchReview, adapter: TorrentClientAdapter) -> SeedJob:
+def _execute_media_to_torrent(
+    session: Session, review: MatchReview, adapter: TorrentClientAdapter, torrent_client_id: int | None = None
+) -> SeedJob:
     candidate = review.candidate
     media_file = review.media_file
     if media_file is None:
@@ -110,7 +125,7 @@ def _execute_media_to_torrent(session: Session, review: MatchReview, adapter: To
     session.commit()
 
     return _create_hardlink_then_seed(
-        session, seed_job, candidate, adapter, source_path, target_path, disk, target_root
+        session, seed_job, candidate, adapter, source_path, target_path, disk, target_root, torrent_client_id
     )
 
 
@@ -123,6 +138,7 @@ def _create_hardlink_then_seed(
     target_path: str,
     disk: Disk,
     target_root: str,
+    torrent_client_id: int | None = None,
 ) -> SeedJob:
     if not candidate.download_link:
         seed_job.final_status = "failed"
@@ -136,7 +152,7 @@ def _create_hardlink_then_seed(
         session.commit()
         logger.info("Hardlink creato per candidate %s: %s", candidate.id, target_path)
 
-        client_save_path = _client_visible_path(disk, target_root)
+        client_save_path = _client_visible_path(session, disk, torrent_client_id, target_root)
         info_hash = adapter.add_torrent(candidate.download_link, save_path=client_save_path, force_recheck=True)
         seed_job.info_hash = info_hash
         seed_job.torrent_added_at = datetime.now(UTC)
@@ -152,7 +168,9 @@ def _create_hardlink_then_seed(
     return seed_job
 
 
-def _execute_torrent_to_client(session: Session, review: MatchReview, adapter: TorrentClientAdapter) -> SeedJob:
+def _execute_torrent_to_client(
+    session: Session, review: MatchReview, adapter: TorrentClientAdapter, torrent_client_id: int | None = None
+) -> SeedJob:
     """Il file è già presente sul filesystem (docs/SPEC.md sezione 3): mai
     un nuovo hardlink, solo l'aggiunta al client puntando alla cartella che
     già lo contiene."""
@@ -175,7 +193,7 @@ def _execute_torrent_to_client(session: Session, review: MatchReview, adapter: T
 
     save_path_local = os.path.dirname(source_path)
     try:
-        client_save_path = _client_visible_path(disk, save_path_local)
+        client_save_path = _client_visible_path(session, disk, torrent_client_id, save_path_local)
         info_hash = adapter.add_torrent(candidate.download_link, save_path=client_save_path, force_recheck=True)
         seed_job.info_hash = info_hash
         seed_job.torrent_added_at = datetime.now(UTC)
@@ -213,7 +231,9 @@ def reconcile_seed_job(session: Session, seed_job: SeedJob, adapter: TorrentClie
     return seed_job
 
 
-def retry_seed_job(session: Session, seed_job: SeedJob, adapter: TorrentClientAdapter) -> SeedJob:
+def retry_seed_job(
+    session: Session, seed_job: SeedJob, adapter: TorrentClientAdapter, torrent_client_id: int | None = None
+) -> SeedJob:
     """Ritenta un seed_job failed. Se ha già un info_hash, il problema era
     probabilmente solo il recheck mai confermato: si reinterroga il client
     invece di ripartire da zero (che per torrent_to_client sarebbe comunque
@@ -237,4 +257,4 @@ def retry_seed_job(session: Session, seed_job: SeedJob, adapter: TorrentClientAd
         .one()
     )
     logger.info("Retry seed_job %s: riparto da zero (nessun info_hash mai ottenuto)", seed_job.id)
-    return execute_review(session, review, adapter)
+    return execute_review(session, review, adapter, torrent_client_id)

@@ -61,7 +61,6 @@ class DiskUpdateRequest(BaseModel):
     media_rel_path: str | None = None
     torrents_rel_path: str | None = None
     new_torrent_rel_path: str | None = None
-    torrent_client_root_path: str | None = None
 
 
 class DiskResponse(BaseModel):
@@ -71,7 +70,6 @@ class DiskResponse(BaseModel):
     media_rel_path: str | None
     torrents_rel_path: str | None
     new_torrent_rel_path: str | None
-    torrent_client_root_path: str | None
     st_dev: int | None
 
     @classmethod
@@ -80,8 +78,7 @@ class DiskResponse(BaseModel):
             id=disk.id, label=disk.label, root_path=disk.root_path,
             media_rel_path=disk.media_rel_path,
             torrents_rel_path=disk.torrents_rel_path,
-            new_torrent_rel_path=disk.new_torrent_rel_path,
-            torrent_client_root_path=disk.torrent_client_root_path, st_dev=disk.st_dev,
+            new_torrent_rel_path=disk.new_torrent_rel_path, st_dev=disk.st_dev,
         )
 
 
@@ -253,8 +250,6 @@ def update_disk(disk_id: int, body: DiskUpdateRequest, session: Session = Depend
         disk.torrents_rel_path = body.torrents_rel_path or None
     if body.new_torrent_rel_path is not None:
         disk.new_torrent_rel_path = body.new_torrent_rel_path or None
-    if body.torrent_client_root_path is not None:
-        disk.torrent_client_root_path = body.torrent_client_root_path or None
     session.commit()
     return DiskResponse.from_model(disk)
 

@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from app import pipeline, torrent_indexer
 from app.adapters.torrent_client.base import ClientTorrentFileInfo, ClientTorrentInfo, TorrentClientAdapter
-from app.models import ClientTorrentFile, Disk, SeedFile, TorrentClient
+from app.models import ClientTorrentFile, Disk, DiskTorrentClient, SeedFile, TorrentClient
 
 
 class FakeAdapter(TorrentClientAdapter):
@@ -20,15 +20,16 @@ class FakeAdapter(TorrentClientAdapter):
 
 
 def _make_disk_and_client(db_session, root_path, torrent_client_root_path=None):
-    disk = Disk(label="disk1", root_path=root_path, torrents_rel_path="torrents",
-                torrent_client_root_path=torrent_client_root_path)
+    disk = Disk(label="disk1", root_path=root_path, torrents_rel_path="torrents")
     db_session.add(disk)
     db_session.commit()
 
     tc = TorrentClient(label="qbt", adapter_type="qbittorrent", base_url="http://qbt")
     db_session.add(tc)
     db_session.commit()
-    tc.disks.append(disk)
+    db_session.add(DiskTorrentClient(
+        disk_id=disk.id, torrent_client_id=tc.id, torrent_client_root_path=torrent_client_root_path,
+    ))
     db_session.commit()
 
     return disk, tc
@@ -81,6 +82,46 @@ def test_resolves_seed_file_when_client_sees_different_root(db_session):
 
     ctf = db_session.query(ClientTorrentFile).one()
     assert ctf.seed_file_id == seed_file.id
+
+
+def test_two_clients_on_same_disk_can_have_different_root_paths(db_session):
+    # Il gap che ha motivato lo spostamento del campo dal disco alla
+    # coppia (disk, torrent_client): due client sullo stesso disco fisico,
+    # ciascuno con un mount interno diverso.
+    disk = Disk(label="disk1", root_path="/mnt/disk1", torrents_rel_path="torrents")
+    db_session.add(disk)
+    db_session.commit()
+    tc_a = TorrentClient(label="qbt-a", adapter_type="qbittorrent", base_url="http://qbt-a")
+    tc_b = TorrentClient(label="qbt-b", adapter_type="qbittorrent", base_url="http://qbt-b")
+    db_session.add_all([tc_a, tc_b])
+    db_session.commit()
+    db_session.add_all([
+        DiskTorrentClient(disk_id=disk.id, torrent_client_id=tc_a.id, torrent_client_root_path="/downloads-a"),
+        DiskTorrentClient(disk_id=disk.id, torrent_client_id=tc_b.id, torrent_client_root_path="/downloads-b"),
+    ])
+    db_session.commit()
+    run = pipeline.start_run(db_session, run_type="manual")
+    seed_file = _make_seed_file(db_session, disk, "torrents/Movie.2024.mkv", run)
+
+    adapter_a = FakeAdapter([
+        ClientTorrentInfo(
+            info_hash="ha", name="Movie.2024.mkv", save_path="/downloads-a/torrents", state="uploading",
+            files=[ClientTorrentFileInfo(path_in_torrent="Movie.2024.mkv", size_bytes=123)],
+        )
+    ])
+    adapter_b = FakeAdapter([
+        ClientTorrentInfo(
+            info_hash="hb", name="Movie.2024.mkv", save_path="/downloads-b/torrents", state="uploading",
+            files=[ClientTorrentFileInfo(path_in_torrent="Movie.2024.mkv", size_bytes=123)],
+        )
+    ])
+
+    torrent_indexer.index_torrent_client(db_session, tc_a, adapter_a, run)
+    torrent_indexer.index_torrent_client(db_session, tc_b, adapter_b, run)
+
+    files = db_session.query(ClientTorrentFile).all()
+    assert len(files) == 2
+    assert all(f.seed_file_id == seed_file.id for f in files)
 
 
 def test_unresolved_file_has_null_seed_file_id(db_session):

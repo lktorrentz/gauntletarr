@@ -5,7 +5,17 @@ import pytest
 
 from app import executor, pipeline
 from app.adapters.torrent_client.base import TorrentStatus
-from app.models import Candidate, Disk, MatchReview, MediaFile, MediaItem, SeedFile, Tracker
+from app.models import (
+    Candidate,
+    Disk,
+    DiskTorrentClient,
+    MatchReview,
+    MediaFile,
+    MediaItem,
+    SeedFile,
+    TorrentClient,
+    Tracker,
+)
 
 
 class FakeAdapter:
@@ -234,3 +244,62 @@ def test_reconcile_seed_job_updates_status_to_seeding(db_session, tmp_path):
     executor.reconcile_seed_job(db_session, seed_job, FakeAdapter(recheck_status="ok"))
 
     assert seed_job.final_status == "seeding"
+
+
+def test_add_torrent_uses_per_client_root_path_override(db_session, tmp_path):
+    # Il motivo per cui l'override vive su (disk, torrent_client) e non sul
+    # disco: due client diversi sullo stesso disco possono vederlo montato
+    # a path diversi nei rispettivi container — qui solo uno dei due ha un
+    # override, l'altro deve continuare a vedere il path locale invariato.
+    root, disk, tracker, item, run = _base_setup(db_session, tmp_path)
+    media_file_path = root / "media" / "movies" / "Movie.2024.mkv"
+    media_file_path.write_bytes(b"content")
+    media_file = MediaFile(
+        disk_id=disk.id, relative_path="media/movies/Movie.2024.mkv", size_bytes=7,
+        st_dev=1, inode=1, media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
+    )
+    db_session.add(media_file)
+    db_session.commit()
+    candidate = Candidate(
+        media_item_id=item.id, tracker_id=tracker.id, torrent_id_remote="1", name="Movie.2024.mkv",
+        size_bytes=7, source="catalog_search", direction="media_to_torrent", confidence=1.0,
+        download_link="https://t.example/dl/1", file_list_json='["Movie.2024.mkv"]',
+    )
+    db_session.add(candidate)
+    db_session.commit()
+
+    tc_with_override = TorrentClient(label="qbt-a", adapter_type="qbittorrent", base_url="http://a")
+    tc_without_override = TorrentClient(label="qbt-b", adapter_type="qbittorrent", base_url="http://b")
+    db_session.add_all([tc_with_override, tc_without_override])
+    db_session.commit()
+    db_session.add(DiskTorrentClient(
+        disk_id=disk.id, torrent_client_id=tc_with_override.id, torrent_client_root_path="/downloads",
+    ))
+    db_session.commit()
+
+    match_review_a = MatchReview(candidate_id=candidate.id, media_file_id=media_file.id, status="approved")
+    db_session.add(match_review_a)
+    db_session.commit()
+    adapter_a = FakeAdapter()
+    executor.execute_review(db_session, match_review_a, adapter_a, tc_with_override.id)
+    assert adapter_a.add_torrent_calls[0]["save_path"] == "/downloads/torrents"
+
+    candidate_b = Candidate(
+        media_item_id=item.id, tracker_id=tracker.id, torrent_id_remote="2", name="Movie.2024.mkv",
+        size_bytes=7, source="catalog_search", direction="torrent_to_client", confidence=1.0,
+        download_link="https://t.example/dl/2",
+    )
+    db_session.add(candidate_b)
+    db_session.commit()
+    seed_file = SeedFile(
+        disk_id=disk.id, relative_path="torrents/Movie.2024.mkv", size_bytes=7, st_dev=1, inode=2,
+        media_file_id=media_file.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
+    )
+    db_session.add(seed_file)
+    db_session.commit()
+    match_review_b = MatchReview(candidate_id=candidate_b.id, seed_file_id=seed_file.id, status="approved")
+    db_session.add(match_review_b)
+    db_session.commit()
+    adapter_b = FakeAdapter()
+    executor.execute_review(db_session, match_review_b, adapter_b, tc_without_override.id)
+    assert adapter_b.add_torrent_calls[0]["save_path"] == str(root / "torrents")

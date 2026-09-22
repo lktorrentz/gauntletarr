@@ -58,12 +58,7 @@ class Disk(Base):
     media_rel_path: Mapped[str | None]
     torrents_rel_path: Mapped[str | None]
     new_torrent_rel_path: Mapped[str | None]
-    torrent_client_root_path: Mapped[str | None]
     created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
-
-    torrent_clients: Mapped[list["TorrentClient"]] = relationship(
-        secondary="disk_torrent_client", back_populates="disks"
-    )
 
     @property
     def effective_new_torrent_rel_path(self) -> str | None:
@@ -111,14 +106,16 @@ class TorrentClient(Base):
     qui_instance_id: Mapped[int | None]
     enabled: Mapped[bool] = mapped_column(nullable=False, server_default=text("1"))
 
-    disks: Mapped[list["Disk"]] = relationship(
-        secondary="disk_torrent_client", back_populates="torrent_clients"
-    )
-
 
 class DiskTorrentClient(Base):
     """Tabella ponte: un disco può avere più client torrent abilitati
-    contemporaneamente (docs/SPEC.md §5)."""
+    contemporaneamente (docs/SPEC.md §5). torrent_client_root_path vive QUI,
+    non su Disk: client diversi associati allo stesso disco possono vederlo
+    montato a path diversi nei rispettivi container — un solo campo su Disk
+    non potrebbe rappresentarlo per più di un client alla volta.
+    Association object (non un plain secondary=) proprio per poter portare
+    questa colonna: niente collezioni di convenienza disk.torrent_clients/
+    torrent_client.disks, le query vanno dirette su questa tabella."""
 
     __tablename__ = "disk_torrent_client"
 
@@ -126,6 +123,10 @@ class DiskTorrentClient(Base):
     torrent_client_id: Mapped[int] = mapped_column(
         ForeignKey("torrent_client.id", ondelete="CASCADE"), primary_key=True
     )
+    torrent_client_root_path: Mapped[str | None]
+
+    disk: Mapped["Disk"] = relationship()
+    torrent_client: Mapped["TorrentClient"] = relationship()
 
 
 class AppSetting(Base):

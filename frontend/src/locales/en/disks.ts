@@ -18,9 +18,6 @@ export const disks = {
   'disks.newHardlinkFolderLabel': 'Folder for new hardlinks (optional)',
   'disks.newHardlinkFolderHelp':
     'Subfolder of root_path where a NEW hardlink is created (and the client\'s save_path) — never restricts the "already seeding" search, which always covers the whole seeding folder. Empty = use the seeding folder itself.',
-  'disks.torrentClientPathLabel': 'Torrent client-side path',
-  'disks.torrentClientPathHelp':
-    'Only needed if the torrent client sees this same physical disk under a different path than root_path (different mount or container) — leave empty if root_path is the same path the client uses.',
   'disks.mediaFolder': 'Media folder',
   'disks.seedingFolder': 'Seeding folder',
   'disks.seedingFolderDialogTitle': 'Seeding folder (torrents_rel_path)',

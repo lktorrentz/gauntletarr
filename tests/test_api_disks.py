@@ -53,16 +53,6 @@ def test_get_disk_not_found_returns_coded_error(client):
     assert response.json()["detail"] == {"code": "disk_not_found", "params": {"id": 999999}}
 
 
-def test_update_disk_torrent_client_root_path(client):
-    (client.scan_root / "disk1").mkdir()
-    created = client.post("/api/disks", json={"label": "Disk 1", "root_path": str(client.scan_root / "disk1")}).json()
-
-    response = client.patch(f"/api/disks/{created['id']}", json={"torrent_client_root_path": "/mnt/disk1"})
-
-    assert response.status_code == 200
-    assert response.json()["torrent_client_root_path"] == "/mnt/disk1"
-
-
 def test_update_disk_label(client):
     (client.scan_root / "disk1").mkdir()
     created = client.post("/api/disks", json={"label": "Disk 1", "root_path": str(client.scan_root / "disk1")}).json()

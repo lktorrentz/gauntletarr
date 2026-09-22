@@ -34,6 +34,8 @@ import { t } from '@/lib/i18n'
 import { selectLabel } from '@/lib/utils'
 
 type TorrentClient = Schemas['TorrentClientResponse']
+type Disk = Schemas['DiskResponse']
+type DiskAssociation = Schemas['DiskAssociationResponse']
 
 const ADAPTER_TYPES = [
   { value: 'qbittorrent', label: 'qBittorrent' },
@@ -294,11 +296,57 @@ function TestButton({ id }: { id: number }) {
   )
 }
 
-function DisksDialog({ torrentClientId, diskIds }: { torrentClientId: number; diskIds: number[] }) {
-  const [open, setOpen] = useState(false)
-  const { data: disks } = useDisks()
+function DiskAssociationRow({
+  torrentClientId,
+  disk,
+  association,
+}: {
+  torrentClientId: number
+  disk: Disk
+  association: DiskAssociation | undefined
+}) {
+  const [draft, setDraft] = useState(association?.torrent_client_root_path ?? '')
   const associate = useAssociateDisk()
   const dissociate = useDissociateDisk()
+  const enabled = association !== undefined
+
+  return (
+    <div className="grid gap-1.5 rounded border px-3 py-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm">{disk.label}</span>
+        <Switch
+          checked={enabled}
+          onCheckedChange={(checked) => {
+            if (checked) associate.mutate({ torrentClientId, diskId: disk.id, torrentClientRootPath: draft })
+            else dissociate.mutate({ torrentClientId, diskId: disk.id })
+          }}
+        />
+      </div>
+      {enabled && (
+        <div className="flex items-center gap-2">
+          <Input
+            className="h-8 font-mono text-xs"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={t('torrentClients.rootPathOverridePlaceholder')}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={associate.isPending}
+            onClick={() => associate.mutate({ torrentClientId, diskId: disk.id, torrentClientRootPath: draft })}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DisksDialog({ torrentClientId, disks: associations }: { torrentClientId: number; disks: DiskAssociation[] }) {
+  const [open, setOpen] = useState(false)
+  const { data: disks } = useDisks()
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -306,23 +354,17 @@ function DisksDialog({ torrentClientId, diskIds }: { torrentClientId: number; di
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('torrentClients.enabledDisksForClient')}</DialogTitle>
+          <DialogDescription>{t('torrentClients.rootPathOverrideHelp')}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-2">
-          {disks?.map((disk) => {
-            const enabled = diskIds.includes(disk.id)
-            return (
-              <div key={disk.id} className="flex items-center justify-between rounded border px-3 py-2">
-                <span className="text-sm">{disk.label}</span>
-                <Switch
-                  checked={enabled}
-                  onCheckedChange={(checked) => {
-                    if (checked) associate.mutate({ torrentClientId, diskId: disk.id })
-                    else dissociate.mutate({ torrentClientId, diskId: disk.id })
-                  }}
-                />
-              </div>
-            )
-          })}
+          {disks?.map((disk) => (
+            <DiskAssociationRow
+              key={disk.id}
+              torrentClientId={torrentClientId}
+              disk={disk}
+              association={associations.find((a) => a.disk_id === disk.id)}
+            />
+          ))}
           {disks?.length === 0 && <p className="text-sm text-muted-foreground">{t('torrentClients.noDisksConfigured')}</p>}
         </div>
       </DialogContent>
@@ -375,10 +417,10 @@ export function TorrentClientsSection() {
                 </TableCell>
                 <TableCell className="font-mono text-xs">{tc.base_url}</TableCell>
                 <TableCell className="flex flex-wrap gap-1">
-                  {tc.disk_ids.length === 0 && <span className="text-xs text-muted-foreground">{t('torrentClients.none')}</span>}
-                  {tc.disk_ids.map((id) => (
-                    <Badge key={id} variant="secondary">
-                      {diskLabel(id)}
+                  {tc.disks.length === 0 && <span className="text-xs text-muted-foreground">{t('torrentClients.none')}</span>}
+                  {tc.disks.map((assoc) => (
+                    <Badge key={assoc.disk_id} variant="secondary">
+                      {diskLabel(assoc.disk_id)}
                     </Badge>
                   ))}
                 </TableCell>
@@ -390,7 +432,7 @@ export function TorrentClientsSection() {
                 </TableCell>
                 <TableCell className="flex justify-end gap-1">
                   <TestButton id={tc.id} />
-                  <DisksDialog torrentClientId={tc.id} diskIds={tc.disk_ids} />
+                  <DisksDialog torrentClientId={tc.id} disks={tc.disks} />
                   <EditTorrentClientDialog tc={tc} />
                   <Button variant="ghost" size="icon-sm" title={t('common.delete')} onClick={() => deleteTorrentClient.mutate(tc.id)}>
                     <TrashIcon className="size-4" />

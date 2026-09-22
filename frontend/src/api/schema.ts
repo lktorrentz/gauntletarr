@@ -407,7 +407,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Associate Disk */
+        /**
+         * Associate Disk
+         * @description Idempotente: associare un disco già associato aggiorna il path
+         *     override invece di fallire — comodo per modificarlo senza dover prima
+         *     disassociare (docs/SPEC.md §5).
+         */
         post: operations["associate_disk_api_torrent_clients__torrent_client_id__disks__disk_id__post"];
         /** Dissociate Disk */
         delete: operations["dissociate_disk_api_torrent_clients__torrent_client_id__disks__disk_id__delete"];
@@ -835,6 +840,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AssociateDiskRequest */
+        AssociateDiskRequest: {
+            /** Torrent Client Root Path */
+            torrent_client_root_path?: string | null;
+        };
         /** AuthStatusResponse */
         AuthStatusResponse: {
             /** Configured */
@@ -922,6 +932,13 @@ export interface components {
             unmatched: number;
             last_run: components["schemas"]["LastRunSummary"] | null;
         };
+        /** DiskAssociationResponse */
+        DiskAssociationResponse: {
+            /** Disk Id */
+            disk_id: number;
+            /** Torrent Client Root Path */
+            torrent_client_root_path: string | null;
+        };
         /** DiskCreateRequest */
         DiskCreateRequest: {
             /** Label */
@@ -943,8 +960,6 @@ export interface components {
             torrents_rel_path: string | null;
             /** New Torrent Rel Path */
             new_torrent_rel_path: string | null;
-            /** Torrent Client Root Path */
-            torrent_client_root_path: string | null;
             /** St Dev */
             st_dev: number | null;
         };
@@ -958,8 +973,6 @@ export interface components {
             torrents_rel_path?: string | null;
             /** New Torrent Rel Path */
             new_torrent_rel_path?: string | null;
-            /** Torrent Client Root Path */
-            torrent_client_root_path?: string | null;
         };
         /** DupeCandidateResponse */
         DupeCandidateResponse: {
@@ -1261,8 +1274,8 @@ export interface components {
             qui_instance_id: number | null;
             /** Enabled */
             enabled: boolean;
-            /** Disk Ids */
-            disk_ids: number[];
+            /** Disks */
+            disks: components["schemas"]["DiskAssociationResponse"][];
         };
         /** TorrentClientTestResponse */
         TorrentClientTestResponse: {
@@ -2288,7 +2301,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssociateDiskRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             204: {

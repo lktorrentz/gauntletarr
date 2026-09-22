@@ -46,10 +46,19 @@ export function useTestTorrentClient() {
 export function useAssociateDisk() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ torrentClientId, diskId }: { torrentClientId: number; diskId: number }) =>
+    mutationFn: ({
+      torrentClientId,
+      diskId,
+      torrentClientRootPath,
+    }: {
+      torrentClientId: number
+      diskId: number
+      torrentClientRootPath?: string | null
+    }) =>
       unwrap(
         api.POST('/api/torrent-clients/{torrent_client_id}/disks/{disk_id}', {
           params: { path: { torrent_client_id: torrentClientId, disk_id: diskId } },
+          body: { torrent_client_root_path: torrentClientRootPath || undefined },
         }),
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['torrent-clients'] }),

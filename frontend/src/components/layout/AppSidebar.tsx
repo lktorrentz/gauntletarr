@@ -106,11 +106,11 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="none">
-      <SidebarHeader className="px-3 py-3">
-        <span className="text-sm font-semibold tracking-tight">The Media Gauntlet*rr</span>
+      <SidebarHeader className="px-4 py-4">
+        <span className="text-base font-semibold tracking-tight">The Media Gauntlet*rr</span>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="px-2 py-0.5">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -132,7 +132,7 @@ export function AppSidebar() {
             const item = group.items[0]
             const isActive = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
             return (
-              <SidebarGroup key={group.title}>
+              <SidebarGroup key={group.title} className="px-2 py-0.5">
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
@@ -150,7 +150,7 @@ export function AppSidebar() {
           const open = openGroups.has(group.title)
           return (
             <Collapsible key={group.title} open={open} onOpenChange={() => toggleGroup(group.title)}>
-              <SidebarGroup>
+              <SidebarGroup className="px-2 py-0.5">
                 <SidebarGroupLabel render={<CollapsibleTrigger className="w-full cursor-pointer justify-between" />}>
                   <span className="flex items-center gap-2">
                     <group.icon className="size-4" />

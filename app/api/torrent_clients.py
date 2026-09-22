@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app import adapter_factory
 from app.api_errors import coded_detail
 from app.deps import get_session
-from app.models import Disk, TorrentClient
+from app.models import Disk, DiskTorrentClient, TorrentClient
 
 router = APIRouter(prefix="/api/torrent-clients", tags=["torrent-clients"])
 
@@ -44,6 +44,19 @@ class TorrentClientTestResponse(BaseModel):
     error: str | None = None
 
 
+class DiskAssociationResponse(BaseModel):
+    disk_id: int
+    torrent_client_root_path: str | None
+
+
+class AssociateDiskRequest(BaseModel):
+    # Solo se questo client vede questo disco a un path diverso da
+    # disk.root_path (container/mount diverso) — vuoto/assente se vedono lo
+    # stesso path. Per (disk, client): client diversi sullo stesso disco
+    # possono avere ciascuno il proprio path, non è un campo del disco.
+    torrent_client_root_path: str | None = None
+
+
 class TorrentClientResponse(BaseModel):
     id: int
     label: str
@@ -52,14 +65,17 @@ class TorrentClientResponse(BaseModel):
     username: str | None
     qui_instance_id: int | None  # mai api_token/password: write-only, non tornano mai indietro
     enabled: bool
-    disk_ids: list[int]  # dischi abilitati per questo client (Fase 8: la UI deve poterli mostrare)
+    disks: list[DiskAssociationResponse]  # dischi abilitati per questo client, con l'eventuale path override
 
     @classmethod
-    def from_model(cls, tc: TorrentClient) -> "TorrentClientResponse":
+    def from_model(cls, tc: TorrentClient, links: list[DiskTorrentClient]) -> "TorrentClientResponse":
         return cls(
             id=tc.id, label=tc.label, adapter_type=tc.adapter_type,
             base_url=tc.base_url, username=tc.username, qui_instance_id=tc.qui_instance_id, enabled=tc.enabled,
-            disk_ids=[d.id for d in tc.disks],
+            disks=[
+                DiskAssociationResponse(disk_id=link.disk_id, torrent_client_root_path=link.torrent_client_root_path)
+                for link in links
+            ],
         )
 
 
@@ -77,9 +93,16 @@ def _get_disk_or_404(session: Session, disk_id: int) -> Disk:
     return disk
 
 
+def _links_for(session: Session, torrent_client_id: int) -> list[DiskTorrentClient]:
+    return session.query(DiskTorrentClient).filter_by(torrent_client_id=torrent_client_id).all()
+
+
 @router.get("", response_model=list[TorrentClientResponse])
 def list_torrent_clients(session: Session = Depends(get_session)):
-    return [TorrentClientResponse.from_model(tc) for tc in session.query(TorrentClient).all()]
+    return [
+        TorrentClientResponse.from_model(tc, _links_for(session, tc.id))
+        for tc in session.query(TorrentClient).all()
+    ]
 
 
 @router.post("", response_model=TorrentClientResponse, status_code=201)
@@ -99,7 +122,7 @@ def create_torrent_client(body: TorrentClientCreateRequest, session: Session = D
     )
     session.add(tc)
     session.commit()
-    return TorrentClientResponse.from_model(tc)
+    return TorrentClientResponse.from_model(tc, [])
 
 
 @router.post("/{torrent_client_id}/test", response_model=TorrentClientTestResponse)
@@ -137,7 +160,7 @@ def update_torrent_client(
     if body.enabled is not None:
         tc.enabled = body.enabled
     session.commit()
-    return TorrentClientResponse.from_model(tc)
+    return TorrentClientResponse.from_model(tc, _links_for(session, tc.id))
 
 
 @router.delete("/{torrent_client_id}", status_code=204)
@@ -148,18 +171,30 @@ def delete_torrent_client(torrent_client_id: int, session: Session = Depends(get
 
 
 @router.post("/{torrent_client_id}/disks/{disk_id}", status_code=204)
-def associate_disk(torrent_client_id: int, disk_id: int, session: Session = Depends(get_session)):
-    tc = _get_torrent_client_or_404(session, torrent_client_id)
-    disk = _get_disk_or_404(session, disk_id)
-    if disk not in tc.disks:
-        tc.disks.append(disk)
-        session.commit()
+def associate_disk(
+    torrent_client_id: int, disk_id: int, body: AssociateDiskRequest = AssociateDiskRequest(),
+    session: Session = Depends(get_session),
+):
+    """Idempotente: associare un disco già associato aggiorna il path
+    override invece di fallire — comodo per modificarlo senza dover prima
+    disassociare (docs/SPEC.md §5)."""
+    _get_torrent_client_or_404(session, torrent_client_id)
+    _get_disk_or_404(session, disk_id)
+    link = (
+        session.query(DiskTorrentClient)
+        .filter_by(disk_id=disk_id, torrent_client_id=torrent_client_id)
+        .one_or_none()
+    )
+    if link is None:
+        link = DiskTorrentClient(disk_id=disk_id, torrent_client_id=torrent_client_id)
+        session.add(link)
+    link.torrent_client_root_path = body.torrent_client_root_path or None
+    session.commit()
 
 
 @router.delete("/{torrent_client_id}/disks/{disk_id}", status_code=204)
 def dissociate_disk(torrent_client_id: int, disk_id: int, session: Session = Depends(get_session)):
-    tc = _get_torrent_client_or_404(session, torrent_client_id)
-    disk = _get_disk_or_404(session, disk_id)
-    if disk in tc.disks:
-        tc.disks.remove(disk)
-        session.commit()
+    _get_torrent_client_or_404(session, torrent_client_id)
+    _get_disk_or_404(session, disk_id)
+    session.query(DiskTorrentClient).filter_by(disk_id=disk_id, torrent_client_id=torrent_client_id).delete()
+    session.commit()

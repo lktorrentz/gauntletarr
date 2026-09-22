@@ -24,6 +24,10 @@ export const torrentClients = {
   'torrentClients.connectionFailed': 'Connection failed.',
   'torrentClients.enabledDisks': 'Enabled disks',
   'torrentClients.enabledDisksForClient': 'Disks enabled for this client',
+  'torrentClients.rootPathOverrideHelp':
+    "Only if this client sees a disk at a different path than root_path (different container/mount) — "
+    + 'each client can have its own, since two clients on the same disk may see it mounted differently.',
+  'torrentClients.rootPathOverridePlaceholder': '/mnt/disk1',
   'torrentClients.noDisksConfigured': 'No disks configured.',
   'torrentClients.disks': 'Disks',
   'torrentClients.enabled': 'Enabled',

@@ -8,7 +8,7 @@ import os
 
 from app import library, pipeline, scanner, torrent_indexer
 from app.adapters.torrent_client.base import ClientTorrentFileInfo, ClientTorrentInfo, TorrentClientAdapter
-from app.models import Disk, TorrentClient
+from app.models import Disk, DiskTorrentClient, TorrentClient
 
 
 class FakeAdapter(TorrentClientAdapter):
@@ -37,7 +37,7 @@ def test_four_state_combinations(db_session, tmp_path):
     tc = TorrentClient(label="qbt", adapter_type="qbittorrent", base_url="http://qbt")
     db_session.add(tc)
     db_session.commit()
-    tc.disks.append(disk)
+    db_session.add(DiskTorrentClient(disk_id=disk.id, torrent_client_id=tc.id))
     db_session.commit()
 
     # 1) hardlinkato + tracciato -> seeding

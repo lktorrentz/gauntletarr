@@ -24,11 +24,6 @@ CREATE TABLE IF NOT EXISTS disk (
                                                          -- Does NOT narrow the "already seeding" search, which
                                                          -- always stays on the whole torrents_rel_path. If
                                                          -- null, torrents_rel_path is used unchanged.
-    torrent_client_root_path    TEXT,                   -- root of THIS disk as seen by the torrent client, if
-                                                         -- different from root_path (different container/mount
-                                                         -- for the same physical disk) — null if the client and
-                                                         -- Gauntletarr see the same path (common case, same
-                                                         -- host or same mount)
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -72,10 +67,17 @@ CREATE TABLE IF NOT EXISTS torrent_client (
 );
 
 -- A disk can have several clients enabled at once (SPEC.md §5) — needs a
--- bridge table, not a single FK on disk.
+-- bridge table, not a single FK on disk. torrent_client_root_path lives
+-- here, per (disk, client) pair, not on disk: different clients associated
+-- with the same disk can see it mounted at different paths in their own
+-- container — a single column on disk could not represent that for more
+-- than one client at a time.
 CREATE TABLE IF NOT EXISTS disk_torrent_client (
-    disk_id           INTEGER NOT NULL REFERENCES disk(id) ON DELETE CASCADE,
-    torrent_client_id INTEGER NOT NULL REFERENCES torrent_client(id) ON DELETE CASCADE,
+    disk_id                    INTEGER NOT NULL REFERENCES disk(id) ON DELETE CASCADE,
+    torrent_client_id          INTEGER NOT NULL REFERENCES torrent_client(id) ON DELETE CASCADE,
+    torrent_client_root_path   TEXT,    -- root of THIS disk as seen by THIS client, if different from
+                                         -- disk.root_path — null if this client and Gauntletarr see the
+                                         -- same path (common case, same host or same mount)
     PRIMARY KEY (disk_id, torrent_client_id)
 );
 

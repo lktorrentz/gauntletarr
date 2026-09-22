@@ -70,13 +70,43 @@ def test_associate_and_dissociate_disk(client):
 
     associate = client.post(f"/api/torrent-clients/{tc_id}/disks/{disk_id}")
     assert associate.status_code == 204
-    assert client.get("/api/torrent-clients").json()[0]["disk_ids"] == [disk_id]
+    disks = client.get("/api/torrent-clients").json()[0]["disks"]
+    assert disks == [{"disk_id": disk_id, "torrent_client_root_path": None}]
 
     # idempotente: associare due volte non deve fallire né duplicare
     again = client.post(f"/api/torrent-clients/{tc_id}/disks/{disk_id}")
     assert again.status_code == 204
-    assert client.get("/api/torrent-clients").json()[0]["disk_ids"] == [disk_id]
+    disks = client.get("/api/torrent-clients").json()[0]["disks"]
+    assert disks == [{"disk_id": disk_id, "torrent_client_root_path": None}]
 
     dissociate = client.delete(f"/api/torrent-clients/{tc_id}/disks/{disk_id}")
     assert dissociate.status_code == 204
-    assert client.get("/api/torrent-clients").json()[0]["disk_ids"] == []
+    assert client.get("/api/torrent-clients").json()[0]["disks"] == []
+
+
+def test_associate_disk_with_root_path_override(client):
+    # Il motivo per cui l'override vive sulla coppia (disk, client) e non sul
+    # disco: due client diversi sullo stesso disco possono vederlo montato
+    # a path diversi nei rispettivi container.
+    (client.scan_root / "disk1").mkdir()
+    disk_id = client.post(
+        "/api/disks", json={"label": "Disk 1", "root_path": str(client.scan_root / "disk1")}
+    ).json()["id"]
+    tc_a = client.post(
+        "/api/torrent-clients", json={"label": "qbt-a", "adapter_type": "qbittorrent", "base_url": "http://a"}
+    ).json()["id"]
+    tc_b = client.post(
+        "/api/torrent-clients", json={"label": "qbt-b", "adapter_type": "qbittorrent", "base_url": "http://b"}
+    ).json()["id"]
+
+    client.post(f"/api/torrent-clients/{tc_a}/disks/{disk_id}", json={"torrent_client_root_path": "/downloads-a"})
+    client.post(f"/api/torrent-clients/{tc_b}/disks/{disk_id}", json={"torrent_client_root_path": "/downloads-b"})
+
+    by_id = {tc["id"]: tc["disks"] for tc in client.get("/api/torrent-clients").json()}
+    assert by_id[tc_a] == [{"disk_id": disk_id, "torrent_client_root_path": "/downloads-a"}]
+    assert by_id[tc_b] == [{"disk_id": disk_id, "torrent_client_root_path": "/downloads-b"}]
+
+    # re-associare aggiorna l'override invece di fallire
+    client.post(f"/api/torrent-clients/{tc_a}/disks/{disk_id}", json={"torrent_client_root_path": "/downloads-a2"})
+    updated = next(tc for tc in client.get("/api/torrent-clients").json() if tc["id"] == tc_a)
+    assert updated["disks"] == [{"disk_id": disk_id, "torrent_client_root_path": "/downloads-a2"}]

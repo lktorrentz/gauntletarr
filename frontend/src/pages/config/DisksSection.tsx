@@ -165,7 +165,6 @@ function EditDiskDialog({ disk }: { disk: Disk }) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState(disk.label)
   const [newTorrentRelPath, setNewTorrentRelPath] = useState(disk.new_torrent_rel_path ?? '')
-  const [torrentClientRootPath, setTorrentClientRootPath] = useState(disk.torrent_client_root_path ?? '')
   const updateDisk = useUpdateDisk()
 
   function submit() {
@@ -175,7 +174,6 @@ function EditDiskDialog({ disk }: { disk: Disk }) {
         body: {
           label,
           new_torrent_rel_path: newTorrentRelPath || undefined,
-          torrent_client_root_path: torrentClientRootPath || undefined,
         },
       },
       {
@@ -211,16 +209,6 @@ function EditDiskDialog({ disk }: { disk: Disk }) {
               placeholder="torrents/new"
             />
             <p className="text-xs text-muted-foreground">{t('disks.newHardlinkFolderHelp')}</p>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="disk-edit-client-root">{t('disks.torrentClientPathLabel')}</Label>
-            <Input
-              id="disk-edit-client-root"
-              value={torrentClientRootPath}
-              onChange={(e) => setTorrentClientRootPath(e.target.value)}
-              placeholder="/mnt/disk1"
-            />
-            <p className="text-xs text-muted-foreground">{t('disks.torrentClientPathHelp')}</p>
           </div>
         </div>
         <DialogFooter>

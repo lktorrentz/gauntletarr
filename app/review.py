@@ -106,19 +106,23 @@ def create_review_for_seed_file(
 
 
 def _build_torrent_client_adapter_or_none(session: Session):
+    """Ritorna (adapter, torrent_client_id) — l'id serve a executor.py per
+    risolvere l'eventuale path override specifico di QUESTO client per il
+    disco coinvolto (disk_torrent_client.torrent_client_root_path, non un
+    campo del disco). (None, None) se nessun client abilitato."""
     torrent_client_row = session.query(TorrentClient).filter_by(enabled=True).first()
     if torrent_client_row is None:
         logger.info("Nessun client torrent configurato: esecuzione rimandata")
-        return None
-    return build_torrent_client_adapter(torrent_client_row)
+        return None, None
+    return build_torrent_client_adapter(torrent_client_row), torrent_client_row.id
 
 
 def _try_execute(session: Session, review: MatchReview) -> None:
-    adapter = _build_torrent_client_adapter_or_none(session)
+    adapter, torrent_client_id = _build_torrent_client_adapter_or_none(session)
     if adapter is None:
         return
     try:
-        execute_review(session, review, adapter)
+        execute_review(session, review, adapter, torrent_client_id)
     except ExecutionError:
         logger.exception(
             "Esecuzione immediata fallita per review %s (visibile tra le esecuzioni fallite, ritenta da lì)",
@@ -189,10 +193,10 @@ def list_failed_seed_jobs(session: Session) -> list[SeedJob]:
 
 
 def retry_failed(session: Session, seed_job: SeedJob) -> SeedJob:
-    adapter = _build_torrent_client_adapter_or_none(session)
+    adapter, torrent_client_id = _build_torrent_client_adapter_or_none(session)
     if adapter is None:
         raise ExecutionError("Nessun client torrent configurato")
-    return retry_seed_job(session, seed_job, adapter)
+    return retry_seed_job(session, seed_job, adapter, torrent_client_id)
 
 
 def retry_all_failed(session: Session) -> dict[str, int]:
@@ -218,7 +222,7 @@ def reconcile_pending_seed_jobs(session: Session) -> dict[str, int]:
     'in_progress' con un info_hash già noto — una sola interrogazione di
     stato per client (mai un hardlink o un add_torrent), quindi non viola
     la regola "nessuna esecuzione senza conferma umana"."""
-    adapter = _build_torrent_client_adapter_or_none(session)
+    adapter, _torrent_client_id = _build_torrent_client_adapter_or_none(session)
     if adapter is None:
         return {"reconciled": 0, "errors": 0}
 
