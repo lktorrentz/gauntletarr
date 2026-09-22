@@ -19,6 +19,8 @@ def db_session(tmp_path, monkeypatch):
 
     engine = db_module.make_engine(str(tmp_path / "test.db"))
     db_module.migrate_legacy_media_path_id(engine)
+    db_module.repair_dangling_media_file_legacy_fk(engine)
+    db_module.migrate_legacy_run_log_phase_check(engine)
     db_module.apply_schema(engine)
     db_module.migrate_schema(engine)
     session_factory = db_module.make_session_factory(engine)

@@ -29,7 +29,25 @@ colonne, mai rimuoverle) — ogni scan da allora falliva silenziosamente
 al primo INSERT in media_file, perché il codice attuale non valorizza
 più quella colonna (bug riportato dall'utente sulla sua istanza Unraid
 reale, con dati che NON si possono semplicemente ricreare da zero come
-si è sempre fatto finora per un'istanza di sviluppo)."""
+si è sempre fatto finora per un'istanza di sviluppo).
+
+ATTENZIONE per chiunque tocchi ancora questa funzione: la prima versione
+faceva ALTER TABLE media_file RENAME TO media_file_legacy prima di
+ricrearla. Verificato con un test diretto (dopo un secondo report
+dell'utente, "no such table: media_file_legacy" stavolta su un INSERT in
+seed_file): SQLite riscrive le REFERENCES di OGNI altra tabella verso
+quella rinominata IN OGNI CASO, non solo con le foreign key attive — la
+PRAGMA foreign_keys=OFF non previene affatto questo comportamento, solo
+la sua enforcement sulle scritture. Dopo il DROP TABLE finale della
+tabella rinominata, ogni tabella con una FK verso media_file(id)
+(seed_file/match_review/seed_job/upload_job) restava agganciata per
+sempre a un nome ormai inesistente. La versione qui sotto non rinomina
+MAI la tabella già referenziata: crea la forma corretta sotto un nome
+temporaneo, copia i dati, fa DROP (non RENAME) dell'originale, e solo
+allora rinomina il nome temporaneo in quello finale — un RENAME verso un
+nome che nessuno referenzia ancora non fa scattare alcuna riscrittura.
+repair_dangling_media_file_legacy_fk() ripara chi ha già subito il danno
+della prima versione."""
 
 import logging
 from pathlib import Path
@@ -63,17 +81,15 @@ def migrate_legacy_media_path_id(engine: Engine) -> None:
     """Ricostruisce media_file senza la colonna legacy media_path_id, se
     presente — vedi la nota in cima al file. Va chiamata PRIMA di
     apply_schema(): quest'ultima non ricrea mai una tabella già esistente,
-    quindi deve trovare media_file già rinominata via ALTER TABLE ... RENAME
-    per poter ricreare quella corretta con CREATE TABLE IF NOT EXISTS.
+    quindi deve trovare media_file già nella forma corretta (o assente) per
+    poterla lasciare stare.
 
-    PRAGMA foreign_keys=OFF per tutta la durata: SQLite riscrive
-    automaticamente le REFERENCES di altre tabelle verso una tabella
-    rinominata SOLO quando le foreign key sono attive. Con le FK spente, il
-    RENAME sotto lascia intatto il testo "REFERENCES media_file(id)" in
-    seed_file/match_review/upload_job, che dopo la ricostruzione torna a
-    puntare correttamente alla nuova media_file (stessi id delle righe
-    originali, copiati esplicitamente) — nessuna di quelle tabelle va
-    toccata."""
+    Mai un RENAME sulla media_file originale (vedi il warning in cima al
+    file sul perché) — si crea invece media_file__rebuild già nella forma
+    giusta, si copiano i dati (stessi id delle righe originali: le FK di
+    seed_file/match_review/seed_job/upload_job restano valide), si fa DROP
+    (non RENAME) dell'originale, e solo allora si rinomina
+    media_file__rebuild in media_file."""
     inspector = inspect(engine)
     if not inspector.has_table("media_file"):
         return
@@ -89,8 +105,7 @@ def migrate_legacy_media_path_id(engine: Engine) -> None:
     try:
         raw_conn.executescript("""
             PRAGMA foreign_keys=OFF;
-            ALTER TABLE media_file RENAME TO media_file_legacy;
-            CREATE TABLE media_file (
+            CREATE TABLE media_file__rebuild (
                 id                      INTEGER PRIMARY KEY,
                 disk_id                 INTEGER NOT NULL REFERENCES disk(id) ON DELETE CASCADE,
                 relative_path           TEXT NOT NULL,
@@ -106,7 +121,7 @@ def migrate_legacy_media_path_id(engine: Engine) -> None:
                 last_seen_at            TIMESTAMP NOT NULL,
                 UNIQUE(disk_id, relative_path)
             );
-            INSERT INTO media_file (
+            INSERT INTO media_file__rebuild (
                 id, disk_id, relative_path, size_bytes, st_dev, inode, nlink,
                 content_hash, media_item_id, resolver_source, mediainfo_unique_id,
                 last_scan_id, last_seen_at
@@ -115,13 +130,242 @@ def migrate_legacy_media_path_id(engine: Engine) -> None:
                 id, disk_id, relative_path, size_bytes, st_dev, inode, nlink,
                 content_hash, media_item_id, resolver_source, mediainfo_unique_id,
                 last_scan_id, last_seen_at
-            FROM media_file_legacy;
-            DROP TABLE media_file_legacy;
+            FROM media_file;
+            DROP TABLE media_file;
+            ALTER TABLE media_file__rebuild RENAME TO media_file;
             DROP TABLE IF EXISTS media_path;
             CREATE INDEX IF NOT EXISTS idx_media_file_media_item_id ON media_file(media_item_id);
             CREATE INDEX IF NOT EXISTS idx_media_file_hardlink ON media_file(disk_id, st_dev, inode);
             PRAGMA foreign_keys=ON;
         """)
+        raw_conn.commit()
+    finally:
+        raw_conn.close()
+
+
+# Le uniche 4 tabelle con una FK diretta verso media_file(id) — vedi
+# `grep -n "REFERENCES media_file(id)" docs/schema.sql`. Se schema.sql
+# cambia queste tabelle, va tenuta manualmente in sync anche questa (stessa
+# convenzione di app/models.py rispetto a schema.sql).
+_LEGACY_MEDIA_FILE_FK_REBUILD: dict[str, tuple[str, list[str]]] = {
+    "seed_file": (
+        """
+        CREATE TABLE seed_file__rebuild (
+            id              INTEGER PRIMARY KEY,
+            disk_id         INTEGER NOT NULL REFERENCES disk(id) ON DELETE CASCADE,
+            relative_path   TEXT NOT NULL,
+            size_bytes      INTEGER NOT NULL,
+            st_dev          INTEGER NOT NULL,
+            inode           INTEGER NOT NULL,
+            media_file_id   INTEGER REFERENCES media_file(id) ON DELETE SET NULL,
+            last_scan_id    INTEGER NOT NULL REFERENCES run_log(id),
+            last_seen_at    TIMESTAMP NOT NULL,
+            UNIQUE(disk_id, relative_path)
+        )
+        """,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_seed_file_media_file_id ON seed_file(media_file_id)",
+            "CREATE INDEX IF NOT EXISTS idx_seed_file_hardlink ON seed_file(disk_id, st_dev, inode)",
+        ],
+    ),
+    "match_review": (
+        """
+        CREATE TABLE match_review__rebuild (
+            id              INTEGER PRIMARY KEY,
+            candidate_id    INTEGER NOT NULL REFERENCES candidate(id) ON DELETE CASCADE,
+            media_file_id   INTEGER REFERENCES media_file(id) ON DELETE CASCADE,
+            seed_file_id    INTEGER REFERENCES seed_file(id) ON DELETE CASCADE,
+            status          TEXT NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending','approved','rejected','auto_approved')),
+            decided_by      TEXT,
+            decided_at      TIMESTAMP
+        )
+        """,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_match_review_candidate_id ON match_review(candidate_id)",
+            "CREATE INDEX IF NOT EXISTS idx_match_review_media_file_id ON match_review(media_file_id)",
+            "CREATE INDEX IF NOT EXISTS idx_match_review_seed_file_id ON match_review(seed_file_id)",
+        ],
+    ),
+    "seed_job": (
+        """
+        CREATE TABLE seed_job__rebuild (
+            id                          INTEGER PRIMARY KEY,
+            candidate_id                INTEGER NOT NULL REFERENCES candidate(id) ON DELETE CASCADE,
+            source_media_file_id        INTEGER REFERENCES media_file(id),
+            source_seed_file_id         INTEGER REFERENCES seed_file(id),
+            result_seed_file_id         INTEGER REFERENCES seed_file(id),
+            result_client_torrent_id    INTEGER REFERENCES client_torrent(id),
+            info_hash                   TEXT,
+            hardlink_created_at         TIMESTAMP,
+            torrent_added_at            TIMESTAMP,
+            recheck_status               TEXT CHECK (recheck_status IN ('pending','ok','failed')),
+            final_status                 TEXT NOT NULL DEFAULT 'in_progress'
+                                         CHECK (final_status IN ('in_progress','seeding','failed','rolled_back')),
+            error_message                TEXT
+        )
+        """,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_seed_job_candidate_id ON seed_job(candidate_id)",
+            "CREATE INDEX IF NOT EXISTS idx_seed_job_source_media_file_id ON seed_job(source_media_file_id)",
+            "CREATE INDEX IF NOT EXISTS idx_seed_job_source_seed_file_id ON seed_job(source_seed_file_id)",
+        ],
+    ),
+    "upload_job": (
+        """
+        CREATE TABLE upload_job__rebuild (
+            id                      INTEGER PRIMARY KEY,
+            media_file_id           INTEGER REFERENCES media_file(id),
+            source_path             TEXT NOT NULL,
+            tracker_id              INTEGER NOT NULL REFERENCES tracker(id),
+            status                  TEXT NOT NULL DEFAULT 'draft'
+                                    CHECK (status IN ('draft','ready','uploading','uploaded','failed')),
+            torrent_path            TEXT,
+            info_hash               TEXT,
+            mediainfo_text           TEXT,
+            screenshot_urls_json      TEXT,
+            description_rendered      TEXT,
+            tmdb_id                  INTEGER,
+            imdb_id                  TEXT,
+            category_id               INTEGER,
+            type_id                   INTEGER,
+            resolution_id              INTEGER,
+            torrent_id_remote          TEXT,
+            error_message               TEXT,
+            created_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_upload_job_tracker_id ON upload_job(tracker_id)",
+        ],
+    ),
+}
+
+
+def repair_dangling_media_file_legacy_fk(engine: Engine) -> None:
+    """Ripara il danno lasciato da una versione precedente e sbagliata di
+    migrate_legacy_media_path_id() — vedi il warning in cima al file.
+    Rileva ogni tabella la cui definizione (sqlite_master.sql) contiene
+    ancora il testo "media_file_legacy" e la ricostruisce puntando di
+    nuovo a "media_file", con la stessa tecnica sicura (mai un RENAME
+    sulla tabella già referenziata da qualcun altro — crea la forma
+    corretta sotto un nome temporaneo, copia i dati, DROP dell'originale,
+    poi rinomina). Va chiamata subito dopo migrate_legacy_media_path_id(),
+    prima di apply_schema(). No-op se non c'è nulla da riparare
+    (installazioni mai toccate dal bug precedente, o già riparate)."""
+    if not inspect(engine).has_table("media_file"):
+        return
+
+    raw_conn = engine.raw_connection()
+    try:
+        cursor = raw_conn.cursor()
+        found = {
+            row[0]
+            for row in cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE '%media_file_legacy%'"
+            ).fetchall()
+        }
+        broken_tables = [name for name in _LEGACY_MEDIA_FILE_FK_REBUILD if name in found]
+        unexpected = found - set(broken_tables)
+        if unexpected:
+            logger.warning(
+                "Riferimenti a media_file_legacy trovati in tabelle non previste, ignorate: %s",
+                sorted(unexpected),
+            )
+        if not broken_tables:
+            return
+
+        logger.warning(
+            "Riparo %d tabell%s con una FK ancora agganciata a media_file_legacy: %s",
+            len(broken_tables), "a" if len(broken_tables) == 1 else "e", broken_tables,
+        )
+        cursor.execute("PRAGMA foreign_keys=OFF")
+        for table in broken_tables:
+            create_sql, index_sqls = _LEGACY_MEDIA_FILE_FK_REBUILD[table]
+            columns = [col[1] for col in cursor.execute(f'PRAGMA table_info("{table}")').fetchall()]
+            column_list = ", ".join(f'"{c}"' for c in columns)
+            cursor.execute(create_sql)
+            cursor.execute(f'INSERT INTO "{table}__rebuild" ({column_list}) SELECT {column_list} FROM "{table}"')
+            cursor.execute(f'DROP TABLE "{table}"')
+            cursor.execute(f'ALTER TABLE "{table}__rebuild" RENAME TO "{table}"')
+            for index_sql in index_sqls:
+                cursor.execute(index_sql)
+        cursor.execute("PRAGMA foreign_keys=ON")
+        raw_conn.commit()
+    finally:
+        raw_conn.close()
+
+
+def migrate_legacy_run_log_phase_check(engine: Engine) -> None:
+    """Stesso problema di migrate_legacy_media_path_id(), stavolta sul CHECK
+    di run_log.current_phase: il commit 1149b94 (fase corrente in questa
+    sessione) ha esteso i valori ammessi da ('scanning','matching',
+    'executing') a includere anche 'resolving'/'indexing'/'reconciling",
+    per riflettere le fasi reali della pipeline (app/pipeline.py). Un DB
+    creato prima di quel commit (come quello pre-5fd42fc dell'utente)
+    conserva il vecchio CHECK più stretto — apply_schema()/migrate_schema()
+    non lo toccano per lo stesso motivo di sempre (CREATE TABLE IF NOT
+    EXISTS non tocca una tabella già esistente, e un ALTER TABLE non può
+    modificare un CHECK in SQLite). Scoperto verificando dal vivo la
+    migrazione precedente: con media_file/seed_file finalmente
+    funzionanti, la primissima transizione di fase successiva a
+    "scanning" (_set_phase(session, run, "resolving")) avrebbe fatto
+    fallire di nuovo la run, stavolta con
+    "CHECK constraint failed: current_phase IN (...)" — mai arrivato a
+    riprodursi sull'istanza reale dell'utente solo perché lo scan falliva
+    prima ancora di arrivarci.
+
+    Stessa tecnica sicura delle altre due migrazioni sopra: mai un RENAME
+    sulla run_log originale (referenziata da media_file/seed_file/
+    client_torrent_file.last_scan_id) — si crea la forma corretta sotto un
+    nome temporaneo, si copiano i dati con gli id originali, si fa DROP
+    (non RENAME) dell'originale, poi si rinomina."""
+    inspector = inspect(engine)
+    if not inspector.has_table("run_log"):
+        return
+    with engine.connect() as conn:
+        current_sql = conn.execute(
+            text("SELECT sql FROM sqlite_master WHERE type='table' AND name='run_log'")
+        ).scalar()
+    if current_sql is None or "reconciling" in current_sql:
+        return  # già nella forma corrente
+
+    logger.warning(
+        "Migrazione legacy: run_log.current_phase esteso a 'resolving'/'indexing'/'reconciling' "
+        "(pre-1149b94), dati preservati con gli stessi id"
+    )
+    raw_conn = engine.raw_connection()
+    try:
+        cursor = raw_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=OFF")
+        source_columns = [row[1] for row in cursor.execute("PRAGMA table_info(run_log)").fetchall()]
+        cursor.execute("""
+            CREATE TABLE run_log__rebuild (
+                id                  INTEGER PRIMARY KEY,
+                run_type            TEXT NOT NULL CHECK (run_type IN ('scheduled','manual','bulk_import')),
+                started_at          TIMESTAMP NOT NULL,
+                finished_at         TIMESTAMP,
+                current_phase       TEXT CHECK (current_phase IN
+                                        ('scanning','resolving','indexing','matching','executing','reconciling')),
+                phase_total         INTEGER,
+                phase_done          INTEGER,
+                items_total         INTEGER,
+                items_scanned       INTEGER DEFAULT 0,
+                matches_found        INTEGER DEFAULT 0,
+                auto_executed         INTEGER DEFAULT 0,
+                pending_review       INTEGER DEFAULT 0,
+                orphan_torrent_count  INTEGER DEFAULT 0,
+                ignored_count         INTEGER DEFAULT 0,
+                health_snapshot       REAL,
+                errors                INTEGER DEFAULT 0,
+                last_error            TEXT
+            )
+        """)
+        column_list = ", ".join(f'"{c}"' for c in source_columns)
+        cursor.execute(f'INSERT INTO run_log__rebuild ({column_list}) SELECT {column_list} FROM run_log')
+        cursor.execute("DROP TABLE run_log")
+        cursor.execute("ALTER TABLE run_log__rebuild RENAME TO run_log")
+        cursor.execute("PRAGMA foreign_keys=ON")
         raw_conn.commit()
     finally:
         raw_conn.close()
