@@ -9,6 +9,9 @@ import { TorrentClientsPage } from '@/pages/config/TorrentClientsPage'
 import { TrackersPage } from '@/pages/config/TrackersPage'
 import { SettingsPage } from '@/pages/config/SettingsPage'
 import { RunsPage } from '@/pages/reseeding/RunsPage'
+import { TreeViewPage } from '@/pages/library/TreeViewPage'
+import { GridViewPage } from '@/pages/library/GridViewPage'
+import { OrphanedPage } from '@/pages/library/OrphanedPage'
 import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
 
 // Ogni voce di navigazione (NAV_DASHBOARD + NAV_GROUPS) diventa una route:
@@ -18,6 +21,9 @@ import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
 // elenchi di route da tenere sincronizzati a mano.
 const overrides: Record<string, ReactNode> = {
   [NAV_DASHBOARD.to]: <DashboardPage />,
+  '/library/tree': <TreeViewPage />,
+  '/library/grid': <GridViewPage />,
+  '/library/orphaned': <OrphanedPage />,
   '/reseeding/runs': <RunsPage />,
   '/config/disks': <DisksPage />,
   '/config/torrent-clients': <TorrentClientsPage />,
