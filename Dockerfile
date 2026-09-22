@@ -1,7 +1,7 @@
 # Stage 1: build del frontend (Fase 8, docs/SPEC.md §10-11) - Node resta
 # solo in questo stage, mai nell'immagine finale (nessun runtime Node in
 # produzione, solo i file statici prodotti da `vite build`).
-FROM node:20-slim AS frontend-build
+FROM node:22-slim AS frontend-build
 
 WORKDIR /frontend
 
