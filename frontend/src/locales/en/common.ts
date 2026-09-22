@@ -12,4 +12,6 @@ export const common = {
   'common.loading': 'Loading…',
   'common.saveFailed': 'Save failed: {message}',
   'common.leaveBlank': 'Leave blank to keep it unchanged',
+  'common.runNow': 'Run now',
+  'common.runFailed': 'Run failed: {message}',
 } as const

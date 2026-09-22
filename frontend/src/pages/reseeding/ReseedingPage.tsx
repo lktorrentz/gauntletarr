@@ -124,13 +124,13 @@ function RunsCard() {
         <Button
           onClick={() =>
             triggerRun.mutate(undefined, {
-              onError: (error) => toast.error(t('reseeding.runFailed', { message: error.message })),
+              onError: (error) => toast.error(t('common.runFailed', { message: error.message })),
             })
           }
           disabled={triggerRun.isPending}
         >
           <PlayIcon className="size-4" />
-          {t('reseeding.runNow')}
+          {t('common.runNow')}
         </Button>
       </CardHeader>
       <CardContent>

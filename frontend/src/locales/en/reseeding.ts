@@ -7,8 +7,6 @@ export const reseeding = {
   'reseeding.reject': 'Reject',
   'reseeding.rejectFailed': 'Reject failed: {message}',
   'reseeding.noPendingReviews': 'No pending reviews.',
-  'reseeding.runNow': 'Run now',
-  'reseeding.runFailed': 'Run failed: {message}',
   'reseeding.type': 'Type',
   'reseeding.started': 'Started',
   'reseeding.phase': 'Phase',
