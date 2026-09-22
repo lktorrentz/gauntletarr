@@ -6,8 +6,8 @@
 // per tutti e quattro i loghi, non solo per compensare quel caso.
 export function ServiceLogo({ src, alt }: { src: string; alt: string }) {
   return (
-    <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-border">
+    <div className="flex size-7 shrink-0 items-center justify-center">
       <img src={src} alt={alt} className="size-full object-contain" />
     </div>
-  )
+  );
 }

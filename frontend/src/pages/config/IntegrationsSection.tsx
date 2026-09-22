@@ -10,7 +10,9 @@ import {
   useDeleteSonarrInstance,
   useRadarrInstances,
   useSonarrInstances,
+  useTestRadarrConnection,
   useTestRadarrInstance,
+  useTestSonarrConnection,
   useTestSonarrInstance,
   useUpdateRadarrInstance,
   useUpdateSonarrInstance,
@@ -69,10 +71,40 @@ interface ArrInstanceUpdateBody {
   basic_auth_password?: string
 }
 
+interface ArrConnectionTestBody {
+  base_url: string
+  api_key: string
+  timeout_seconds?: number
+  basic_auth_username?: string
+  basic_auth_password?: string
+}
+
 interface ArrInstanceTestResult {
   status: string
   version?: string | null
   error?: string | null
+}
+
+function toastTestResult(result: ArrInstanceTestResult) {
+  if (result.status === 'ok') toast.success(t('integrations.connectedSuccess', { version: result.version ?? '?' }))
+  else toast.error(t('integrations.connectionFailed', { message: result.error ?? '' }))
+}
+
+function TestConnectionButton({
+  onTest,
+  isPending,
+  disabled,
+}: {
+  onTest: () => void
+  isPending: boolean
+  disabled?: boolean
+}) {
+  return (
+    <Button type="button" variant="outline" onClick={onTest} disabled={disabled || isPending}>
+      <ZapIcon className="size-4" />
+      {t('integrations.testConnection')}
+    </Button>
+  )
 }
 
 function BasicAuthFields({
@@ -123,11 +155,15 @@ function BasicAuthFields({
 }
 
 function AddArrInstanceDialog({
+  serviceName,
   urlPlaceholder,
   createMutation,
+  testConnectionMutation,
 }: {
+  serviceName: string
   urlPlaceholder: string
   createMutation: UseMutationResult<ArrInstance, Error, ArrInstanceWriteBody>
+  testConnectionMutation: UseMutationResult<ArrInstanceTestResult, Error, ArrConnectionTestBody>
 }) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
@@ -168,6 +204,17 @@ function AddArrInstanceDialog({
     )
   }
 
+  function test() {
+    testConnectionMutation.mutate(
+      {
+        base_url: baseUrl, api_key: apiKey, timeout_seconds: Number(timeoutSeconds) || 15,
+        basic_auth_username: basicAuth ? basicAuthUsername : undefined,
+        basic_auth_password: basicAuth ? basicAuthPassword : undefined,
+      },
+      { onSuccess: toastTestResult },
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
@@ -180,25 +227,22 @@ function AddArrInstanceDialog({
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('integrations.addInstance')}</DialogTitle>
+          <DialogTitle>{t('integrations.addInstanceTitled', { name: serviceName })}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div className="grid gap-5">
           <div className="grid gap-1.5">
             <Label htmlFor="arr-add-label">{t('integrations.instanceLabel')}</Label>
             <Input id="arr-add-label" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="arr-add-url">{t('integrations.instanceUrl')}</Label>
-            <Input
-              id="arr-add-url"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder={urlPlaceholder}
-            />
+            <Input id="arr-add-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+            <p className="text-xs text-muted-foreground">{t('integrations.urlSuggestion', { url: urlPlaceholder })}</p>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="arr-add-key">{t('integrations.instanceApiKey')}</Label>
             <Input id="arr-add-key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <p className="text-xs text-muted-foreground">{t('integrations.apiKeyHelp', { name: serviceName })}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
@@ -215,7 +259,7 @@ function AddArrInstanceDialog({
               />
             </div>
           </div>
-          <p className="-mt-2 text-xs text-muted-foreground">{t('integrations.priorityHelp')}</p>
+          <p className="-mt-3 text-xs text-muted-foreground">{t('integrations.priorityHelp')}</p>
           <BasicAuthFields
             enabled={basicAuth}
             onEnabledChange={setBasicAuth}
@@ -225,7 +269,8 @@ function AddArrInstanceDialog({
             onPasswordChange={setBasicAuthPassword}
           />
         </div>
-        <DialogFooter>
+        <DialogFooter className="sm:justify-between">
+          <TestConnectionButton onTest={test} isPending={testConnectionMutation.isPending} disabled={!baseUrl || !apiKey} />
           <Button
             onClick={submit}
             disabled={
@@ -241,11 +286,17 @@ function AddArrInstanceDialog({
 }
 
 function EditArrInstanceDialog({
+  serviceName,
   instance,
   updateMutation,
+  testConnectionMutation,
+  testInstanceMutation,
 }: {
+  serviceName: string
   instance: ArrInstance
   updateMutation: UseMutationResult<ArrInstance, Error, { id: number; body: ArrInstanceUpdateBody }>
+  testConnectionMutation: UseMutationResult<ArrInstanceTestResult, Error, ArrConnectionTestBody>
+  testInstanceMutation: UseMutationResult<ArrInstanceTestResult, Error, number>
 }) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState(instance.label)
@@ -279,6 +330,24 @@ function EditArrInstanceDialog({
     )
   }
 
+  function test() {
+    // Se l'utente non ha ridigitato una nuova API key (write-only, non torna
+    // mai nel form), testa contro le credenziali già salvate dell'istanza
+    // invece che con una chiave vuota.
+    if (apiKey) {
+      testConnectionMutation.mutate(
+        {
+          base_url: baseUrl, api_key: apiKey, timeout_seconds: Number(timeoutSeconds) || 15,
+          basic_auth_username: basicAuth ? basicAuthUsername : undefined,
+          basic_auth_password: basicAuth ? basicAuthPassword : undefined,
+        },
+        { onSuccess: toastTestResult },
+      )
+    } else {
+      testInstanceMutation.mutate(instance.id, { onSuccess: toastTestResult })
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
@@ -290,9 +359,9 @@ function EditArrInstanceDialog({
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('integrations.editInstance')}</DialogTitle>
+          <DialogTitle>{t('integrations.editInstanceTitled', { name: serviceName })}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div className="grid gap-5">
           <div className="grid gap-1.5">
             <Label htmlFor="arr-edit-label">{t('integrations.instanceLabel')}</Label>
             <Input id="arr-edit-label" value={label} onChange={(e) => setLabel(e.target.value)} />
@@ -310,6 +379,7 @@ function EditArrInstanceDialog({
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={t('common.leaveBlank')}
             />
+            <p className="text-xs text-muted-foreground">{t('integrations.apiKeyHelp', { name: serviceName })}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
@@ -331,7 +401,7 @@ function EditArrInstanceDialog({
               />
             </div>
           </div>
-          <p className="-mt-2 text-xs text-muted-foreground">{t('integrations.priorityHelp')}</p>
+          <p className="-mt-3 text-xs text-muted-foreground">{t('integrations.priorityHelp')}</p>
           <BasicAuthFields
             enabled={basicAuth}
             onEnabledChange={setBasicAuth}
@@ -342,7 +412,12 @@ function EditArrInstanceDialog({
             passwordPlaceholder={t('common.leaveBlank')}
           />
         </div>
-        <DialogFooter>
+        <DialogFooter className="sm:justify-between">
+          <TestConnectionButton
+            onTest={test}
+            isPending={testConnectionMutation.isPending || testInstanceMutation.isPending}
+            disabled={!baseUrl}
+          />
           <Button
             onClick={submit}
             disabled={!label || !baseUrl || (basicAuth && !basicAuthUsername) || updateMutation.isPending}
@@ -355,32 +430,6 @@ function EditArrInstanceDialog({
   )
 }
 
-function TestArrInstanceButton({
-  id,
-  testMutation,
-}: {
-  id: number
-  testMutation: UseMutationResult<ArrInstanceTestResult, Error, number>
-}) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      title={t('integrations.testConnection')}
-      onClick={() =>
-        testMutation.mutate(id, {
-          onSuccess: (result) => {
-            if (result.status === 'ok') toast.success(t('integrations.connectedSuccess', { version: result.version ?? '?' }))
-            else toast.error(t('integrations.connectionFailed', { message: result.error ?? '' }))
-          },
-        })
-      }
-    >
-      <ZapIcon className="size-4" />
-    </Button>
-  )
-}
-
 function ArrInstancesCard({
   title,
   logoSrc,
@@ -390,7 +439,8 @@ function ArrInstancesCard({
   createMutation,
   updateMutation,
   deleteMutation,
-  testMutation,
+  testConnectionMutation,
+  testInstanceMutation,
 }: {
   title: string
   logoSrc: string
@@ -400,21 +450,25 @@ function ArrInstancesCard({
   createMutation: UseMutationResult<ArrInstance, Error, ArrInstanceWriteBody>
   updateMutation: UseMutationResult<ArrInstance, Error, { id: number; body: ArrInstanceUpdateBody }>
   deleteMutation: UseMutationResult<void, Error, number>
-  testMutation: UseMutationResult<ArrInstanceTestResult, Error, number>
+  testConnectionMutation: UseMutationResult<ArrInstanceTestResult, Error, ArrConnectionTestBody>
+  testInstanceMutation: UseMutationResult<ArrInstanceTestResult, Error, number>
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex gap-3">
-          <ServiceLogo src={logoSrc} alt={title} />
-          <div>
+      <CardHeader>
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <ServiceLogo src={logoSrc} alt={title} />
             <CardTitle>{title}</CardTitle>
-            <div>
-              <CardDescription>{t('integrations.notYetUsedDescription')}</CardDescription>
-            </div>
           </div>
+          <AddArrInstanceDialog
+            serviceName={title}
+            urlPlaceholder={urlPlaceholder}
+            createMutation={createMutation}
+            testConnectionMutation={testConnectionMutation}
+          />
         </div>
-        <AddArrInstanceDialog urlPlaceholder={urlPlaceholder} createMutation={createMutation} />
+        <CardDescription>{t('integrations.notYetUsedDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
@@ -447,8 +501,13 @@ function ArrInstancesCard({
                   />
                 </TableCell>
                 <TableCell className="flex justify-end gap-1">
-                  <TestArrInstanceButton id={instance.id} testMutation={testMutation} />
-                  <EditArrInstanceDialog instance={instance} updateMutation={updateMutation} />
+                  <EditArrInstanceDialog
+                    serviceName={title}
+                    instance={instance}
+                    updateMutation={updateMutation}
+                    testConnectionMutation={testConnectionMutation}
+                    testInstanceMutation={testInstanceMutation}
+                  />
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -479,12 +538,14 @@ export function IntegrationsSection() {
   const createRadarrInstance = useCreateRadarrInstance()
   const updateRadarrInstance = useUpdateRadarrInstance()
   const deleteRadarrInstance = useDeleteRadarrInstance()
+  const testRadarrConnection = useTestRadarrConnection()
   const testRadarrInstance = useTestRadarrInstance()
 
   const { data: sonarrInstances, isPending: sonarrPending } = useSonarrInstances()
   const createSonarrInstance = useCreateSonarrInstance()
   const updateSonarrInstance = useUpdateSonarrInstance()
   const deleteSonarrInstance = useDeleteSonarrInstance()
+  const testSonarrConnection = useTestSonarrConnection()
   const testSonarrInstance = useTestSonarrInstance()
 
   return (
@@ -498,7 +559,8 @@ export function IntegrationsSection() {
         createMutation={createRadarrInstance}
         updateMutation={updateRadarrInstance}
         deleteMutation={deleteRadarrInstance}
-        testMutation={testRadarrInstance}
+        testConnectionMutation={testRadarrConnection}
+        testInstanceMutation={testRadarrInstance}
       />
 
       <ArrInstancesCard
@@ -510,7 +572,8 @@ export function IntegrationsSection() {
         createMutation={createSonarrInstance}
         updateMutation={updateSonarrInstance}
         deleteMutation={deleteSonarrInstance}
-        testMutation={testSonarrInstance}
+        testConnectionMutation={testSonarrConnection}
+        testInstanceMutation={testSonarrInstance}
       />
     </div>
   )

@@ -66,6 +66,37 @@ class RadarrInstanceTestResponse(BaseModel):
     error: str | None = None
 
 
+class RadarrConnectionTestRequest(BaseModel):
+    """Senza instance_id: usata dal dialog "Add instance" per testare prima
+    ancora di salvare, con i valori appena digitati nel form."""
+
+    base_url: str
+    api_key: str
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
+    basic_auth_username: str | None = None
+    basic_auth_password: str | None = None
+
+
+def _test_connection(
+    base_url: str, api_key: str, timeout_seconds: int,
+    basic_auth_username: str | None, basic_auth_password: str | None,
+) -> RadarrInstanceTestResponse:
+    """Sola lettura: chiama GET /api/v3/system/status, comune a tutta la
+    famiglia Servarr (Radarr/Sonarr condividono la stessa shape REST v3) —
+    non serve un adapter completo solo per verificare le credenziali."""
+    auth = (basic_auth_username, basic_auth_password) if basic_auth_username else None
+    try:
+        response = httpx.get(
+            f"{base_url.rstrip('/')}/api/v3/system/status",
+            headers={"X-Api-Key": api_key}, auth=auth, timeout=timeout_seconds,
+        )
+        response.raise_for_status()
+        version = response.json().get("version")
+    except Exception as exc:
+        return RadarrInstanceTestResponse(status="error", error=str(exc))
+    return RadarrInstanceTestResponse(status="ok", version=version)
+
+
 def _get_or_404(session: Session, instance_id: int) -> RadarrInstance:
     instance = session.get(RadarrInstance, instance_id)
     if instance is None:
@@ -90,24 +121,23 @@ def create_radarr_instance(body: RadarrInstanceCreateRequest, session: Session =
     return RadarrInstanceResponse.from_model(instance)
 
 
+@router.post("/test", response_model=RadarrInstanceTestResponse)
+def test_radarr_connection(body: RadarrConnectionTestRequest):
+    return _test_connection(
+        body.base_url, body.api_key, body.timeout_seconds, body.basic_auth_username, body.basic_auth_password
+    )
+
+
 @router.post("/{instance_id}/test", response_model=RadarrInstanceTestResponse)
 def test_radarr_instance(instance_id: int, session: Session = Depends(get_session)):
-    """Sola lettura: chiama GET /api/v3/system/status, comune a tutta la
-    famiglia Servarr (Radarr/Sonarr condividono la stessa shape REST v3) —
-    non serve un adapter completo solo per verificare le credenziali."""
+    """Come test_radarr_connection ma contro le credenziali già salvate di
+    un'istanza esistente — usata dal dialog "Edit instance" quando l'utente
+    non ha ridigitato una nuova API key (write-only, non torna mai nel form)."""
     instance = _get_or_404(session, instance_id)
-    auth = (instance.basic_auth_username, instance.basic_auth_password) if instance.basic_auth_username else None
     timeout = instance.timeout_seconds if instance.timeout_seconds is not None else DEFAULT_TIMEOUT_SECONDS
-    try:
-        response = httpx.get(
-            f"{instance.base_url.rstrip('/')}/api/v3/system/status",
-            headers={"X-Api-Key": instance.api_key}, auth=auth, timeout=timeout,
-        )
-        response.raise_for_status()
-        version = response.json().get("version")
-    except Exception as exc:
-        return RadarrInstanceTestResponse(status="error", error=str(exc))
-    return RadarrInstanceTestResponse(status="ok", version=version)
+    return _test_connection(
+        instance.base_url, instance.api_key, timeout, instance.basic_auth_username, instance.basic_auth_password
+    )
 
 
 @router.patch("/{instance_id}", response_model=RadarrInstanceResponse)

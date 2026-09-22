@@ -68,6 +68,19 @@ def test_test_connection_reports_error_on_unreachable_instance(client):
     assert body["error"]
 
 
+def test_stateless_test_connection_before_creating(client):
+    """Il dialog "Add instance" può testare prima di salvare — nessun
+    instance_id coinvolto."""
+    response = client.post(
+        "/api/radarr-instances/test",
+        json={"base_url": "http://radarr.invalid.example", "api_key": "k", "timeout_seconds": 1},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["error"]
+
+
 def test_supports_multiple_instances(client):
     client.post("/api/radarr-instances", json={"label": "4K", "base_url": "http://radarr-4k:7878", "api_key": "a"})
     client.post("/api/radarr-instances", json={"label": "SD", "base_url": "http://radarr-sd:7878", "api_key": "b"})

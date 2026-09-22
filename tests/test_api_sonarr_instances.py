@@ -58,3 +58,20 @@ def test_test_connection_reports_ok_with_version(client, monkeypatch):
     response = client.post(f"/api/sonarr-instances/{instance_id}/test")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "version": "4.0.9", "error": None}
+
+
+def test_stateless_test_connection_before_creating(client, monkeypatch):
+    """Il dialog "Add instance" può testare prima di salvare — nessun
+    instance_id coinvolto, i valori vengono dal form."""
+
+    def fake_get(url, headers=None, auth=None, timeout=None):
+        assert headers["X-Api-Key"] == "draft-key"
+        return httpx.Response(200, json={"version": "4.0.9"}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(sonarr_instances_module.httpx, "get", fake_get)
+
+    response = client.post(
+        "/api/sonarr-instances/test", json={"base_url": "http://sonarr:8989", "api_key": "draft-key"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "version": "4.0.9", "error": None}

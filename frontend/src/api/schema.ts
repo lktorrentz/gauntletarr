@@ -552,6 +552,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/radarr-instances/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Radarr Connection */
+        post: operations["test_radarr_connection_api_radarr_instances_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/radarr-instances/{instance_id}/test": {
         parameters: {
             query?: never;
@@ -563,9 +580,9 @@ export interface paths {
         put?: never;
         /**
          * Test Radarr Instance
-         * @description Sola lettura: chiama GET /api/v3/system/status, comune a tutta la
-         *     famiglia Servarr (Radarr/Sonarr condividono la stessa shape REST v3) —
-         *     non serve un adapter completo solo per verificare le credenziali.
+         * @description Come test_radarr_connection ma contro le credenziali già salvate di
+         *     un'istanza esistente — usata dal dialog "Edit instance" quando l'utente
+         *     non ha ridigitato una nuova API key (write-only, non torna mai nel form).
          */
         post: operations["test_radarr_instance_api_radarr_instances__instance_id__test_post"];
         delete?: never;
@@ -610,6 +627,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sonarr-instances/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Sonarr Connection */
+        post: operations["test_sonarr_connection_api_sonarr_instances_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sonarr-instances/{instance_id}/test": {
         parameters: {
             query?: never;
@@ -621,9 +655,9 @@ export interface paths {
         put?: never;
         /**
          * Test Sonarr Instance
-         * @description Sola lettura: vedi test_radarr_instance in app/api/radarr_instances.py
-         *     — stesso endpoint /api/v3/system/status, condiviso da tutta la famiglia
-         *     Servarr.
+         * @description Come test_sonarr_connection ma contro le credenziali già salvate di
+         *     un'istanza esistente — usata dal dialog "Edit instance" quando l'utente
+         *     non ha ridigitato una nuova API key (write-only, non torna mai nel form).
          */
         post: operations["test_sonarr_instance_api_sonarr_instances__instance_id__test_post"];
         delete?: never;
@@ -1344,6 +1378,26 @@ export interface components {
             /** Created */
             created: boolean;
         };
+        /**
+         * RadarrConnectionTestRequest
+         * @description Senza instance_id: usata dal dialog "Add instance" per testare prima
+         *     ancora di salvare, con i valori appena digitati nel form.
+         */
+        RadarrConnectionTestRequest: {
+            /** Base Url */
+            base_url: string;
+            /** Api Key */
+            api_key: string;
+            /**
+             * Timeout Seconds
+             * @default 15
+             */
+            timeout_seconds: number;
+            /** Basic Auth Username */
+            basic_auth_username?: string | null;
+            /** Basic Auth Password */
+            basic_auth_password?: string | null;
+        };
         /** RadarrInstanceCreateRequest */
         RadarrInstanceCreateRequest: {
             /** Label */
@@ -1517,6 +1571,26 @@ export interface components {
             username: string;
             /** Password */
             password: string;
+        };
+        /**
+         * SonarrConnectionTestRequest
+         * @description Senza instance_id: usata dal dialog "Add instance" per testare prima
+         *     ancora di salvare, con i valori appena digitati nel form.
+         */
+        SonarrConnectionTestRequest: {
+            /** Base Url */
+            base_url: string;
+            /** Api Key */
+            api_key: string;
+            /**
+             * Timeout Seconds
+             * @default 15
+             */
+            timeout_seconds: number;
+            /** Basic Auth Username */
+            basic_auth_username?: string | null;
+            /** Basic Auth Password */
+            basic_auth_password?: string | null;
         };
         /** SonarrInstanceCreateRequest */
         SonarrInstanceCreateRequest: {
@@ -3129,6 +3203,39 @@ export interface operations {
             };
         };
     };
+    test_radarr_connection_api_radarr_instances_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RadarrConnectionTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadarrInstanceTestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     test_radarr_instance_api_radarr_instances__instance_id__test_post: {
         parameters: {
             query?: never;
@@ -3264,6 +3371,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SonarrInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_sonarr_connection_api_sonarr_instances_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SonarrConnectionTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SonarrInstanceTestResponse"];
                 };
             };
             /** @description Validation Error */

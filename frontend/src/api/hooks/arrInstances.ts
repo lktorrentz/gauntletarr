@@ -43,6 +43,15 @@ export function useTestRadarrInstance() {
   })
 }
 
+// Senza instance_id: usata dal dialog "Add instance" per testare prima
+// ancora di salvare, con i valori appena digitati nel form.
+export function useTestRadarrConnection() {
+  return useMutation({
+    mutationFn: (body: Schemas['RadarrConnectionTestRequest']) =>
+      unwrap(api.POST('/api/radarr-instances/test', { body })),
+  })
+}
+
 export function useSonarrInstances() {
   return useQuery({
     queryKey: ['sonarr-instances'],
@@ -80,5 +89,14 @@ export function useTestSonarrInstance() {
   return useMutation({
     mutationFn: (id: number) =>
       unwrap(api.POST('/api/sonarr-instances/{instance_id}/test', { params: { path: { instance_id: id } } })),
+  })
+}
+
+// Senza instance_id: usata dal dialog "Add instance" per testare prima
+// ancora di salvare, con i valori appena digitati nel form.
+export function useTestSonarrConnection() {
+  return useMutation({
+    mutationFn: (body: Schemas['SonarrConnectionTestRequest']) =>
+      unwrap(api.POST('/api/sonarr-instances/test', { body })),
   })
 }

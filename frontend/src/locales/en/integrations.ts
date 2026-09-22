@@ -6,11 +6,14 @@ export const integrations = {
     'Minimum confidence (0.0–1.0) above which a match runs automatically, per direction.',
 
   'integrations.addInstance': 'Add instance',
-  'integrations.editInstance': 'Edit instance',
+  'integrations.addInstanceTitled': 'Add {name} instance',
+  'integrations.editInstanceTitled': 'Edit {name} instance',
   'integrations.noInstances': 'No instances configured.',
   'integrations.instanceLabel': 'Label',
   'integrations.instanceUrl': 'URL',
+  'integrations.urlSuggestion': 'e.g. {url}',
   'integrations.instanceApiKey': 'API key',
+  'integrations.apiKeyHelp': 'Found in Settings → General in {name}.',
   'integrations.instanceEnabled': 'Enabled',
   'integrations.createInstanceFailed': 'Could not add instance: {message}',
 
