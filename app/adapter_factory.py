@@ -18,6 +18,7 @@ from app.adapters.media_resolver.base import MediaResolverAdapter
 from app.adapters.media_resolver.filename_parser import FilenameParserResolver
 from app.adapters.torrent_client.base import TorrentClientAdapter
 from app.adapters.torrent_client.qbittorrent import QBittorrentAdapter
+from app.adapters.torrent_client.qui import QuiTorrentClientAdapter
 from app.adapters.tracker.base import TrackerAdapter, Unit3dTrackerAdapter
 from app.models import TorrentClient, Tracker
 from app.tmdb_client import TMDBClient
@@ -31,6 +32,16 @@ def build_torrent_client_adapter(torrent_client: TorrentClient) -> TorrentClient
             base_url=torrent_client.base_url,
             username=torrent_client.username,
             password=torrent_client.password,
+        )
+    if torrent_client.adapter_type == "qui":
+        if torrent_client.qui_instance_id is None:
+            raise ValueError(f"TorrentClient {torrent_client.id!r} (qui) senza qui_instance_id configurato")
+        if not torrent_client.api_token:
+            raise ValueError(f"TorrentClient {torrent_client.id!r} (qui) senza api_token configurato")
+        return QuiTorrentClientAdapter(
+            base_url=torrent_client.base_url,
+            api_token=torrent_client.api_token,
+            instance_id=torrent_client.qui_instance_id,
         )
     raise ValueError(
         f"adapter_type torrent_client non ancora implementato: {torrent_client.adapter_type!r} "

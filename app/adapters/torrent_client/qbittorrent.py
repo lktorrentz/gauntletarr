@@ -18,12 +18,11 @@ confrontando l'elenco dei torrent prima/dopo l'aggiunta (diff), mai
 fidandosi del solo valore di ritorno di torrents_add() — stesso approccio
 di ratio-guardian.
 
-"qui" (gestore multi-istanza per qBittorrent, docs/SPEC.md sezione 15):
-trattato qui come N istanze qBittorrent indipendenti, ciascuna configurata
-come un proprio TorrentClient con adapter_type="qbittorrent" puntato al
-base_url che qui espone per quell'istanza — nessun adapter dedicato,
-finché non si scopre (contro un'istanza reale) che qui espone invece una
-propria API di aggregazione diversa dalla WebUI API standard.
+"qui" (gestore multi-istanza per qBittorrent, docs/SPEC.md sezione 15) NON
+usa questo adapter: espone una propria API di aggregazione (auth via
+X-API-Key, percorsi sotto /api/instances/{id}/...), diversa dalla WebUI API
+nativa di qBittorrent che qbittorrent-api si aspetta — confermato contro il
+suo swagger/OpenAPI reale, non solo dedotto. Vedi app/adapters/torrent_client/qui.py.
 """
 
 import logging

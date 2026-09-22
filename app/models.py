@@ -120,6 +120,13 @@ class TorrentClient(Base):
     base_url: Mapped[str] = mapped_column(nullable=False)
     username: Mapped[str | None]
     password: Mapped[str | None] = mapped_column(EncryptedString)
+    # Solo per adapter_type="qui": la sua X-API-Key (un'unica chiave copre
+    # tutte le istanze qBittorrent gestite da un deployment qui, docs/SPEC.md
+    # sezione 15) e l'id dell'istanza specifica a cui questa riga è ancorata —
+    # qui aggrega più istanze dietro un solo host, ma add_torrent deve sapere
+    # esattamente su quale scrivere, quindi un TorrentClient per istanza.
+    api_token: Mapped[str | None] = mapped_column(EncryptedString)
+    qui_instance_id: Mapped[int | None]
     enabled: Mapped[bool] = mapped_column(nullable=False, server_default=text("1"))
 
     disks: Mapped[list["Disk"]] = relationship(

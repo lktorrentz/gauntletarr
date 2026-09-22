@@ -13,7 +13,8 @@ from app.models import Disk, TorrentClient
 
 router = APIRouter(prefix="/api/torrent-clients", tags=["torrent-clients"])
 
-SUPPORTED_ADAPTER_TYPES = {"qbittorrent"}  # deluge/transmission/rutorrent pianificati, vedi docs/ROADMAP.md Fase 2
+# deluge/transmission/rutorrent pianificati, vedi docs/ROADMAP.md Fase 2
+SUPPORTED_ADAPTER_TYPES = {"qbittorrent", "qui"}
 
 
 class TorrentClientCreateRequest(BaseModel):
@@ -22,6 +23,8 @@ class TorrentClientCreateRequest(BaseModel):
     base_url: str
     username: str | None = None
     password: str | None = None
+    api_token: str | None = None  # adapter_type="qui": la sua X-API-Key
+    qui_instance_id: int | None = None  # adapter_type="qui": quale istanza gestita da quel deployment
 
 
 class TorrentClientUpdateRequest(BaseModel):
@@ -29,6 +32,8 @@ class TorrentClientUpdateRequest(BaseModel):
     base_url: str | None = None
     username: str | None = None
     password: str | None = None
+    api_token: str | None = None
+    qui_instance_id: int | None = None
     enabled: bool | None = None
 
 
@@ -44,6 +49,7 @@ class TorrentClientResponse(BaseModel):
     adapter_type: str
     base_url: str
     username: str | None
+    qui_instance_id: int | None  # mai api_token/password: write-only, non tornano mai indietro
     enabled: bool
     disk_ids: list[int]  # dischi abilitati per questo client (Fase 8: la UI deve poterli mostrare)
 
@@ -51,7 +57,7 @@ class TorrentClientResponse(BaseModel):
     def from_model(cls, tc: TorrentClient) -> "TorrentClientResponse":
         return cls(
             id=tc.id, label=tc.label, adapter_type=tc.adapter_type,
-            base_url=tc.base_url, username=tc.username, enabled=tc.enabled,
+            base_url=tc.base_url, username=tc.username, qui_instance_id=tc.qui_instance_id, enabled=tc.enabled,
             disk_ids=[d.id for d in tc.disks],
         )
 
@@ -86,6 +92,7 @@ def create_torrent_client(body: TorrentClientCreateRequest, session: Session = D
     tc = TorrentClient(
         label=body.label, adapter_type=body.adapter_type, base_url=body.base_url,
         username=body.username, password=body.password,
+        api_token=body.api_token, qui_instance_id=body.qui_instance_id,
     )
     session.add(tc)
     session.commit()
@@ -120,6 +127,10 @@ def update_torrent_client(
         tc.username = body.username
     if body.password is not None:
         tc.password = body.password
+    if body.api_token is not None:
+        tc.api_token = body.api_token
+    if body.qui_instance_id is not None:
+        tc.qui_instance_id = body.qui_instance_id
     if body.enabled is not None:
         tc.enabled = body.enabled
     session.commit()

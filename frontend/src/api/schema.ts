@@ -1077,6 +1077,10 @@ export interface components {
             username?: string | null;
             /** Password */
             password?: string | null;
+            /** Api Token */
+            api_token?: string | null;
+            /** Qui Instance Id */
+            qui_instance_id?: number | null;
         };
         /** TorrentClientResponse */
         TorrentClientResponse: {
@@ -1090,6 +1094,8 @@ export interface components {
             base_url: string;
             /** Username */
             username: string | null;
+            /** Qui Instance Id */
+            qui_instance_id: number | null;
             /** Enabled */
             enabled: boolean;
             /** Disk Ids */
@@ -1114,6 +1120,10 @@ export interface components {
             username?: string | null;
             /** Password */
             password?: string | null;
+            /** Api Token */
+            api_token?: string | null;
+            /** Qui Instance Id */
+            qui_instance_id?: number | null;
             /** Enabled */
             enabled?: boolean | null;
         };

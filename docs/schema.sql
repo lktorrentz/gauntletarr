@@ -61,11 +61,19 @@ CREATE TABLE IF NOT EXISTS torrent_client (
     id              INTEGER PRIMARY KEY,
     label           TEXT NOT NULL,
     adapter_type    TEXT NOT NULL,          -- "qbittorrent" | "deluge" | "transmission" | "rutorrent" | "qui"
-                                             -- (multi-client from v1, see SPEC.md §5 — "qui" might turn
-                                             -- out to be plain qbittorrent pointed elsewhere, still open)
+                                             -- (multi-client from v1, see SPEC.md §5)
     base_url        TEXT NOT NULL,
     username        TEXT,
     password        TEXT,                   -- encrypted at rest
+    api_token       TEXT,                   -- encrypted at rest — adapter_type="qui" only (its X-API-Key,
+                                             -- confirmed against a live instance's OpenAPI spec: SPEC.md §15).
+                                             -- Missing from the original Phase 0 draft, found while implementing
+                                             -- the dedicated qui adapter (a qui deployment is NOT the plain
+                                             -- qBittorrent WebUI API pointed elsewhere, as first assumed).
+    qui_instance_id INTEGER,                -- adapter_type="qui" only: one qui deployment manages several
+                                             -- qBittorrent instances behind one host+api_token, so this pins
+                                             -- one TorrentClient row to exactly one of them (add_torrent must
+                                             -- target a specific instance, never pick one at runtime).
     enabled         BOOLEAN NOT NULL DEFAULT 1
 );
 

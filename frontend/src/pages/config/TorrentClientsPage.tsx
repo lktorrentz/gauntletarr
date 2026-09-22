@@ -25,32 +25,59 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { selectLabel } from '@/lib/utils'
+
+const ADAPTER_TYPES = [
+  { value: 'qbittorrent', label: 'qBittorrent' },
+  { value: 'qui', label: 'qui (gestore multi-istanza per qBittorrent)' },
+]
 
 function AddTorrentClientDialog() {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
+  const [adapterType, setAdapterType] = useState<'qbittorrent' | 'qui'>('qbittorrent')
   const [baseUrl, setBaseUrl] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [apiToken, setApiToken] = useState('')
+  const [quiInstanceId, setQuiInstanceId] = useState('')
   const createTorrentClient = useCreateTorrentClient()
+  const isQui = adapterType === 'qui'
+
+  function reset() {
+    setLabel('')
+    setBaseUrl('')
+    setUsername('')
+    setPassword('')
+    setApiToken('')
+    setQuiInstanceId('')
+  }
 
   function submit() {
     createTorrentClient.mutate(
-      { label, adapter_type: 'qbittorrent', base_url: baseUrl, username: username || undefined, password: password || undefined },
+      {
+        label,
+        adapter_type: adapterType,
+        base_url: baseUrl,
+        username: isQui ? undefined : username || undefined,
+        password: isQui ? undefined : password || undefined,
+        api_token: isQui ? apiToken || undefined : undefined,
+        qui_instance_id: isQui && quiInstanceId ? Number(quiInstanceId) : undefined,
+      },
       {
         onSuccess: () => {
           setOpen(false)
-          setLabel('')
-          setBaseUrl('')
-          setUsername('')
-          setPassword('')
+          reset()
         },
         onError: (error) => toast.error(`Creazione fallita: ${error.message}`),
       },
     )
   }
+
+  const canSubmit = label && baseUrl && (isQui ? apiToken && quiInstanceId : true)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -66,10 +93,21 @@ function AddTorrentClientDialog() {
           </div>
           <div className="grid gap-1.5">
             <Label>Tipo</Label>
-            <Input value="qbittorrent" disabled />
-            <p className="text-xs text-muted-foreground">
-              Unico adapter implementato per ora (Deluge/Transmission/rutorrent pianificati).
-            </p>
+            <Select value={adapterType} onValueChange={(v) => setAdapterType(v as 'qbittorrent' | 'qui')}>
+              <SelectTrigger>
+                <SelectValue>
+                  {(v: string | null) => selectLabel(ADAPTER_TYPES, v, (a) => a.value, (a) => a.label, 'qBittorrent')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {ADAPTER_TYPES.map((a) => (
+                  <SelectItem key={a.value} value={a.value}>
+                    {a.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Deluge/Transmission/rutorrent pianificati, non ancora disponibili.</p>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="tc-base-url">URL</Label>
@@ -77,20 +115,50 @@ function AddTorrentClientDialog() {
               id="tc-base-url"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="http://qbittorrent:8080"
+              placeholder={isQui ? 'http://qui:7476' : 'http://qbittorrent:8080'}
             />
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="tc-username">Utente</Label>
-            <Input id="tc-username" value={username} onChange={(e) => setUsername(e.target.value)} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="tc-password">Password</Label>
-            <Input id="tc-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
+          {isQui ? (
+            <>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tc-api-token">API key</Label>
+                <Input
+                  id="tc-api-token"
+                  type="password"
+                  value={apiToken}
+                  onChange={(e) => setApiToken(e.target.value)}
+                  placeholder="Impostazioni → API Keys in qui"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tc-qui-instance-id">Istanza</Label>
+                <Input
+                  id="tc-qui-instance-id"
+                  type="number"
+                  value={quiInstanceId}
+                  onChange={(e) => setQuiInstanceId(e.target.value)}
+                  placeholder="id numerico dell'istanza qBittorrent gestita da qui"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Un deployment qui gestisce più istanze: questo client punta a una sola (mai scelta a runtime).
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tc-username">Utente</Label>
+                <Input id="tc-username" value={username} onChange={(e) => setUsername(e.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="tc-password">Password</Label>
+                <Input id="tc-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+            </>
+          )}
         </div>
         <DialogFooter>
-          <Button onClick={submit} disabled={!label || !baseUrl || createTorrentClient.isPending}>
+          <Button onClick={submit} disabled={!canSubmit || createTorrentClient.isPending}>
             Crea
           </Button>
         </DialogFooter>
@@ -175,6 +243,7 @@ export function TorrentClientsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Etichetta</TableHead>
+              <TableHead>Tipo</TableHead>
               <TableHead>URL</TableHead>
               <TableHead>Dischi</TableHead>
               <TableHead>Abilitato</TableHead>
@@ -184,7 +253,7 @@ export function TorrentClientsPage() {
           <TableBody>
             {isPending && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                   Caricamento…
                 </TableCell>
               </TableRow>
@@ -192,6 +261,12 @@ export function TorrentClientsPage() {
             {torrentClients?.map((tc) => (
               <TableRow key={tc.id}>
                 <TableCell className="font-medium">{tc.label}</TableCell>
+                <TableCell>
+                  <Badge variant="outline">
+                    {tc.adapter_type}
+                    {tc.adapter_type === 'qui' && tc.qui_instance_id !== null ? ` #${tc.qui_instance_id}` : ''}
+                  </Badge>
+                </TableCell>
                 <TableCell className="font-mono text-xs">{tc.base_url}</TableCell>
                 <TableCell className="flex flex-wrap gap-1">
                   {tc.disk_ids.length === 0 && <span className="text-xs text-muted-foreground">nessuno</span>}
@@ -218,7 +293,7 @@ export function TorrentClientsPage() {
             ))}
             {torrentClients?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                   Nessun client torrent configurato.
                 </TableCell>
               </TableRow>
