@@ -8,8 +8,10 @@ import { integrations } from './integrations'
 import { layout } from './layout'
 import { library } from './library'
 import { logs } from './logs'
+import { metadata } from './metadata'
 import { reseeding } from './reseeding'
 import { security } from './security'
+import { timeLanguage } from './timeLanguage'
 import { torrent } from './torrent'
 import { torrentClients } from './torrentClients'
 import { trackers } from './trackers'
@@ -30,8 +32,10 @@ export const en = {
   ...layout,
   ...library,
   ...logs,
+  ...metadata,
   ...reseeding,
   ...security,
+  ...timeLanguage,
   ...torrent,
   ...torrentClients,
   ...trackers,

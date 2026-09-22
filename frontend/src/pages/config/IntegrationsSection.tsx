@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { SettingField } from '@/components/SettingField'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { t } from '@/lib/i18n'
@@ -290,27 +289,6 @@ export function IntegrationsSection() {
 
   return (
     <div className="grid gap-6">
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>{t('integrations.contentIdTitle')}</CardTitle>
-          <CardDescription>{t('integrations.contentIdDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <SettingField
-            settingKey="tmdb_api_key"
-            label="TMDB API key"
-            description="https://www.themoviedb.org/settings/api"
-            type="password"
-          />
-          <SettingField
-            settingKey="tvdb_api_key"
-            label="TVDB API key"
-            description={t('integrations.tvdbApiKeyDescription')}
-            type="password"
-          />
-        </CardContent>
-      </Card>
-
       <ArrInstancesCard
         title="Radarr"
         urlPlaceholder="http://radarr:7878"
