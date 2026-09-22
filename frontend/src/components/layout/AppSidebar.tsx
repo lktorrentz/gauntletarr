@@ -1,10 +1,13 @@
-import { ChevronRightIcon } from 'lucide-react'
+import { ChevronRightIcon, LogOutIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 import { useDashboard } from '@/api/hooks/dashboard'
 import { useHealth } from '@/api/hooks/health'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   Sidebar,
   SidebarContent,
@@ -50,6 +53,7 @@ function StatBox({ dotClassName, label, value }: { dotClassName: string; label: 
 function AppSidebarFooter() {
   const { data: dashboard } = useDashboard()
   const { data: health } = useHealth()
+  const { username, logout } = useAuth()
 
   return (
     <SidebarFooter className="gap-2 border-t px-3 py-3">
@@ -73,6 +77,14 @@ function AppSidebarFooter() {
           API docs
         </a>
         <span>v{health?.version ?? '…'}</span>
+      </div>
+      <div className="flex items-center justify-between border-t pt-2">
+        <ThemeToggle />
+        {username && (
+          <Button variant="ghost" size="icon-sm" title={`Esci (${username})`} onClick={logout}>
+            <LogOutIcon className="size-4" />
+          </Button>
+        )}
       </div>
     </SidebarFooter>
   )
