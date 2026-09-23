@@ -37,7 +37,12 @@ function PresetsCard() {
   const { data: setting } = useSetting(PRESETS_KEY)
   const setSetting = useSetSetting(PRESETS_KEY)
   const invalidateLibrary = useInvalidateLibrary()
-  const enabled = parsePresetKeys(setting?.value)
+  // Mai salvato (null): valgono i preset attivi di default lato backend
+  // (app/exclusions.py DEFAULT_ENABLED_PRESETS), la UI deve mostrare gli stessi.
+  const enabled =
+    setting?.value == null
+      ? (presets ?? []).filter((p) => p.enabled_by_default).map((p) => p.key)
+      : parsePresetKeys(setting.value)
 
   const toggle = (key: string, on: boolean) => {
     const next = on ? [...enabled.filter((k) => k !== key), key] : enabled.filter((k) => k !== key)
@@ -125,7 +130,7 @@ function CustomPatternsCard() {
         />
         <p className="flex gap-1.5 text-xs text-muted-foreground">
           <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
-          {t('exclusions.mediaVideoOnlyNote')}
+          {t('exclusions.stillUsedNote')}
         </p>
       </CardContent>
       <CardFooter className="justify-end">

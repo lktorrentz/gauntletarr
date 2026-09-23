@@ -18,6 +18,7 @@ import os
 
 from sqlalchemy.orm import Session
 
+from app.file_types import is_video
 from app.models import MediaFile
 
 _CHUNK_SIZE = 64 * 1024
@@ -48,6 +49,8 @@ def find_duplicate_media_files(session: Session, disk_id: int | None = None) -> 
 
     groups: dict[tuple[int, str], list[MediaFile]] = {}
     for mf in query.all():
+        if not is_video(mf.relative_path):
+            continue  # copie di nfo/immagini: rumore, nessuno spazio rilevante sprecato
         groups.setdefault((mf.size_bytes, mf.content_hash), []).append(mf)
 
     result = []

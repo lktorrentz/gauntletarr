@@ -1,4 +1,4 @@
-import { ChevronRightIcon, FileVideoIcon, FolderIcon } from 'lucide-react'
+import { ChevronRightIcon, FileIcon, FileVideoIcon, FolderIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { HardlinkInfo } from '@/components/HardlinkInfo'
@@ -55,6 +55,14 @@ export function buildTree(files: TreeFileEntry[]): TreeNode {
     })
   }
   return root
+}
+
+// Stesse estensioni di app/file_types.py: solo l'icona, lo stato arriva dal backend.
+const VIDEO_EXTENSIONS = ['.mkv', '.mp4', '.avi', '.m2ts', '.ts', '.wmv', '.mov']
+
+function isVideo(path: string): boolean {
+  const lower = path.toLowerCase()
+  return VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext))
 }
 
 // Cartelle prima dei file, poi alfabetico.
@@ -155,7 +163,11 @@ export function FileTree({
             <TableRow key={node.path} className={cn(file.excluded && 'opacity-60')}>
               <TableCell className="max-w-0" style={indent}>
                 <div className="flex items-center gap-1.5 pl-5">
-                  <FileVideoIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  {isVideo(node.name) ? (
+                    <FileVideoIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  )}
                   <span className="truncate font-mono text-xs" title={file.relative_path}>
                     {node.name}
                   </span>

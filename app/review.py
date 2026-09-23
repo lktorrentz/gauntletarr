@@ -83,13 +83,43 @@ def _user_rejected_torrents(
     return {(tracker_id, remote) for tracker_id, remote in query.all()}
 
 
+def _torrents_already_in_progress(
+    session: Session, *, media_file_id: int | None, seed_file_id: int | None
+) -> set[tuple[int, str]]:
+    """(tracker_id, torrent_id_remote) già in coda o in esecuzione per un
+    ALTRO file: un season pack scoperto dall'episodio 1 non deve rientrare
+    in coda dall'episodio 2 (stessa decisione, stesso seed). Per lo stesso
+    file vale invece la regola di sempre: la review nuova sostituisce la
+    vecchia (_supersede_active_reviews)."""
+    active = (
+        session.query(Candidate.tracker_id, Candidate.torrent_id_remote, MatchReview.media_file_id,
+                      MatchReview.seed_file_id)
+        .join(MatchReview, MatchReview.candidate_id == Candidate.id)
+        .filter(MatchReview.status.in_(READY_FOR_DECISION_STATUSES + ("approved",)))
+        .all()
+    )
+    running = (
+        session.query(Candidate.tracker_id, Candidate.torrent_id_remote, SeedJob.source_media_file_id,
+                      SeedJob.source_seed_file_id)
+        .join(SeedJob, SeedJob.candidate_id == Candidate.id)
+        .filter(SeedJob.final_status.in_(("in_progress", "seeding")))
+        .all()
+    )
+    return {
+        (tracker_id, remote)
+        for tracker_id, remote, mf_id, sf_id in [*active, *running]
+        if (mf_id, sf_id) != (media_file_id, seed_file_id)
+    }
+
+
 def _create_review(
     session: Session, candidates: list[Candidate], *, media_file_id: int | None, seed_file_id: int | None
 ) -> MatchReview | None:
     # Un torrent già rifiutato dall'utente per questo file non torna mai in
     # coda a ogni nuova ricerca — resta solo nell'audit trail di candidate.
     rejected = _user_rejected_torrents(session, media_file_id=media_file_id, seed_file_id=seed_file_id)
-    candidates = [c for c in candidates if (c.tracker_id, c.torrent_id_remote) not in rejected]
+    busy = _torrents_already_in_progress(session, media_file_id=media_file_id, seed_file_id=seed_file_id)
+    candidates = [c for c in candidates if (c.tracker_id, c.torrent_id_remote) not in rejected | busy]
     if not candidates:
         return None
 

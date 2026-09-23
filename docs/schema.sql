@@ -320,7 +320,29 @@ CREATE TABLE IF NOT EXISTS candidate (
     piece_boundary_count  INTEGER,                -- pieces straddling an adjacent file in the torrent, not judgeable
     confidence            REAL NOT NULL,          -- 0.0-1.0, computed from explicit rules
     ambiguity_reason      TEXT,                   -- e.g. "season_pack_partial", "multiple_size_matches", "piece_mismatch"
+    piece_length          INTEGER,                -- from the .torrent when downloaded: tolerance for missing extras
     created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Every file of a candidate's torrent and the local file it was matched to
+-- (app/torrent_layout.py). A season pack has one row per episode plus its
+-- extras (nfo, subtitles, sample); a single-file torrent has one row. The
+-- executor recreates the torrent from these rows: every video must have a
+-- local file (otherwise the candidate is "season_pack_partial", confidence
+-- 0, never executable), an extra without one is left for the client to
+-- download after the recheck. media_file_id for direction='media_to_torrent',
+-- seed_file_id for 'torrent_to_client', both null = no local file.
+CREATE TABLE IF NOT EXISTS candidate_file (
+    id              INTEGER PRIMARY KEY,
+    candidate_id    INTEGER NOT NULL REFERENCES candidate(id) ON DELETE CASCADE,
+    torrent_path    TEXT NOT NULL,          -- inside the torrent, relative to candidate.folder
+    size_bytes      INTEGER,
+    is_video        BOOLEAN NOT NULL,
+    media_file_id   INTEGER REFERENCES media_file(id) ON DELETE SET NULL,
+    seed_file_id    INTEGER REFERENCES seed_file(id) ON DELETE SET NULL,
+    size_match      BOOLEAN,
+    mediainfo_match BOOLEAN,
+    piece_verified  BOOLEAN
 );
 
 CREATE TABLE IF NOT EXISTS match_review (
@@ -385,7 +407,12 @@ CREATE TABLE IF NOT EXISTS seed_job (
     recheck_status               TEXT CHECK (recheck_status IN ('pending','ok','failed')),
     final_status                 TEXT NOT NULL DEFAULT 'in_progress'
                                  CHECK (final_status IN ('in_progress','seeding','failed','rolled_back')),
-    error_message                TEXT
+    error_message                TEXT,
+    expected_missing_bytes       INTEGER
+        -- bytes the client may legitimately still download after the recheck: extras of the
+        -- torrent (nfo, subtitles, sample) with no local file, plus the pieces they share with
+        -- neighbouring files (app/torrent_layout.py::expected_missing_bytes). Null/0 = the
+        -- recheck must reach 100%, as always.
     -- Indicative layout — execution details to be refined in Phase 4 (docs/ROADMAP.md), in
     -- particular how/when result_seed_file_id and result_client_torrent_id get reconciled
     -- with the next scan instead of being written directly by the executor.
@@ -435,6 +462,7 @@ CREATE TABLE IF NOT EXISTS upload_job (
 -- especially alongside a run's concurrent writes.
 CREATE INDEX IF NOT EXISTS idx_candidate_media_item_id ON candidate(media_item_id);
 CREATE INDEX IF NOT EXISTS idx_candidate_tracker_id ON candidate(tracker_id);
+CREATE INDEX IF NOT EXISTS idx_candidate_file_candidate_id ON candidate_file(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_match_review_candidate_id ON match_review(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_match_review_media_file_id ON match_review(media_file_id);
 CREATE INDEX IF NOT EXISTS idx_match_review_seed_file_id ON match_review(seed_file_id);

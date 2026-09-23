@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.adapters.media_resolver.base import MediaResolverAdapter, ResolvedMedia
 from app.exclusions import load_exclusions
+from app.file_types import is_video
 from app.models import MediaFile, MediaItem
 from app.poster_cache import download_poster
 
@@ -55,6 +56,8 @@ def resolve_unmatched_media_files(
     excluded = 0
 
     for mf in media_files:
+        if not is_video(mf.relative_path):
+            continue  # nfo, sottotitoli, immagini: nessuna identità da cercare
         if exclusions.is_excluded(mf.relative_path):
             excluded += 1
             continue

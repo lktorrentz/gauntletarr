@@ -22,67 +22,97 @@ class FakeTrackerAdapter:
         return self._candidates
 
 
-def test_score_size_only_match(monkeypatch):
+def _anchor_ctx(db_session, candidates, size=1000, path="movies/Movie (2024)/Movie.2024.mkv"):
+    tracker = Tracker(label="t", adapter_type="unit3d", base_url="https://t.example", api_token="x")
+    disk = Disk(label="d", root_path="/media", media_rel_path="movies")
+    db_session.add_all([tracker, disk])
+    db_session.commit()
+    run = pipeline.start_run(db_session, "manual")
+    item = MediaItem(content_type="movie", tmdb_id=157336)
+    db_session.add(item)
+    db_session.commit()
+    anchor = MediaFile(
+        disk_id=disk.id, relative_path=path, size_bytes=size, st_dev=1, inode=1,
+        media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
+    )
+    db_session.add(anchor)
+    db_session.commit()
+    ctx = matching.MatchContext(db_session, tracker, FakeTrackerAdapter(candidates), "media_to_torrent")
+    return ctx, anchor
+
+
+def _match_one(db_session, tc, **kwargs):
+    ctx, anchor = _anchor_ctx(db_session, [tc], **kwargs)
+    (candidate,) = matching.match_file(ctx, anchor, anchor.media_item_id, 157336)
+    return candidate
+
+
+def test_size_only_match(db_session, monkeypatch):
     monkeypatch.setattr(matching, "compute_unique_id", lambda path: None)
-    confidence, size_match, mediainfo_match, ambiguity = matching.score_candidate(
-        "/media/Movie.2024.mkv", 1000, _tc(size_bytes=1000)
-    )
-    assert confidence == matching.CONFIDENCE_SIZE_ONLY
-    assert size_match is True
-    assert mediainfo_match is None
+    c = _match_one(db_session, _tc(size_bytes=1000))
+    assert c.confidence == matching.CONFIDENCE_SIZE_ONLY
+    assert c.size_match is True
+    assert c.mediainfo_match is None
 
 
-def test_score_no_match_on_size_mismatch():
-    confidence, size_match, mediainfo_match, ambiguity = matching.score_candidate(
-        "/media/Movie.2024.mkv", 1000, _tc(size_bytes=999)
-    )
-    assert confidence == matching.CONFIDENCE_NO_MATCH
-    assert size_match is False
+def test_no_match_on_size_mismatch(db_session):
+    c = _match_one(db_session, _tc(size_bytes=999))
+    assert c.confidence == matching.CONFIDENCE_NO_MATCH
+    assert c.size_match is False
 
 
-def test_score_mediainfo_match_raises_confidence(monkeypatch):
+def test_mediainfo_match_raises_confidence(db_session, monkeypatch):
     monkeypatch.setattr(matching, "compute_unique_id", lambda path: "abc123")
-    confidence, size_match, mediainfo_match, ambiguity = matching.score_candidate(
-        "/media/Movie.2024.mkv", 1000, _tc(size_bytes=1000, mediainfo_unique_id="abc123")
-    )
-    assert confidence == matching.CONFIDENCE_SIZE_AND_MEDIAINFO_MATCH
-    assert mediainfo_match is True
+    c = _match_one(db_session, _tc(size_bytes=1000, mediainfo_unique_id="abc123"))
+    assert c.confidence == matching.CONFIDENCE_SIZE_AND_MEDIAINFO_MATCH
+    assert c.mediainfo_match is True
 
 
-def test_score_mediainfo_mismatch_zeroes_confidence(monkeypatch):
+def test_mediainfo_mismatch_zeroes_confidence(db_session, monkeypatch):
     monkeypatch.setattr(matching, "compute_unique_id", lambda path: "different")
-    confidence, size_match, mediainfo_match, ambiguity = matching.score_candidate(
-        "/media/Movie.2024.mkv", 1000, _tc(size_bytes=1000, mediainfo_unique_id="abc123")
-    )
-    assert confidence == matching.CONFIDENCE_NO_MATCH
-    assert mediainfo_match is False
-    assert ambiguity == "mediainfo_mismatch"
+    c = _match_one(db_session, _tc(size_bytes=1000, mediainfo_unique_id="abc123"))
+    assert c.confidence == matching.CONFIDENCE_NO_MATCH
+    assert c.mediainfo_match is False
+    assert c.ambiguity_reason == "mediainfo_mismatch"
 
 
-def test_score_season_pack_is_never_matched():
-    confidence, size_match, mediainfo_match, ambiguity = matching.score_candidate(
-        "/media/Show.S01E01.mkv", 1000, _tc(file_list=["a.mkv", "b.mkv"])
-    )
-    assert confidence == matching.CONFIDENCE_NO_MATCH
-    assert ambiguity == "season_pack_not_supported"
+def test_movie_with_an_nfo_is_matched_on_the_video_size(db_session, monkeypatch):
+    # Prima: qualunque torrent con più di un file finiva a 0 come "season pack".
+    monkeypatch.setattr(matching, "compute_unique_id", lambda path: None)
+    c = _match_one(db_session, _tc(
+        size_bytes=1050, folder="Movie.2024.1080p-GRP",
+        file_list=["Movie.2024.1080p-GRP.mkv", "Movie.2024.1080p-GRP.nfo"],
+        file_sizes={"Movie.2024.1080p-GRP.mkv": 1000, "Movie.2024.1080p-GRP.nfo": 50},
+    ))
+    assert c.confidence == matching.CONFIDENCE_SIZE_ONLY
+    by_path = {f.torrent_path: f for f in c.files}
+    assert by_path["Movie.2024.1080p-GRP.mkv"].media_file_id is not None
+    assert by_path["Movie.2024.1080p-GRP.nfo"].media_file_id is None  # lo scaricherà il client
+
+
+def test_season_pack_without_local_episodes_is_partial(db_session):
+    ctx, anchor = _anchor_ctx(db_session, [], path="tv/Show/Season 01/Show - S01E01.mkv")
+    anchor.media_item.content_type = "tv"
+    anchor.media_item.season_number, anchor.media_item.episode_number = 1, 1
+    db_session.commit()
+    ctx.tracker_adapter = FakeTrackerAdapter([_tc(
+        size_bytes=2000, folder="Show.S01", file_list=["Show.S01E01.mkv", "Show.S01E02.mkv"],
+        file_sizes={"Show.S01E01.mkv": 1000, "Show.S01E02.mkv": 1000},
+    )])
+
+    (c,) = matching.match_file(ctx, anchor, anchor.media_item_id, 157336)
+
+    assert c.confidence == matching.CONFIDENCE_NO_MATCH
+    assert c.ambiguity_reason == "season_pack_partial"
 
 
 def test_match_file_persists_one_candidate_per_torrent_candidate(db_session, monkeypatch):
     monkeypatch.setattr(matching, "compute_unique_id", lambda path: None)
-    tracker = Tracker(label="t", adapter_type="unit3d", base_url="https://t.example", api_token="x")
-    db_session.add(tracker)
-    db_session.commit()
-    media_item = MediaItem(content_type="movie", tmdb_id=157336)
-    db_session.add(media_item)
-    db_session.commit()
-
-    adapter = FakeTrackerAdapter(
-        [_tc(torrent_id_remote="1", size_bytes=1000), _tc(torrent_id_remote="2", size_bytes=999)]
+    ctx, anchor = _anchor_ctx(
+        db_session, [_tc(torrent_id_remote="1", size_bytes=1000), _tc(torrent_id_remote="2", size_bytes=999)]
     )
 
-    candidates = matching.match_file(
-        db_session, media_item.id, 157336, "/media/Movie.2024.mkv", 1000, tracker, adapter, "media_to_torrent"
-    )
+    candidates = matching.match_file(ctx, anchor, anchor.media_item_id, 157336)
 
     assert len(candidates) == 2
     assert db_session.query(Candidate).count() == 2

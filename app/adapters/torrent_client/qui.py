@@ -139,7 +139,12 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
         else:
             recheck_status = "failed"
 
-        return TorrentStatus(info_hash=torrent["hash"], state=state, recheck_status=recheck_status, progress=progress)
+        amount_left = torrent.get("amount_left")
+        return TorrentStatus(
+            info_hash=torrent["hash"], state=state, recheck_status=recheck_status, progress=progress,
+            incomplete=state not in ERROR_STATES and state not in CHECKING_STATES and progress < 1.0,
+            amount_left=int(amount_left) if amount_left is not None else None,
+        )
 
     def list_torrents(self) -> list[ClientTorrentInfo]:
         logger.debug("qui[%s]: list_torrents() — recupero la lista paginata...", self.instance_id)

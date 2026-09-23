@@ -88,6 +88,10 @@ class ArrGrab:
 class ArrIndex:
     _identities: dict[tuple[str, int], ArrIdentity] = field(default_factory=dict)
     _grabs: dict[tuple[str, int], ArrGrab] = field(default_factory=dict)
+    # (droppedPath, size) -> (importedPath, size): dove è finito in libreria
+    # ogni file di un download, anche dopo il rename di Sonarr/Radarr — è ciò
+    # che collega i file di un season pack ai singoli episodi importati.
+    _imports: dict[tuple[str, int], tuple[str, int]] = field(default_factory=dict)
 
     def add_identity(self, path: str, size: int, identity: ArrIdentity) -> None:
         self._identities.setdefault((path_key(path), size), identity)
@@ -103,12 +107,20 @@ class ArrIndex:
     def grab_for(self, path: str, size: int) -> ArrGrab | None:
         return self._grabs.get((path_key(path), size))
 
+    def add_import(self, dropped_path: str, imported_path: str, size: int) -> None:
+        self._imports.setdefault((path_key(dropped_path), size), (path_key(imported_path), size))
+
+    def imported_for(self, dropped_path: str, size: int) -> tuple[str, int] | None:
+        """Chiave (path_key, size) del file in libreria importato da questo
+        file del download — da cercare fra i media_file con la stessa chiave."""
+        return self._imports.get((path_key(dropped_path), size))
+
     def __len__(self) -> int:
         return len(self._identities) + len(self._grabs)
 
     @property
     def counts(self) -> dict[str, int]:
-        return {"identities": len(self._identities), "grabs": len(self._grabs)}
+        return {"identities": len(self._identities), "grabs": len(self._grabs), "imports": len(self._imports)}
 
 
 class ArrApi:
@@ -179,9 +191,12 @@ def _index_history(api: ArrApi, index: ArrIndex) -> None:
             size = int(data.get("size"))
         except (TypeError, ValueError):
             continue
+        imported, dropped = data.get("importedPath"), data.get("droppedPath")
+        if imported and dropped:
+            index.add_import(dropped, imported, size)
         if grab is None:
             continue
-        for path in (data.get("importedPath"), data.get("droppedPath")):
+        for path in (imported, dropped):
             if path:
                 index.add_grab(path, size, grab)
 

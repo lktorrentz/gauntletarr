@@ -27,8 +27,18 @@ def test_custom_pattern_with_slash_matches_full_relative_path():
 
 
 def test_no_patterns_excludes_nothing():
-    exclusions = compile_exclusions(None, None)
+    # Stringa vuota salvata = l'utente ha scelto "nessun preset".
+    exclusions = compile_exclusions(None, "")
     assert not exclusions.is_excluded("anything/at/all.nfo")
+
+
+def test_presets_never_saved_enable_media_server_metadata_by_default():
+    exclusions = compile_exclusions(None, None)
+    assert exclusions.is_excluded("tv/Show/Season 01/Show - S01E01-thumb.jpg")
+    assert exclusions.is_excluded("movies/Interstellar (2014)/poster.jpg")
+    assert exclusions.is_excluded("movies/Interstellar (2014)/Interstellar.nfo")
+    assert not exclusions.is_excluded("movies/Interstellar (2014)/Interstellar.mkv")
+    assert not exclusions.is_excluded("movies/Interstellar (2014)/Interstellar.en.srt")
 
 
 def test_preset_qbittorrent_incomplete():

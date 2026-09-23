@@ -34,6 +34,13 @@ CLIENT_INCOMPLETE_PRESETS: dict[str, list[str]] = {
 # Spazzatura tipica di una release scena/tracker, mai il contenuto vero.
 SCENE_JUNK_PRESET = "scene_junk"
 
+# Metadati che media server e *arr scrivono accanto ai video in libreria
+# (poster, fanart, nfo Kodi/Radarr/Sonarr): mai parte di un torrent, ma da
+# quando lo scanner registra ogni file lato libreria renderebbero la vista
+# Media files illeggibile. Attivo di default finché l'utente non salva le
+# proprie scelte (DEFAULT_ENABLED_PRESETS).
+MEDIA_SERVER_METADATA_PRESET = "media_server_metadata"
+
 PRESETS: dict[str, list[str]] = {
     **CLIENT_INCOMPLETE_PRESETS,
     SCENE_JUNK_PRESET: [
@@ -43,7 +50,17 @@ PRESETS: dict[str, list[str]] = {
         "screens/*", "screenshots/*",
         "*thumbs.db", "*.ds_store",
     ],
+    MEDIA_SERVER_METADATA_PRESET: [
+        "poster.*", "fanart.*", "banner.*", "clearlogo.*", "clearart.*", "landscape.*", "logo.*",
+        "folder.jpg", "folder.png", "*-thumb.jpg", "*-poster.*", "*-fanart.*",
+        "season*-poster.*", "season*-banner.*", "season*-fanart.*",
+        "theme.mp3", ".actors/*", "*.nfo",
+    ],
 }
+
+# Preset attivi quando exclusion_presets non è mai stato salvato (None).
+# Una stringa vuota salvata dall'utente significa invece "nessuno".
+DEFAULT_ENABLED_PRESETS = [MEDIA_SERVER_METADATA_PRESET]
 
 
 @dataclass
@@ -83,7 +100,8 @@ def parse_preset_keys(raw: str | None) -> list[str]:
 
 def compile_exclusions(custom_patterns_raw: str | None, enabled_presets_raw: str | None) -> CompiledExclusions:
     patterns = list(parse_custom_patterns(custom_patterns_raw))
-    for key in parse_preset_keys(enabled_presets_raw):
+    preset_keys = DEFAULT_ENABLED_PRESETS if enabled_presets_raw is None else parse_preset_keys(enabled_presets_raw)
+    for key in preset_keys:
         patterns.extend(PRESETS.get(key, []))
     return CompiledExclusions(patterns=patterns)
 

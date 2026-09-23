@@ -19,6 +19,7 @@ Definizione usata qui (coerente con la tabella di SPEC.md sezione 3):
 from sqlalchemy.orm import Session
 
 from app.exclusions import CompiledExclusions
+from app.file_types import is_video
 from app.models import ClientTorrentFile, MediaFile, MediaItem, SeedFile
 
 _NO_EXCLUSIONS = CompiledExclusions(patterns=[])
@@ -163,8 +164,9 @@ def media_items_overview(
 def unmatched_media_files(
     session: Session, disk_id: int | None = None, exclusions: CompiledExclusions = _NO_EXCLUSIONS
 ) -> list[dict]:
-    """media_file senza alcuna identità risolta ("unmatched", sezione 3) —
-    mai in media_items_overview, che parte sempre da un media_item."""
+    """media_file video senza alcuna identità risolta ("unmatched", sezione
+    3) — mai in media_items_overview, che parte sempre da un media_item. I
+    file non video non hanno mai un'identità, quindi non sono "unmatched"."""
     query = session.query(MediaFile).filter(MediaFile.media_item_id.is_(None))
     if disk_id is not None:
         query = query.filter_by(disk_id=disk_id)
@@ -175,4 +177,5 @@ def unmatched_media_files(
             "excluded": exclusions.is_excluded(mf.relative_path), "linked_paths": [],
         }
         for mf in query.order_by(MediaFile.relative_path).all()
+        if is_video(mf.relative_path)
     ]

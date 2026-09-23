@@ -3,20 +3,19 @@ cerca candidati sul tracker e scrive righe `candidate` con confidence
 esplicita e spiegabile (mai un punteggio ML opaco). Vedi docs/SPEC.md
 sezioni 3, 6, 8.
 
-Season pack (torrent con più di un file video) sono **fuori scope in
-questa fase**: ricevono confidence 0.0 e ambiguity_reason=
-"season_pack_not_supported", sempre instradati in revisione manuale, mai
-auto-eseguiti — semplificazione esplicita rispetto a ratio-guardian (che
-isola l'episodio cercato dentro il pack via guessit sui nomi dei file
-del pack). Vedi docs/ROADMAP.md Fase 4 per il motivo di questa scelta.
+Ogni candidato è un torrent intero, valutato file per file da
+app/torrent_layout.py: un film a file singolo, un film col suo .nfo, un
+season pack. Un pack si ricrea solo se ogni suo episodio ha un file locale
+verificato ("season_pack_partial" altrimenti, confidence 0).
 
-Le due direzioni (docs/SPEC.md sezione 3) condividono lo stesso
-`score_candidate`/verifica piece-hash, cambia solo quali file orfani si
-iterano e quale soglia si applica poi in fase di revisione (app/review.py).
+Le due direzioni (docs/SPEC.md sezione 3) condividono la stessa
+valutazione, cambia solo da quale lato si cercano i file locali e quale
+soglia si applica poi in fase di revisione (app/review.py).
 """
 
 import json
 import logging
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -24,249 +23,236 @@ from sqlalchemy.orm import Session
 from app import settings_repo
 from app.adapters.tracker.base import (
     NotSupportedError,
-    TorrentCandidate,
     TrackerAdapter,
     TrackerRateLimitedError,
     UploadError,
 )
 from app.arr import ArrGrab, ArrIndex, host_of
 from app.exclusions import CompiledExclusions, load_exclusions
+from app.file_types import is_video
 from app.mediainfo_util import compute_unique_id
-from app.models import Candidate, ClientTorrentFile, MatchAttempt, MediaFile, SeedFile, Tracker
+from app.models import (
+    Candidate,
+    CandidateFile,
+    ClientTorrentFile,
+    MatchAttempt,
+    MediaFile,
+    SeedFile,
+    Tracker,
+)
 from app.torrent_file import TorrentInfo, TorrentMetainfoError, compute_info_hash, parse_torrent_info
-from app.torrent_pieces import verify_file_pieces
+from app.torrent_layout import (
+    CONFIDENCE_NO_MATCH,
+    CONFIDENCE_PIECE_VERIFIED,  # noqa: F401  (riesportate: le soglie vivono in torrent_layout)
+    CONFIDENCE_SIZE_AND_MEDIAINFO_MATCH,  # noqa: F401
+    CONFIDENCE_SIZE_ONLY,  # noqa: F401
+    Layout,
+    LayoutEvaluation,
+    LocalFiles,
+    evaluate,
+    layout_from_catalog,
+    layout_from_torrent,
+    map_media_side,
+    map_seed_side,
+)
 
 logger = logging.getLogger(__name__)
-
-# Regole esplicite (docs/SPEC.md sezione 6), non un punteggio ML.
-CONFIDENCE_PIECE_VERIFIED = 0.99
-CONFIDENCE_SIZE_AND_MEDIAINFO_MATCH = 0.9
-CONFIDENCE_SIZE_ONLY = 0.5
-CONFIDENCE_NO_MATCH = 0.0
 
 # Ogni quanto un file orfano già cercato su un tracker viene ricercato
 # comunque, anche se nulla è cambiato (nuovi upload sul tracker). Setting
 # app_settings "rematch_interval_days", 0 = ricerca a ogni run come prima.
 DEFAULT_REMATCH_INTERVAL_DAYS = 7
 
-
-def _is_single_file_candidate(tc: TorrentCandidate) -> bool:
-    files = tc.file_list or []
-    return len(files) <= 1
-
-
-def score_candidate(
-    local_path: str, local_size: int, tc: TorrentCandidate
-) -> tuple[float, bool | None, bool | None, str | None]:
-    """(confidence, size_match, mediainfo_match, ambiguity_reason). Non
-    calcola piece_verified qui — richiede un fetch di rete, fatto solo se
-    conviene davvero (vedi match_file)."""
-    if not _is_single_file_candidate(tc):
-        return CONFIDENCE_NO_MATCH, None, None, "season_pack_not_supported"
-
-    size_match = tc.size_bytes == local_size
-    if not size_match:
-        return CONFIDENCE_NO_MATCH, False, None, None
-
-    mediainfo_match = None
-    if tc.mediainfo_unique_id is not None:
-        local_unique_id = compute_unique_id(local_path)
-        if local_unique_id is not None:
-            mediainfo_match = local_unique_id == tc.mediainfo_unique_id
-
-    if mediainfo_match is False:
-        # dimensione combacia ma il contenuto reale no: falso positivo,
-        # non un candidato debole da mandare comunque in review.
-        return CONFIDENCE_NO_MATCH, True, False, "mediainfo_mismatch"
-    if mediainfo_match is True:
-        return CONFIDENCE_SIZE_AND_MEDIAINFO_MATCH, True, True, None
-    return CONFIDENCE_SIZE_ONLY, True, None, None
+# Motivi per cui un torrent non riguarda proprio il file cercato (es. il
+# pack di un'altra stagione, trovato cercando per tmdb_id della serie):
+# nessuna riga di audit, sarebbe solo rumore moltiplicato per ogni episodio.
+_UNRELATED_REASONS = {"anchor_not_in_torrent"}
 
 
-def _verify_piece_hash(
-    local_path: str, tc: TorrentCandidate, tracker_adapter: TrackerAdapter
-) -> tuple[str | None, bool | None, int | None]:
-    """Scarica il .torrent (tramite l'adapter, così passa dal rate limiting
-    del tracker) e verifica i piece hash del file locale (solo candidati a
-    file singolo arrivano qui, vedi score_candidate). None su qualunque
-    problema di rete/formato — mai un'eccezione che interrompe il matching
-    dell'intero file. Unica eccezione: TrackerRateLimitedError risale,
-    perché significa smettere di interrogare questo tracker del tutto."""
-    if not tc.download_link:
-        return None, None, None
-    try:
-        content = tracker_adapter.download_torrent(tc.download_link)
-        parsed = parse_torrent_info(content)
-        info_hash = compute_info_hash(content)
-    except TrackerRateLimitedError:
-        raise
-    except (UploadError, NotSupportedError, TorrentMetainfoError):
-        logger.warning("Download/parsing del .torrent fallito per la verifica piece-hash", exc_info=True)
-        return None, None, None
+@dataclass
+class MatchContext:
+    """Stato di UN tracker per UNA run di matching, condiviso fra tutti gli
+    orfani: indici dei file locali, .torrent già scaricati, torrent multi-
+    video già valutati (un pack di 10 episodi orfani si valuta e scarica una
+    volta sola, non dieci)."""
 
-    return _verify_pieces_from_torrent(local_path, parsed, info_hash)
+    session: Session
+    tracker_row: Tracker
+    tracker_adapter: TrackerAdapter
+    direction: str
+    arr_index: ArrIndex | None = None
+    local: LocalFiles | None = None
+    evaluated_packs: set[str] = field(default_factory=set)
+    _torrents: dict[str, TorrentInfo | None] = field(default_factory=dict)
+    _info_hashes: dict[str, str] = field(default_factory=dict)
+
+    def local_files(self) -> LocalFiles:
+        if self.local is None:
+            self.local = LocalFiles.load(self.session)
+        return self.local
+
+    def fetch_torrent(self, url: str | None) -> TorrentInfo | None:
+        """Scarica e analizza un .torrent tramite l'adapter (rate limit del
+        tracker), al massimo una volta per URL per run. None su qualunque
+        problema di rete/formato; TrackerRateLimitedError risale."""
+        if not url:
+            return None
+        if url not in self._torrents:
+            try:
+                content = self.tracker_adapter.download_torrent(url)
+                self._torrents[url] = parse_torrent_info(content)
+                self._info_hashes[url] = compute_info_hash(content)
+            except TrackerRateLimitedError:
+                raise
+            except (UploadError, NotSupportedError, TorrentMetainfoError):
+                logger.warning("Download/parsing del .torrent fallito: %s", url.split("?")[0], exc_info=True)
+                self._torrents[url] = None
+        return self._torrents[url]
+
+    def info_hash(self, url: str | None) -> str | None:
+        return self._info_hashes.get(url) if url else None
 
 
-def _verify_pieces_from_torrent(
-    local_path: str, parsed: TorrentInfo, info_hash: str
-) -> tuple[str | None, bool | None, int | None]:
-    if len(parsed.files) != 1:
-        return info_hash, None, None
-    entry = parsed.files[0]
-    result = verify_file_pieces(
-        local_path, parsed.piece_length, parsed.pieces, parsed.total_length, entry.offset, entry.length
+def _map(ctx: MatchContext, layout: Layout, anchor: MediaFile | SeedFile):
+    if ctx.direction == "media_to_torrent":
+        return map_media_side(layout, anchor, ctx.local_files(), ctx.arr_index)
+    return map_seed_side(layout, anchor, ctx.local_files())
+
+
+def _evaluate(ctx: MatchContext, layout: Layout, anchor, *, download_link: str | None,
+              unique_ids: dict[str, str] | None, single_unique_id: str | None) -> LayoutEvaluation:
+    return evaluate(
+        _map(ctx, layout, anchor), layout,
+        anchor_id=anchor.id,
+        unique_ids=unique_ids,
+        single_unique_id=single_unique_id,
+        # lambda, non il riferimento diretto: i test sostituiscono matching.compute_unique_id
+        compute_unique_id=lambda path: compute_unique_id(path),
+        fetch_torrent=lambda: ctx.fetch_torrent(download_link),
     )
-    if result.mismatches > 0:
-        return info_hash, False, result.boundary
-    if result.clean:
-        return info_hash, True, result.boundary
-    return info_hash, None, result.boundary
 
 
-def match_file(
-    session: Session,
+def _persist(
+    ctx: MatchContext,
+    *,
     media_item_id: int,
-    tmdb_id: int,
-    local_path: str,
-    local_size: int,
-    tracker_row: Tracker,
-    tracker_adapter: TrackerAdapter,
-    direction: str,
-) -> list[Candidate]:
-    """Cerca sul tracker per tmdb_id e valuta ogni candidato contro un solo
-    file locale (mai season-pack-aware, vedi sopra). Persiste tutte le
-    righe candidate anche a confidence 0 (audit trail), un solo commit per
-    chiamata."""
-    torrent_candidates = tracker_adapter.search_by_tmdb(tmdb_id)
-    persisted = []
-    for tc in torrent_candidates:
-        confidence, size_match, mediainfo_match, ambiguity_reason = score_candidate(local_path, local_size, tc)
-
-        piece_verified = None
-        piece_boundary_count = None
-        info_hash = None
-        # Solo per i candidati ambigui (size ok, mediainfo non conclusivo)
-        # vale la spesa di un fetch di rete + rilettura del file — mai per
-        # ogni candidato di ogni file.
-        if confidence == CONFIDENCE_SIZE_ONLY:
-            info_hash, piece_verified, piece_boundary_count = _verify_piece_hash(local_path, tc, tracker_adapter)
-            if piece_verified is False:
-                confidence, ambiguity_reason = CONFIDENCE_NO_MATCH, "piece_mismatch"
-            elif piece_verified is True:
-                confidence, ambiguity_reason = CONFIDENCE_PIECE_VERIFIED, None
-
-        persisted.append(_candidate_row(
-            tc, media_item_id=media_item_id, tracker_row=tracker_row, direction=direction,
-            source="catalog_search", info_hash=info_hash or tc.info_hash, size_match=size_match,
-            mediainfo_match=mediainfo_match, piece_verified=piece_verified,
-            piece_boundary_count=piece_boundary_count, confidence=confidence, ambiguity_reason=ambiguity_reason,
+    torrent_id_remote: str,
+    name: str,
+    size_bytes: int,
+    layout: Layout,
+    evaluation: LayoutEvaluation,
+    download_link: str | None,
+    info_hash: str | None,
+    source: str,
+) -> Candidate:
+    candidate = Candidate(
+        media_item_id=media_item_id,
+        tracker_id=ctx.tracker_row.id,
+        torrent_id_remote=torrent_id_remote,
+        info_hash=info_hash or ctx.info_hash(download_link),
+        name=name,
+        size_bytes=size_bytes,
+        file_list_json=json.dumps([f.path for f in layout.files]),
+        folder=layout.folder,
+        download_link=download_link,
+        source=source,
+        direction=ctx.direction,
+        size_match=evaluation.size_match,
+        mediainfo_match=evaluation.mediainfo_match,
+        piece_verified=evaluation.piece_verified,
+        piece_boundary_count=evaluation.piece_boundary_count,
+        confidence=evaluation.confidence,
+        ambiguity_reason=evaluation.ambiguity_reason,
+        piece_length=layout.piece_length,
+    )
+    for m in evaluation.files:
+        local = m.local
+        candidate.files.append(CandidateFile(
+            torrent_path=m.layout_file.path,
+            size_bytes=m.layout_file.size,
+            is_video=m.layout_file.is_video,
+            media_file_id=local.id if local is not None and local.kind == "media" else None,
+            seed_file_id=local.id if local is not None and local.kind == "seed" else None,
+            size_match=m.size_match,
+            mediainfo_match=m.mediainfo_match,
+            piece_verified=m.piece_verified,
         ))
-    session.add_all(persisted)
-    session.commit()
+    ctx.session.add(candidate)
+    return candidate
+
+
+def match_file(ctx: MatchContext, anchor: MediaFile | SeedFile, media_item_id: int, tmdb_id: int) -> list[Candidate]:
+    """Cerca sul catalogo del tracker per tmdb_id e valuta ogni torrent
+    trovato contro i file locali. Persiste anche i candidati a confidence 0
+    (audit trail), tranne quelli che non riguardano affatto questo file."""
+    persisted = []
+    for tc in ctx.tracker_adapter.search_by_tmdb(tmdb_id):
+        layout = layout_from_catalog(tc.file_list, tc.file_sizes, tc.folder, tc.size_bytes, tc.name)
+        multi_video = len(layout.videos) > 1
+        if multi_video and tc.torrent_id_remote in ctx.evaluated_packs:
+            continue  # già valutato in questa run per un altro episodio dello stesso pack
+        evaluation = _evaluate(
+            ctx, layout, anchor, download_link=tc.download_link,
+            unique_ids=tc.mediainfo_unique_ids_by_filename, single_unique_id=tc.mediainfo_unique_id,
+        )
+        if evaluation.ambiguity_reason in _UNRELATED_REASONS:
+            continue
+        if multi_video:
+            ctx.evaluated_packs.add(tc.torrent_id_remote)
+        persisted.append(_persist(
+            ctx, media_item_id=media_item_id, torrent_id_remote=tc.torrent_id_remote, name=tc.name,
+            size_bytes=tc.size_bytes, layout=layout, evaluation=evaluation, download_link=tc.download_link,
+            info_hash=tc.info_hash, source="catalog_search",
+        ))
+    ctx.session.commit()
     return persisted
 
 
-def _candidate_row(tc: TorrentCandidate, *, media_item_id: int, tracker_row: Tracker, direction: str,
-                   source: str, **scores) -> Candidate:
-    return Candidate(
-        media_item_id=media_item_id,
-        tracker_id=tracker_row.id,
-        torrent_id_remote=tc.torrent_id_remote,
-        name=tc.name,
-        size_bytes=tc.size_bytes,
-        file_list_json=json.dumps(tc.file_list) if tc.file_list is not None else None,
-        folder=tc.folder,
-        download_link=tc.download_link,
-        source=source,
-        direction=direction,
-        **scores,
-    )
-
-
-def match_from_history(
-    session: Session,
-    media_item_id: int,
-    local_path: str,
-    local_size: int,
-    grab: ArrGrab,
-    tracker_row: Tracker,
-    tracker_adapter: TrackerAdapter,
-    direction: str,
-) -> list[Candidate]:
-    """Candidato unico dal torrent che Radarr/Sonarr ricordano per questo
-    file (app/arr.py): un solo download del .torrent al posto della ricerca
-    sul catalogo più i download dei candidati ambigui. Stesse regole di
-    confidence esplicite di match_file (size, poi piece hash sul .torrent
-    già scaricato) — la provenienza dalla history non alza da sola la
-    confidence: un file può essere stato sostituito dopo l'import, sono i
-    piece hash a dirlo. Lista vuota se il .torrent non è scaricabile o
-    leggibile: il chiamante ripiega sulla ricerca normale."""
-    try:
-        content = tracker_adapter.download_torrent(grab.download_url)
-        parsed = parse_torrent_info(content)
-        info_hash = compute_info_hash(content)
-    except TrackerRateLimitedError:
-        raise
-    except (UploadError, NotSupportedError, TorrentMetainfoError):
-        logger.warning("Download del .torrent dalla history fallito, ripiego sulla ricerca", exc_info=True)
+def match_from_history(ctx: MatchContext, anchor: MediaFile | SeedFile, media_item_id: int,
+                       grab: ArrGrab) -> list[Candidate] | None:
+    """Candidato dal torrent che Radarr/Sonarr ricordano per questo file
+    (app/arr.py): un solo download del .torrent al posto della ricerca sul
+    catalogo. Stesse regole di confidence — la provenienza dalla history non
+    alza da sola la confidence: un file può essere stato sostituito dopo
+    l'import, sono size e piece hash a dirlo. None se il .torrent non è
+    scaricabile/leggibile o il pack è già stato valutato in questa run: il
+    chiamante decide se ripiegare sulla ricerca."""
+    if grab.torrent_id_remote in ctx.evaluated_packs:
         return []
-
-    if parsed.is_multi_file:
-        folder, file_list = parsed.name, [f.path for f in parsed.files]
-    else:
-        folder, file_list = None, [parsed.name]
-    tc = TorrentCandidate(
-        torrent_id_remote=grab.torrent_id_remote, info_hash=info_hash, name=parsed.name,
-        size_bytes=parsed.total_length, file_list=file_list, mediainfo_unique_id=None,
-        folder=folder, download_link=grab.download_url,
-        file_sizes={f.path: f.length for f in parsed.files},
+    parsed = ctx.fetch_torrent(grab.download_url)
+    if parsed is None:
+        return None
+    layout = layout_from_torrent(parsed)
+    evaluation = _evaluate(ctx, layout, anchor, download_link=grab.download_url, unique_ids=None,
+                           single_unique_id=None)
+    if len(layout.videos) > 1:
+        ctx.evaluated_packs.add(grab.torrent_id_remote)
+    candidate = _persist(
+        ctx, media_item_id=media_item_id, torrent_id_remote=grab.torrent_id_remote, name=parsed.name,
+        size_bytes=parsed.total_length, layout=layout, evaluation=evaluation, download_link=grab.download_url,
+        info_hash=grab.info_hash, source="history",
     )
-    confidence, size_match, mediainfo_match, ambiguity_reason = score_candidate(local_path, local_size, tc)
-    piece_verified = piece_boundary_count = None
-    if confidence == CONFIDENCE_SIZE_ONLY:
-        _, piece_verified, piece_boundary_count = _verify_pieces_from_torrent(local_path, parsed, info_hash)
-        if piece_verified is False:
-            confidence, ambiguity_reason = CONFIDENCE_NO_MATCH, "piece_mismatch"
-        elif piece_verified is True:
-            confidence, ambiguity_reason = CONFIDENCE_PIECE_VERIFIED, None
-
-    candidate = _candidate_row(
-        tc, media_item_id=media_item_id, tracker_row=tracker_row, direction=direction, source="history",
-        info_hash=info_hash, size_match=size_match, mediainfo_match=mediainfo_match,
-        piece_verified=piece_verified, piece_boundary_count=piece_boundary_count,
-        confidence=confidence, ambiguity_reason=ambiguity_reason,
-    )
-    session.add(candidate)
-    session.commit()
+    ctx.session.commit()
     return [candidate]
 
 
-def _find_candidates(
-    session: Session,
-    *,
-    media_item_id: int,
-    tmdb_id: int,
-    local_path: str,
-    local_size: int,
-    tracker_row: Tracker,
-    tracker_adapter: TrackerAdapter,
-    direction: str,
-    arr_index: ArrIndex | None,
-) -> tuple[list[Candidate], bool]:
+def _anchor_path(anchor: MediaFile | SeedFile) -> str:
+    return f"{anchor.disk.root_path}/{anchor.relative_path}"
+
+
+def find_candidates(ctx: MatchContext, anchor: MediaFile | SeedFile, media_item_id: int,
+                    tmdb_id: int) -> tuple[list[Candidate], bool]:
     """(candidati, da_history). Prima la history di Radarr/Sonarr se ricorda
     un torrent di QUESTO tracker per il file; ricerca sul catalogo solo se
     non c'è o non ha dato un candidato plausibile."""
-    grab = arr_index.grab_for(local_path, local_size) if arr_index is not None else None
-    if grab is not None and grab.tracker_host == host_of(tracker_row.base_url):
-        candidates = match_from_history(
-            session, media_item_id, local_path, local_size, grab, tracker_row, tracker_adapter, direction
-        )
-        if any(c.confidence > CONFIDENCE_NO_MATCH for c in candidates):
+    grab = ctx.arr_index.grab_for(_anchor_path(anchor), anchor.size_bytes) if ctx.arr_index is not None else None
+    if grab is not None and grab.tracker_host == host_of(ctx.tracker_row.base_url):
+        candidates = match_from_history(ctx, anchor, media_item_id, grab)
+        if candidates is not None and (
+            not candidates or any(c.confidence > CONFIDENCE_NO_MATCH for c in candidates)
+        ):
             return candidates, True
-    return match_file(
-        session, media_item_id=media_item_id, tmdb_id=tmdb_id, local_path=local_path, local_size=local_size,
-        tracker_row=tracker_row, tracker_adapter=tracker_adapter, direction=direction,
-    ), False
+    return match_file(ctx, anchor, media_item_id, tmdb_id), False
 
 
 def orphan_media_files(session: Session, exclusions: CompiledExclusions | None = None) -> list[MediaFile]:
@@ -280,7 +266,9 @@ def orphan_media_files(session: Session, exclusions: CompiledExclusions | None =
     return [
         mf
         for mf in session.query(MediaFile).filter(MediaFile.media_item_id.isnot(None)).all()
-        if mf.id not in linked_ids and not (exclusions and exclusions.is_excluded(mf.relative_path))
+        if mf.id not in linked_ids
+        and is_video(mf.relative_path)
+        and not (exclusions and exclusions.is_excluded(mf.relative_path))
     ]
 
 
@@ -305,6 +293,8 @@ def orphan_seed_files_with_identity(
     result = []
     for sf in session.query(SeedFile).filter(SeedFile.media_file_id.isnot(None)).all():
         if sf.id in tracked_ids:
+            continue
+        if not is_video(sf.relative_path):
             continue
         if exclusions and exclusions.is_excluded(sf.relative_path):
             continue
@@ -384,6 +374,7 @@ def run_media_to_torrent_matching(
 
     totals = _new_totals()
     interval = get_rematch_interval(session)
+    ctx = MatchContext(session, tracker_row, tracker_adapter, "media_to_torrent", arr_index)
     for media_file in orphan_media_files(session, load_exclusions(session)):
         tmdb_id = media_file.media_item.tmdb_id
         attempt = _attempt_for(session, tracker_row, media_file_id=media_file.id)
@@ -391,17 +382,7 @@ def run_media_to_torrent_matching(
             totals["skipped_fresh"] += 1
             continue
         try:
-            candidates, from_history = _find_candidates(
-                session,
-                media_item_id=media_file.media_item_id,
-                tmdb_id=tmdb_id,
-                local_path=f"{media_file.disk.root_path}/{media_file.relative_path}",
-                local_size=media_file.size_bytes,
-                tracker_row=tracker_row,
-                tracker_adapter=tracker_adapter,
-                direction="media_to_torrent",
-                arr_index=arr_index,
-            )
+            candidates, from_history = find_candidates(ctx, media_file, media_file.media_item_id, tmdb_id)
             create_review_for_media_file(session, media_file, candidates)
         except TrackerRateLimitedError:
             logger.warning("Tracker %r in rate limit: matching interrotto per questa run", tracker_row.label)
@@ -430,6 +411,7 @@ def run_torrent_to_client_matching(
 
     totals = _new_totals()
     interval = get_rematch_interval(session)
+    ctx = MatchContext(session, tracker_row, tracker_adapter, "torrent_to_client", arr_index)
     for seed_file in orphan_seed_files_with_identity(session, load_exclusions(session)):
         media_item = seed_file.media_file.media_item
         attempt = _attempt_for(session, tracker_row, seed_file_id=seed_file.id)
@@ -437,17 +419,7 @@ def run_torrent_to_client_matching(
             totals["skipped_fresh"] += 1
             continue
         try:
-            candidates, from_history = _find_candidates(
-                session,
-                media_item_id=media_item.id,
-                tmdb_id=media_item.tmdb_id,
-                local_path=f"{seed_file.disk.root_path}/{seed_file.relative_path}",
-                local_size=seed_file.size_bytes,
-                tracker_row=tracker_row,
-                tracker_adapter=tracker_adapter,
-                direction="torrent_to_client",
-                arr_index=arr_index,
-            )
+            candidates, from_history = find_candidates(ctx, seed_file, media_item.id, media_item.tmdb_id)
             create_review_for_seed_file(session, seed_file, candidates)
         except TrackerRateLimitedError:
             logger.warning("Tracker %r in rate limit: matching interrotto per questa run", tracker_row.label)

@@ -30,6 +30,11 @@ class TorrentStatus:
     state: str  # stato nativo del client, non normalizzato
     recheck_status: RecheckStatus
     progress: float  # 0.0-1.0
+    # recheck_status "failed" solo perché mancano dati (nessuno stato di
+    # errore del client): app/executor.py lo accetta se mancano soltanto i
+    # file extra che si sapeva di non avere (seed_job.expected_missing_bytes).
+    incomplete: bool = False
+    amount_left: int | None = None  # byte ancora da scaricare, se il client lo espone
 
 
 @dataclass

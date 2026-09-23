@@ -147,7 +147,7 @@ def test_unreachable_instance_is_skipped_not_fatal(db_session):
     apis = {"radarr": FakeApi({"/api/v3/movie": httpx.ConnectError("down")}), "sonarr": _sonarr_api()}
     index = build_arr_index(db_session, api_factory=lambda inst: apis[inst.label])
 
-    assert index.counts == {"identities": 1, "grabs": 0}
+    assert index.counts == {"identities": 1, "grabs": 0, "imports": 0}
 
 
 def test_path_key_uses_folder_and_filename_case_insensitively():

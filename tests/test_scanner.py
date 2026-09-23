@@ -79,14 +79,18 @@ def test_seed_file_without_media_counterpart_is_orphan_torrent(db_session, tmp_p
     assert seed_states[0]["media_file_id"] is None
 
 
-def test_non_video_extension_ignored_on_media_side(db_session, tmp_path):
+def test_non_video_file_on_media_side_is_indexed_too(db_session, tmp_path):
+    # Anche lato libreria ogni file viene registrato: nfo e sottotitoli
+    # servono a ricreare i torrent che li contengono. Nasconderli è compito
+    # delle esclusioni, mai dello scanner.
     disk, root = _make_disk(db_session, tmp_path)
 
     (root / "media" / "movies" / "readme.txt").write_bytes(b"not a video")
 
     _run_scan(db_session, disk)
 
-    assert library.media_file_states(db_session) == []
+    states = library.media_file_states(db_session)
+    assert [s["relative_path"] for s in states] == [os.path.join("media", "movies", "readme.txt")]
 
 
 def test_non_video_file_on_torrent_side_is_still_indexed(db_session, tmp_path):

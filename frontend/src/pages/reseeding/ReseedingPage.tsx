@@ -19,7 +19,75 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { t } from '@/lib/i18n'
+import { formatBytes } from '@/lib/library-filters'
 import { cn } from '@/lib/utils'
+
+type Review = NonNullable<ReturnType<typeof useReviews>['data']>[number]
+type Layout = NonNullable<Review['layout']>
+
+// Riepilogo di un torrent multi-file (film con extra, season pack), dai
+// dati di candidate_file: cosa verrà ricreato da file locali e cosa
+// scaricherà il client dopo il recheck.
+function layoutSummary(layout: Layout): string {
+  const parts = [
+    t(layout.video_count > 1 ? 'reseeding.seasonPack' : 'reseeding.withExtras'),
+    t('reseeding.videosVerified', {
+      verified: layout.videos_piece_verified,
+      matched: layout.videos_matched,
+      total: layout.video_count,
+    }),
+  ]
+  if (layout.extras_missing > 0) {
+    parts.push(
+      t('reseeding.extrasToDownload', {
+        count: layout.extras_missing,
+        size: formatBytes(layout.extras_missing_bytes),
+      }),
+    )
+  }
+  return parts.join(' · ')
+}
+
+function LayoutFiles({ layout }: { layout: Layout }) {
+  return (
+    <div className="border-t bg-muted/30 p-3">
+      <p className="mb-1.5 text-xs font-medium text-muted-foreground">{t('reseeding.torrentFiles')}</p>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('reseeding.fileInTorrent')}</TableHead>
+            <TableHead>{t('reseeding.localFile')}</TableHead>
+            <TableHead className="w-24 text-right">{t('library.columnSize')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {layout.files.map((f) => (
+            <TableRow key={f.torrent_path}>
+              <TableCell className="max-w-0 truncate font-mono text-xs" title={f.torrent_path}>
+                {f.torrent_path}
+              </TableCell>
+              <TableCell className="max-w-0 truncate text-xs" title={f.local_path ?? undefined}>
+                {f.local_path ? (
+                  <span className={cn(f.piece_verified === false && 'text-destructive')}>
+                    {f.local_path}
+                    {f.piece_verified && <Badge variant="secondary" className="ml-1.5">{t('reseeding.verified')}</Badge>}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {f.is_video ? t('reseeding.missingVideo') : t('reseeding.clientDownloads')}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right text-xs tabular-nums">
+                {f.size_bytes != null ? formatBytes(f.size_bytes) : '—'}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
 
 function CandidateAudit({ mediaItemId }: { mediaItemId: number }) {
   const { data, isPending } = useCandidateAudit(mediaItemId)
@@ -44,7 +112,7 @@ function CandidateAudit({ mediaItemId }: { mediaItemId: number }) {
   )
 }
 
-function ReviewRow({ review }: { review: NonNullable<ReturnType<typeof useReviews>['data']>[number] }) {
+function ReviewRow({ review }: { review: Review }) {
   const [open, setOpen] = useState(false)
   const approve = useApproveReview()
   const reject = useRejectReview()
@@ -63,6 +131,7 @@ function ReviewRow({ review }: { review: NonNullable<ReturnType<typeof useReview
             {review.ambiguity_reason && <span>{review.ambiguity_reason}</span>}
             {review.status === 'auto_approved' && <Badge>{t('reseeding.autoApproved')}</Badge>}
           </div>
+          {review.layout && <p className="text-xs text-muted-foreground">{layoutSummary(review.layout)}</p>}
         </div>
         <Button
           size="sm"
@@ -88,6 +157,7 @@ function ReviewRow({ review }: { review: NonNullable<ReturnType<typeof useReview
         </Button>
       </div>
       <CollapsibleContent>
+        {review.layout && <LayoutFiles layout={review.layout} />}
         <CandidateAudit mediaItemId={review.media_item_id} />
       </CollapsibleContent>
     </Collapsible>

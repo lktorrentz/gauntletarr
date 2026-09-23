@@ -114,7 +114,9 @@ class QBittorrentAdapter(TorrentClientAdapter):
             recheck_status = "failed"
 
         return TorrentStatus(
-            info_hash=torrent.hash, state=state, recheck_status=recheck_status, progress=torrent.progress
+            info_hash=torrent.hash, state=state, recheck_status=recheck_status, progress=torrent.progress,
+            incomplete=state not in ERROR_STATES and state not in CHECKING_STATES and torrent.progress < 1.0,
+            amount_left=getattr(torrent, "amount_left", None),
         )
 
     def list_torrents(self) -> list[ClientTorrentInfo]:

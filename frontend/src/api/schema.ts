@@ -1126,6 +1126,24 @@ export interface components {
             piece_verified: boolean | null;
             /** Ambiguity Reason */
             ambiguity_reason: string | null;
+            layout?: components["schemas"]["LayoutSummary"] | null;
+        };
+        /** CandidateFileResponse */
+        CandidateFileResponse: {
+            /** Torrent Path */
+            torrent_path: string;
+            /** Size Bytes */
+            size_bytes: number | null;
+            /** Is Video */
+            is_video: boolean;
+            /** Local Path */
+            local_path: string | null;
+            /** Size Match */
+            size_match: boolean | null;
+            /** Mediainfo Match */
+            mediainfo_match: boolean | null;
+            /** Piece Verified */
+            piece_verified: boolean | null;
         };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
@@ -1229,6 +1247,8 @@ export interface components {
             key: string;
             /** Patterns */
             patterns: string[];
+            /** Enabled By Default */
+            enabled_by_default: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1286,6 +1306,30 @@ export interface components {
             pending_review: number;
             /** Errors */
             errors: number;
+        };
+        /**
+         * LayoutSummary
+         * @description Riepilogo di un torrent multi-file (film con extra, season pack):
+         *     quanti video, quanti verificati coi piece hash, quanti extra dovrà
+         *     scaricare il client perché non presenti in locale.
+         */
+        LayoutSummary: {
+            /** Folder */
+            folder: string | null;
+            /** Video Count */
+            video_count: number;
+            /** Videos Matched */
+            videos_matched: number;
+            /** Videos Piece Verified */
+            videos_piece_verified: number;
+            /** Extra Count */
+            extra_count: number;
+            /** Extras Missing */
+            extras_missing: number;
+            /** Extras Missing Bytes */
+            extras_missing_bytes: number;
+            /** Files */
+            files: components["schemas"]["CandidateFileResponse"][];
         };
         /** LogEntry */
         LogEntry: {
@@ -1488,6 +1532,7 @@ export interface components {
             candidate_name: string;
             /** Ambiguity Reason */
             ambiguity_reason: string | null;
+            layout?: components["schemas"]["LayoutSummary"] | null;
         };
         /** RunResponse */
         RunResponse: {

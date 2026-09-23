@@ -357,10 +357,36 @@ class Candidate(Base):
     piece_boundary_count: Mapped[int | None]
     confidence: Mapped[float] = mapped_column(nullable=False)
     ambiguity_reason: Mapped[str | None]
+    piece_length: Mapped[int | None]
     created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
 
     media_item: Mapped["MediaItem"] = relationship()
     tracker: Mapped["Tracker"] = relationship()
+    files: Mapped[list["CandidateFile"]] = relationship(
+        order_by="CandidateFile.id", cascade="all, delete-orphan", back_populates="candidate"
+    )
+
+
+class CandidateFile(Base):
+    """Vedi docs/schema.sql: un file del torrent di un candidato e il file
+    locale a cui è stato abbinato (app/torrent_layout.py)."""
+
+    __tablename__ = "candidate_file"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("candidate.id", ondelete="CASCADE"), nullable=False)
+    torrent_path: Mapped[str] = mapped_column(nullable=False)
+    size_bytes: Mapped[int | None]
+    is_video: Mapped[bool] = mapped_column(nullable=False)
+    media_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_file.id", ondelete="SET NULL"))
+    seed_file_id: Mapped[int | None] = mapped_column(ForeignKey("seed_file.id", ondelete="SET NULL"))
+    size_match: Mapped[bool | None]
+    mediainfo_match: Mapped[bool | None]
+    piece_verified: Mapped[bool | None]
+
+    candidate: Mapped["Candidate"] = relationship(back_populates="files")
+    media_file: Mapped["MediaFile | None"] = relationship()
+    seed_file: Mapped["SeedFile | None"] = relationship()
 
 
 class TrackerUploadProfile(Base):
@@ -480,5 +506,6 @@ class SeedJob(Base):
     recheck_status: Mapped[str | None]
     final_status: Mapped[str] = mapped_column(nullable=False, server_default=text("'in_progress'"))
     error_message: Mapped[str | None]
+    expected_missing_bytes: Mapped[int | None]
 
     candidate: Mapped["Candidate"] = relationship()

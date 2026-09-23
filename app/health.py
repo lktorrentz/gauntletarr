@@ -15,11 +15,16 @@ bisogno concreto già osservato.
 from sqlalchemy.orm import Session
 
 from app import library, review
+from app.exclusions import load_exclusions
 
 
 def compute_snapshot(session: Session, disk_id: int | None = None) -> dict:
-    media_states = library.media_file_states(session, disk_id=disk_id)
-    seed_states = library.seed_file_states(session, disk_id=disk_id)
+    # Stessi file che si vedono nelle viste: gli esclusi non contano mai.
+    exclusions = load_exclusions(session)
+    media_states = [f for f in library.media_file_states(session, disk_id=disk_id, exclusions=exclusions)
+                    if not f["excluded"]]
+    seed_states = [f for f in library.seed_file_states(session, disk_id=disk_id, exclusions=exclusions)
+                   if not f["excluded"]]
 
     total_media_size = sum(f["size_bytes"] for f in media_states)
     seeding_media_size = sum(f["size_bytes"] for f in media_states if f["state"] == "seeding")
@@ -35,5 +40,8 @@ def compute_snapshot(session: Session, disk_id: int | None = None) -> dict:
         "ignored_count": sum(1 for f in seed_states if f["state"] == "ignored"),
         "pending_review": len(review.list_ready_for_review(session)),
         "failed": len(review.list_failed_seed_jobs(session)),
-        "unmatched": len(library.unmatched_media_files(session, disk_id=disk_id)),
+        "unmatched": sum(
+            1 for f in library.unmatched_media_files(session, disk_id=disk_id, exclusions=exclusions)
+            if not f["excluded"]
+        ),
     }

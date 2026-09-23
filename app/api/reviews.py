@@ -15,6 +15,56 @@ from app.models import Candidate, MatchReview, SeedJob
 router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 
 
+class CandidateFileResponse(BaseModel):
+    torrent_path: str
+    size_bytes: int | None
+    is_video: bool
+    local_path: str | None  # relative_path del file locale abbinato, None = mancante
+    size_match: bool | None
+    mediainfo_match: bool | None
+    piece_verified: bool | None
+
+
+class LayoutSummary(BaseModel):
+    """Riepilogo di un torrent multi-file (film con extra, season pack):
+    quanti video, quanti verificati coi piece hash, quanti extra dovrà
+    scaricare il client perché non presenti in locale."""
+
+    folder: str | None
+    video_count: int
+    videos_matched: int
+    videos_piece_verified: int
+    extra_count: int
+    extras_missing: int
+    extras_missing_bytes: int
+    files: list[CandidateFileResponse]
+
+
+def _layout_summary(c: Candidate) -> LayoutSummary | None:
+    if len(c.files) <= 1:
+        return None
+    files = []
+    for f in c.files:
+        local = f.media_file or f.seed_file
+        files.append(CandidateFileResponse(
+            torrent_path=f.torrent_path, size_bytes=f.size_bytes, is_video=f.is_video,
+            local_path=local.relative_path if local is not None else None,
+            size_match=f.size_match, mediainfo_match=f.mediainfo_match, piece_verified=f.piece_verified,
+        ))
+    videos = [f for f in files if f.is_video]
+    extras_missing = [f for f in files if not f.is_video and f.local_path is None]
+    return LayoutSummary(
+        folder=c.folder,
+        video_count=len(videos),
+        videos_matched=sum(1 for f in videos if f.local_path is not None),
+        videos_piece_verified=sum(1 for f in videos if f.piece_verified),
+        extra_count=len(files) - len(videos),
+        extras_missing=len(extras_missing),
+        extras_missing_bytes=sum(f.size_bytes or 0 for f in extras_missing),
+        files=files,
+    )
+
+
 class ReviewResponse(BaseModel):
     id: int
     candidate_id: int
@@ -26,6 +76,7 @@ class ReviewResponse(BaseModel):
     confidence: float
     candidate_name: str
     ambiguity_reason: str | None
+    layout: LayoutSummary | None = None  # solo per torrent con più di un file
 
     @classmethod
     def from_model(cls, r: MatchReview) -> "ReviewResponse":
@@ -34,6 +85,7 @@ class ReviewResponse(BaseModel):
             media_file_id=r.media_file_id, seed_file_id=r.seed_file_id,
             status=r.status, direction=r.candidate.direction, confidence=r.candidate.confidence,
             candidate_name=r.candidate.name, ambiguity_reason=r.candidate.ambiguity_reason,
+            layout=_layout_summary(r.candidate),
         )
 
 
@@ -105,6 +157,7 @@ class CandidateAuditResponse(BaseModel):
     mediainfo_match: bool | None
     piece_verified: bool | None
     ambiguity_reason: str | None
+    layout: LayoutSummary | None = None
 
 
 @router.get("/candidates/{media_item_id}", response_model=list[CandidateAuditResponse])
@@ -117,6 +170,7 @@ def list_candidates_for_media_item(media_item_id: int, session: Session = Depend
             id=c.id, tracker_id=c.tracker_id, name=c.name, direction=c.direction,
             confidence=c.confidence, size_match=c.size_match, mediainfo_match=c.mediainfo_match,
             piece_verified=c.piece_verified, ambiguity_reason=c.ambiguity_reason,
+            layout=_layout_summary(c),
         )
         for c in rows
     ]

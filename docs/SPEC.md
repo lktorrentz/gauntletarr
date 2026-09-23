@@ -165,9 +165,23 @@ Default: filename parsing (guessit) → TMDB lookup. Optional Sonarr/Radarr adap
 - **Torrent of origin:** from the history, the torrent a file was imported from. The imported event links `importedPath`/`droppedPath` to a `downloadId`, and the grabbed event gives `guid` (for UNIT3D via Prowlarr, the download URL `…/torrent/download/<id>.<passkey>`) plus the info hash. The matching engine turns this into a single `source='history'` candidate: one `.torrent` download instead of a catalog search, with the same explicit confidence rules (size, then piece hash). It falls back to the catalog search when that candidate isn't plausible.
 - **Path matching:** automatic, with no path-mapping config. The folder and file name plus the exact size must match, because *arr paths live in their own container namespace.
 - **Posters:** Sonarr only exposes TVDB artwork, so a series' TMDB poster costs one `/tv/{id}` call per series, never a per-episode title search.
-- **Known gap:** Sonarr history is mostly season packs, which the matching engine doesn't support yet, so for TV the history only helps with single-episode torrents until season-pack matching exists.
+- **Season packs:** the imported events also map every file of a download (`droppedPath`) to the library file it became (`importedPath`), even after Sonarr renamed it. This is the most precise way to match a pack's episodes (see "Multi-file torrents" below). On the user's instance: 396 pack folders, 8838 files.
 
 **Extension for the grid view**: at TMDB resolution time, download and cache the poster (`tmdb_poster_path` → local image, section 4). A `media_item` with no poster available (very niche content, or TMDB doesn't have it) shows a placeholder in the UI, never a blocking error.
+
+### Multi-file torrents: season packs and releases with extras (implemented 2026-09-23, `app/torrent_layout.py`)
+
+Every candidate is evaluated as a whole torrent, file by file. This replaces the Phase 4 scope reduction ("more than one file = confidence 0"), which also excluded every movie released with an `.nfo` or subtitles next to it.
+- **The library scan records every file**, not only videos. Exclusions are a filter for views, counts and API lookups; an excluded file that is part of a torrent is still used to recreate it. Only videos get an identity and trigger matching.
+- **Matching a pack's videos to local files**, most precise first:
+  1. Sonarr history (`droppedPath` → `importedPath`);
+  2. on the torrent side, the original names under the same root as the orphan;
+  3. guessit season/episode on the pack's file names plus exact size.
+
+  Every file must be on the orphan's disk (hardlinks).
+- **Extras** (nfo, subtitles, sample) match by name, or by extension plus exact size when renamed. Extras with no local file are left for the client to download after the recheck. The recheck counts as ok only if what is left fits `seed_job.expected_missing_bytes`: those extras plus two pieces each for shared boundary pieces. Anything else below 100% still fails.
+- **Confidence:** the lowest of its videos (size → per-file mediainfo Unique ID → per-file piece hash, using the offsets from the `.torrent`, downloaded once per candidate). A pack with any video missing locally is `season_pack_partial`, confidence 0, never executed. User decision: a pack is only recreated whole; seasons collected episode by episode keep using single-episode torrents.
+- **One evaluation per pack per run:** the other orphan episodes of the same pack reuse it, and a torrent already queued or running for another file never gets a second review. Every file of the torrent and its local match is stored in `candidate_file`, which the executor recreates from and the Reseeding page shows.
 
 ### Matching engine (inherits ratio-guardian §7-8, integrated with smartmediareseed)
 

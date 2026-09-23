@@ -20,17 +20,15 @@ app/pipeline.py, non qui — questo modulo resta scoped al solo filesystem.
 import logging
 import os
 from datetime import UTC, datetime
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.db_utils import bulk_upsert
 from app.duplicates import compute_fast_hash
+from app.file_types import VIDEO_EXTENSIONS, is_video  # noqa: F401  (riesportati)
 from app.models import Disk, MediaFile, RunLog, SeedFile
 
 logger = logging.getLogger(__name__)
-
-VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".wmv", ".mov"}
 
 
 def _walk_files(abs_root: str):
@@ -50,17 +48,16 @@ def _walk_files(abs_root: str):
 
 
 def scan_disk(session: Session, disk: Disk, run: RunLog) -> dict[str, int]:
-    """Scansiona un disco: la sua cartella media (se configurata, filtrata
-    alle estensioni video) e, se configurata, la sua cartella torrent (ogni
-    file, senza filtro — un client traccia anche sottotitoli/nfo/sample,
-    servirà per il collegamento coi client_torrent_file dalla Fase 2)."""
+    """Scansiona un disco: la sua cartella media e la sua cartella torrent,
+    se configurate — ogni file su entrambi i lati, video e non. I file
+    extra (nfo, sottotitoli, sample) servono per ricreare torrent che li
+    contengono; nasconderli da viste e conteggi è compito delle esclusioni
+    (app/exclusions.py), mai dello scanner."""
     now = datetime.now(UTC)
     media_rows: list[dict] = []
     if disk.media_rel_path:
         abs_root = os.path.join(disk.root_path, disk.media_rel_path)
         for full_path, st in _walk_files(abs_root):
-            if Path(full_path).suffix.lower() not in VIDEO_EXTENSIONS:
-                continue
             media_rows.append({
                 "disk_id": disk.id,
                 "relative_path": os.path.relpath(full_path, disk.root_path),
