@@ -11,6 +11,11 @@ export const trackers = {
   'trackers.apiUrl': 'API URL',
   'trackers.apiToken': 'API token',
   'trackers.announceUrl': 'Announce URL (upload only)',
+  'trackers.rssKey': 'RSS key (optional)',
+  'trackers.rssKeyPlaceholder': 'Detected automatically',
+  'trackers.rssKeyKnown': 'Already detected — leave blank',
+  'trackers.rssKeyHelp':
+    "You shouldn't need this: the key is read automatically from the tracker's API and kept up to date. It is only used to fix download links saved by Sonarr/Radarr before your key changed. A key set here is used until the tracker's API reports a different one, which then replaces it.",
   'trackers.announceUrlColumn': 'Announce URL',
   'trackers.create': 'Create',
   'trackers.editTracker': 'Edit tracker',

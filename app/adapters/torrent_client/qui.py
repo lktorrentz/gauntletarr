@@ -35,6 +35,7 @@ scrivere, non può sceglierla a runtime.
 import logging
 import os
 import time
+from collections.abc import Callable
 
 from app.adapters.torrent_client.base import (
     CHECKING_STATES,
@@ -146,7 +147,7 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
             amount_left=int(amount_left) if amount_left is not None else None,
         )
 
-    def list_torrents(self) -> list[ClientTorrentInfo]:
+    def list_torrents(self, on_progress: Callable[[int, int], None] | None = None) -> list[ClientTorrentInfo]:
         logger.debug("qui[%s]: list_torrents() — recupero la lista paginata...", self.instance_id)
         torrents = self._fetch_all_torrents()
         logger.debug(
@@ -178,6 +179,8 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
                     files=files,
                 )
             )
+            if on_progress is not None:
+                on_progress(i + 1, len(torrents))
         logger.debug("qui[%s]: list_torrents() completato — %d torrent risolti", self.instance_id, len(result))
         return result
 

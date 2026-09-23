@@ -1425,6 +1425,28 @@ export interface components {
             created: boolean;
         };
         /**
+         * PhaseProgressResponse
+         * @description Una fase della run (app/run_progress.py): done include gli elementi
+         *     saltati (skipped), così done/total è sempre l'avanzamento vero.
+         */
+        PhaseProgressResponse: {
+            /** Status */
+            status: string;
+            /** Done */
+            done: number;
+            /** Total */
+            total: number | null;
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+        };
+        /**
          * RadarrConnectionTestRequest
          * @description Senza instance_id: usata dal dialog "Add instance" per testare prima
          *     ancora di salvare, con i valori appena digitati nel form.
@@ -1551,8 +1573,36 @@ export interface components {
             finished_at: string | null;
             /** Current Phase */
             current_phase: string | null;
+            /** Phase Total */
+            phase_total?: number | null;
+            /** Phase Done */
+            phase_done?: number | null;
+            /** Phase Detail */
+            phase_detail?: string | null;
+            /**
+             * Phases
+             * @default {}
+             */
+            phases: {
+                [key: string]: components["schemas"]["PhaseProgressResponse"];
+            };
             /** Items Scanned */
             items_scanned: number;
+            /**
+             * Matches Found
+             * @default 0
+             */
+            matches_found: number;
+            /**
+             * Auto Executed
+             * @default 0
+             */
+            auto_executed: number;
+            /**
+             * Pending Review
+             * @default 0
+             */
+            pending_review: number;
             /** Errors */
             errors: number;
             /** Last Error */
@@ -1792,6 +1842,8 @@ export interface components {
             announce_url?: string | null;
             /** Rate Limit Per Min */
             rate_limit_per_min?: number | null;
+            /** Rss Key */
+            rss_key?: string | null;
         };
         /** TrackerResponse */
         TrackerResponse: {
@@ -1809,6 +1861,11 @@ export interface components {
             rate_limit_per_min: number | null;
             /** Enabled */
             enabled: boolean;
+            /**
+             * Has Rss Key
+             * @default false
+             */
+            has_rss_key: boolean;
         };
         /** TrackerUpdateRequest */
         TrackerUpdateRequest: {
@@ -1824,6 +1881,8 @@ export interface components {
             rate_limit_per_min?: number | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Rss Key */
+            rss_key?: string | null;
         };
         /** UpdateCheckResponse */
         UpdateCheckResponse: {

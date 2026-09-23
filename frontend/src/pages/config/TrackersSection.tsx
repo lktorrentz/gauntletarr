@@ -26,6 +26,37 @@ import { UploadProfileDialog } from '@/pages/config/UploadProfileDialog'
 
 type Tracker = Schemas['TrackerResponse']
 
+// Facoltativa e quasi sempre inutile: la chiave dei link di download viene
+// appresa dalle risposte dell'API del tracker (app/adapters/tracker/base.py).
+// Serve solo a riscrivere i link salvati da Sonarr/Radarr prima di un
+// cambio di chiave, e mai restituita dall'API (has_rss_key).
+function RssKeyField({
+  id,
+  value,
+  onChange,
+  placeholder,
+}: {
+  id: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id}>{t('trackers.rssKey')}</Label>
+      <Input
+        id={id}
+        type="password"
+        autoComplete="off"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      <p className="text-xs text-muted-foreground">{t('trackers.rssKeyHelp')}</p>
+    </div>
+  )
+}
+
 function AddTrackerDialog() {
   const [open, setOpen] = useState(false)
   const [presetKey, setPresetKey] = useState('')
@@ -33,6 +64,7 @@ function AddTrackerDialog() {
   const [baseUrl, setBaseUrl] = useState('')
   const [apiToken, setApiToken] = useState('')
   const [announceUrl, setAnnounceUrl] = useState('')
+  const [rssKey, setRssKey] = useState('')
   const createTracker = useCreateTracker()
   const { data: bundled } = useBundledUploadProfiles()
 
@@ -50,11 +82,19 @@ function AddTrackerDialog() {
     setBaseUrl('')
     setApiToken('')
     setAnnounceUrl('')
+    setRssKey('')
   }
 
   function submit() {
     createTracker.mutate(
-      { label, adapter_type: 'unit3d', base_url: baseUrl, api_token: apiToken, announce_url: announceUrl || undefined },
+      {
+        label,
+        adapter_type: 'unit3d',
+        base_url: baseUrl,
+        api_token: apiToken,
+        announce_url: announceUrl || undefined,
+        rss_key: rssKey || undefined,
+      },
       {
         onSuccess: () => {
           setOpen(false)
@@ -123,6 +163,7 @@ function AddTrackerDialog() {
               placeholder="https://mytracker.example/announce/passkey"
             />
           </div>
+          <RssKeyField id="t-rss-key" value={rssKey} onChange={setRssKey} placeholder={t('trackers.rssKeyPlaceholder')} />
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={!label || !baseUrl || !apiToken || createTracker.isPending}>
@@ -141,6 +182,7 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
   const [apiToken, setApiToken] = useState('')
   const [announceUrl, setAnnounceUrl] = useState(tracker.announce_url ?? '')
   const [rateLimit, setRateLimit] = useState(tracker.rate_limit_per_min?.toString() ?? '')
+  const [rssKey, setRssKey] = useState('')
   const updateTracker = useUpdateTracker()
 
   function submit() {
@@ -153,12 +195,14 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
           api_token: apiToken || undefined,
           announce_url: announceUrl || undefined,
           rate_limit_per_min: rateLimit ? Number(rateLimit) : undefined,
+          rss_key: rssKey || undefined,
         },
       },
       {
         onSuccess: () => {
           setOpen(false)
           setApiToken('')
+          setRssKey('')
         },
         onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
       },
@@ -195,6 +239,12 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
             <Label htmlFor="t-edit-announce-url">{t('trackers.announceUrl')}</Label>
             <Input id="t-edit-announce-url" value={announceUrl} onChange={(e) => setAnnounceUrl(e.target.value)} />
           </div>
+          <RssKeyField
+            id="t-edit-rss-key"
+            value={rssKey}
+            onChange={setRssKey}
+            placeholder={tracker.has_rss_key ? t('trackers.rssKeyKnown') : t('trackers.rssKeyPlaceholder')}
+          />
           <div className="grid gap-1.5">
             <Label htmlFor="t-edit-rate-limit">{t('trackers.rateLimit')}</Label>
             <Input

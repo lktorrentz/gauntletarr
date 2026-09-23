@@ -43,6 +43,10 @@ CONFIDENCE_SIZE_AND_MEDIAINFO_MATCH = 0.9
 CONFIDENCE_SIZE_ONLY = 0.5
 CONFIDENCE_NO_MATCH = 0.0
 
+# Piece verificati per file video (app/torrent_pieces.py max_pieces): un
+# campione distribuito lungo il file, mai la rilettura dell'intero file.
+PIECE_SAMPLE_SIZE = 8
+
 # Piece che un file extra mancante condivide con i vicini: il client li
 # riscarica interi. Stima prudente quando la piece length non è nota.
 DEFAULT_PIECE_LENGTH = 16 * 1024 * 1024
@@ -371,7 +375,8 @@ def _verify_pieces(m: FileMatch, folder: str | None, parsed: TorrentInfo) -> Non
     if entry is None:
         return
     result = verify_file_pieces(
-        m.local.abs_path, parsed.piece_length, parsed.pieces, parsed.total_length, entry.offset, entry.length
+        m.local.abs_path, parsed.piece_length, parsed.pieces, parsed.total_length, entry.offset, entry.length,
+        max_pieces=PIECE_SAMPLE_SIZE,
     )
     m.piece_boundary_count = result.boundary
     if result.mismatches > 0:

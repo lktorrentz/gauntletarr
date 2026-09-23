@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.adapter_factory import build_torrent_client_adapter
 from app.executor import ExecutionError, execute_review, reconcile_seed_job, retry_seed_job
 from app.models import Candidate, MatchReview, MediaFile, SeedFile, SeedJob, TorrentClient
+from app.run_progress import NULL_PROGRESS
 from app.settings_repo import get_setting
 
 logger = logging.getLogger(__name__)
@@ -206,7 +207,7 @@ def reject(session: Session, review: MatchReview, decided_by: str = "user") -> M
     return review
 
 
-def execute_auto_approved(session: Session) -> dict[str, int]:
+def execute_auto_approved(session: Session, progress=NULL_PROGRESS) -> dict[str, int]:
     """Esegue automaticamente ogni review che il sistema ha già classificato
     auto_approved (confidence sopra soglia, docs/SPEC.md sezione 8) e non ha
     ancora un seed_job — mai le review 'pending', che restano sempre in
@@ -217,8 +218,11 @@ def execute_auto_approved(session: Session) -> dict[str, int]:
         for r in session.query(MatchReview).filter(MatchReview.status == "auto_approved").all()
         if not session.query(SeedJob).filter_by(candidate_id=r.candidate_id).count()
     ]
+    progress.add_total(len(reviews))
     for review in reviews:
         approve(session, review, decided_by="system")
+        progress.advance()
+        progress.result(executed=1)
     return {"executed": len(reviews)}
 
 
@@ -270,7 +274,7 @@ def retry_all_failed(session: Session) -> dict[str, int]:
     return {"succeeded": succeeded, "failed": failed}
 
 
-def reconcile_pending_seed_jobs(session: Session) -> dict[str, int]:
+def reconcile_pending_seed_jobs(session: Session, progress=NULL_PROGRESS) -> dict[str, int]:
     """Ricontrolla lo stato reale nel client per ogni seed_job ancora
     'in_progress' con un info_hash già noto — una sola interrogazione di
     stato per client (mai un hardlink o un add_torrent), quindi non viola
@@ -287,7 +291,9 @@ def reconcile_pending_seed_jobs(session: Session) -> dict[str, int]:
     )
     reconciled = 0
     errors = 0
+    progress.add_total(len(pending))
     for seed_job in pending:
+        progress.advance()
         try:
             reconcile_seed_job(session, seed_job, adapter)
             reconciled += 1

@@ -94,6 +94,7 @@ def build_tracker_adapter(tracker: Tracker) -> TrackerAdapter:
             base_url=tracker.base_url,
             api_token=tracker.api_token,
             rate_limit_per_min=tracker.rate_limit_per_min or 30,
+            rss_key=tracker.rss_key,
         )
     raise ValueError(f"adapter_type tracker non supportato: {tracker.adapter_type!r}")
 

@@ -43,8 +43,32 @@ from sqlalchemy.orm import Session
 from app import adapter_factory, arr, health, matching, media_resolution, review, scanner, torrent_indexer
 from app.adapter_factory import TmdbApiKeyMissingError
 from app.models import Disk, RunLog, TorrentClient, Tracker
+from app.run_progress import RunProgress
 
 logger = logging.getLogger(__name__)
+
+
+def close_interrupted_runs(session: Session) -> int:
+    """All'avvio nessuna run può essere davvero in corso (girano nel
+    processo, in background): una run senza finished_at è stata interrotta
+    da un riavvio o da un crash del container. Chiusa esplicitamente con un
+    errore visibile, altrimenti resterebbe "in corso" per sempre nel popup
+    di stato e in Reseeding. Il lavoro già fatto resta (match_attempt,
+    candidati): la run successiva riparte da dove serve."""
+    now = datetime.now(UTC)
+    interrupted = session.query(RunLog).filter(RunLog.finished_at.is_(None)).all()
+    for run in interrupted:
+        phase = run.current_phase or "start"
+        run.finished_at = now
+        run.current_phase = None
+        run.phase_total = run.phase_done = None
+        run.phase_detail = None
+        run.errors = (run.errors or 0) + 1
+        run.last_error = f"Interrupted by a restart during '{phase}': the next run picks up from there"
+        logger.warning("Run #%s interrotta da un riavvio durante '%s', chiusa", run.id, phase)
+    if interrupted:
+        session.commit()
+    return len(interrupted)
 
 
 def start_run(session: Session, run_type: str) -> RunLog:
@@ -54,12 +78,6 @@ def start_run(session: Session, run_type: str) -> RunLog:
     return run
 
 
-def _set_phase(session: Session, run: RunLog, phase: str) -> None:
-    run.current_phase = phase
-    session.commit()
-    logger.info("Run #%s: fase '%s'", run.id, phase)
-
-
 def _record_failure(session: Session, run: RunLog, errors: int, label: str, exc: Exception) -> int:
     logger.exception("Run #%s: %s fallito", run.id, label)
     session.rollback()
@@ -67,6 +85,17 @@ def _record_failure(session: Session, run: RunLog, errors: int, label: str, exc:
     run.last_error = f"{label}: {exc}"
     session.commit()
     return errors + 1
+
+
+def _remember_rss_key(session: Session, tracker_row: Tracker, tracker_adapter) -> None:
+    """Salva la chiave dei link di download appresa dall'API durante il
+    matching: la prossima run riscrive subito i link della history senza
+    dover prima sbagliare un download."""
+    learned = getattr(tracker_adapter, "rss_key", None)
+    if learned and learned != tracker_row.rss_key:
+        tracker_row.rss_key = learned
+        session.commit()
+        logger.info("Tracker %r: chiave dei link di download aggiornata dall'API", tracker_row.label)
 
 
 def _plural(n: int, singular: str, plural: str) -> str:
@@ -91,15 +120,33 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
         "candidates_found": 0, "auto_executed": 0,
     }
     errors = 0
+    progress = RunProgress(session, run)
+
+    def phase(name: str, total: int | None = None, detail: str | None = None) -> None:
+        progress.start_phase(name, total, detail)
+        logger.info("Run #%s: fase '%s'", run.id, name)
 
     try:
-        _set_phase(session, run, "scanning")
+        phase("scanning", detail="Listing files…")
         disks = session.query(Disk).all()
         logger.info("Run #%s: %d %s da scansionare", run.id, len(disks), _plural(len(disks), "disco", "dischi"))
+        # Prima l'elenco dei file di tutti i dischi (veloce, solo nomi), così
+        # il totale è noto prima della parte lenta (stat + hash).
+        listed: list[tuple[Disk, scanner.DiskFiles]] = []
         for disk in disks:
-            logger.debug("Run #%s: scansione disco %r (%s)", run.id, disk.label, disk.root_path)
+            progress.detail(f"Listing files on {disk.label}…")
             try:
-                counts = scanner.scan_disk(session, disk, run)
+                files = scanner.list_disk_files(disk)
+            except Exception as exc:
+                errors = _record_failure(session, run, errors, f"scan del disco {disk.label!r}", exc)
+                continue
+            listed.append((disk, files))
+            progress.add_total(len(files))
+        for i, (disk, files) in enumerate(listed, start=1):
+            logger.debug("Run #%s: scansione disco %r (%s)", run.id, disk.label, disk.root_path)
+            progress.detail(f"{disk.label} ({i}/{len(listed)})")
+            try:
+                counts = scanner.scan_disk(session, disk, run, files=files, on_progress=progress.advance)
             except Exception as exc:
                 errors = _record_failure(session, run, errors, f"scan del disco {disk.label!r}", exc)
                 continue
@@ -109,8 +156,9 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             )
             totals["media_files_scanned"] += counts["media_files_scanned"]
             totals["seed_files_scanned"] += counts["seed_files_scanned"]
+            run.items_scanned = totals["media_files_scanned"] + totals["seed_files_scanned"]
 
-        _set_phase(session, run, "resolving")
+        phase("resolving", detail="Reading Radarr/Sonarr library and history…")
         # Radarr/Sonarr (opzionali) indicizzati una sola volta per run:
         # servono sia alla risoluzione (identità senza TMDB) sia al matching
         # (torrent d'origine dalla history, senza ricerca sul tracker).
@@ -133,9 +181,12 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             logger.info("Run #%s: TMDB non configurata, salto la risoluzione", run.id)
             resolver = None
         if resolver is not None:
+            progress.detail("Radarr / Sonarr / TMDB" if arr_index is not None and len(arr_index) else "TMDB")
             try:
                 posters_dir = os.path.join(data_dir, "posters")
-                counts = media_resolution.resolve_unmatched_media_files(session, resolver, posters_dir)
+                counts = media_resolution.resolve_unmatched_media_files(
+                    session, resolver, posters_dir, progress=progress
+                )
                 totals["resolved"] = counts["resolved"]
                 totals["unresolved"] = counts["unresolved"]
                 logger.info(
@@ -144,21 +195,35 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                 )
             except Exception as exc:
                 errors = _record_failure(session, run, errors, "risoluzione TMDB", exc)
+        else:
+            progress.detail("TMDB not configured: skipped")
 
-        _set_phase(session, run, "indexing")
+        phase("indexing", total=0)
         torrent_clients = session.query(TorrentClient).filter_by(enabled=True).all()
         logger.info(
             "Run #%s: %d client torrent abilitat%s da indicizzare",
             run.id, len(torrent_clients), _plural(len(torrent_clients), "o", "i"),
         )
-        for torrent_client in torrent_clients:
+        for i, torrent_client in enumerate(torrent_clients, start=1):
             logger.debug(
                 "Run #%s: indicizzazione client %r (%s, %s)",
                 run.id, torrent_client.label, torrent_client.adapter_type, torrent_client.base_url,
             )
+            progress.detail(f"{torrent_client.label} ({i}/{len(torrent_clients)}): listing torrents…")
+            client_total = {"known": False}
+
+            def on_torrent(done: int, total: int, _label=torrent_client.label, _i=i) -> None:
+                if not client_total["known"]:
+                    client_total["known"] = True
+                    progress.add_total(total)
+                    progress.detail(f"{_label} ({_i}/{len(torrent_clients)})")
+                progress.advance()
+
             try:
                 adapter = adapter_factory.build_torrent_client_adapter(torrent_client)
-                counts = torrent_indexer.index_torrent_client(session, torrent_client, adapter, run)
+                counts = torrent_indexer.index_torrent_client(
+                    session, torrent_client, adapter, run, on_progress=on_torrent
+                )
             except Exception as exc:
                 errors = _record_failure(session, run, errors, f"client torrent {torrent_client.label!r}", exc)
                 continue
@@ -169,26 +234,43 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             totals["torrents_indexed"] += counts["torrents_indexed"]
             totals["files_indexed"] += counts["files_indexed"]
 
-        _set_phase(session, run, "matching")
+        phase("matching", total=0)
         trackers = session.query(Tracker).filter_by(enabled=True).all()
         logger.info(
             "Run #%s: %d tracker abilitat%s per il matching",
             run.id, len(trackers), _plural(len(trackers), "o", "i"),
         )
-        for tracker_row in trackers:
+        for i, tracker_row in enumerate(trackers, start=1):
             logger.debug("Run #%s: matching contro tracker %r", run.id, tracker_row.label)
+            where = f"{tracker_row.label} ({i}/{len(trackers)})"
+            current = {"detail": f"{where} · library → torrent"}
+            progress.detail(current["detail"])
+
+            def on_wait(seconds: float | None, _label=tracker_row.label) -> None:
+                progress.detail(
+                    f"{_label}: rate limited (429), retrying in {seconds:.0f}s" if seconds is not None
+                    else current["detail"]
+                )
+
             try:
                 tracker_adapter = adapter_factory.build_tracker_adapter(tracker_row)
-                m2t = matching.run_media_to_torrent_matching(session, tracker_row, tracker_adapter, arr_index)
-                # Già in rate limit: la seconda direzione peggiorerebbe solo il blocco.
-                t2c = (
-                    matching.run_torrent_to_client_matching(session, tracker_row, tracker_adapter, arr_index)
-                    if not m2t["rate_limited"]
-                    else None
+                if hasattr(tracker_adapter, "on_rate_limit_wait"):
+                    tracker_adapter.on_rate_limit_wait = on_wait
+                m2t = matching.run_media_to_torrent_matching(
+                    session, tracker_row, tracker_adapter, arr_index, progress=progress
                 )
+                # Già in rate limit: la seconda direzione peggiorerebbe solo il blocco.
+                t2c = None
+                if not m2t["rate_limited"]:
+                    current["detail"] = f"{where} · torrent → client"
+                    progress.detail(current["detail"])
+                    t2c = matching.run_torrent_to_client_matching(
+                        session, tracker_row, tracker_adapter, arr_index, progress=progress
+                    )
             except Exception as exc:
                 errors = _record_failure(session, run, errors, f"tracker {tracker_row.label!r}", exc)
                 continue
+            _remember_rss_key(session, tracker_row, tracker_adapter)
             parts = [m2t] + ([t2c] if t2c else [])
             candidates = sum(p["candidates"] for p in parts)
             searched = sum(p["files"] for p in parts)
@@ -213,17 +295,17 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                 run.last_error = f"tracker {tracker_row.label!r}: {problem}"
                 session.commit()
 
-        _set_phase(session, run, "executing")
+        phase("executing", total=0)
         try:
-            exec_counts = review.execute_auto_approved(session)
+            exec_counts = review.execute_auto_approved(session, progress=progress)
             totals["auto_executed"] = exec_counts["executed"]
             logger.info("Run #%s: %d review eseguite automaticamente", run.id, exec_counts["executed"])
         except Exception as exc:
             errors = _record_failure(session, run, errors, "esecuzione automatica delle review", exc)
 
-        _set_phase(session, run, "reconciling")
+        phase("reconciling", total=0)
         try:
-            review.reconcile_pending_seed_jobs(session)
+            review.reconcile_pending_seed_jobs(session, progress=progress)
             logger.info("Run #%s: reconcile dei seed_job in corso completato", run.id)
         except Exception as exc:
             errors = _record_failure(session, run, errors, "reconcile dei seed_job in corso", exc)
@@ -237,7 +319,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
         errors += 1
         run.last_error = f"errore inatteso: {exc}"
 
-    run.current_phase = None
+    progress.finish()
     run.finished_at = datetime.now(UTC)
     run.items_scanned = totals["media_files_scanned"] + totals["seed_files_scanned"]
     run.matches_found = totals["candidates_found"]

@@ -320,3 +320,83 @@ def test_pipeline_resolves_through_arr_without_tmdb(db_session, tmp_path, monkey
     mf = db_session.query(MediaFile).one()
     assert mf.resolver_source == "radarr"
     assert mf.media_item.tmdb_id == 157336
+
+
+def test_stale_history_link_falls_back_to_the_current_download_link(db_session, tmp_path, monkeypatch):
+    """Il guid della history ha la chiave di quando è stato fatto il grab: se
+    il tracker lo rifiuta si usa il download_link attuale del torrent, ed è
+    quello che finisce nel candidato (lo scaricherà il client)."""
+    from app.adapters.tracker.base import TorrentCandidate, UploadError
+
+    monkeypatch.setattr(matching, "compute_unique_id", lambda path: None)
+    content = b"0123456789abcdef" * 4
+    tracker, index = _orphan(db_session, tmp_path, content)
+    fresh = "https://itatorrents.xyz/torrent/download/4242.currentkey"
+
+    class StaleKeyTracker(HistoryTracker):
+        detail_calls = 0
+
+        def download_torrent(self, url):
+            self.downloads.append(url)
+            if url == GUID:
+                raise UploadError("The tracker rejected the link (redirect to login)")
+            return self.torrent
+
+        def get_torrent_detail(self, torrent_id_remote):
+            StaleKeyTracker.detail_calls += 1
+            return TorrentCandidate(torrent_id_remote=torrent_id_remote, info_hash=None, name="x", size_bytes=64,
+                                    file_list=None, mediainfo_unique_id=None, download_link=fresh)
+
+    adapter = StaleKeyTracker(torrent=_single_file_torrent(content, "Interstellar.mkv"))
+    totals = matching.run_media_to_torrent_matching(db_session, tracker, adapter, index)
+
+    assert totals["from_history"] == 1
+    assert adapter.search_calls == 0
+    assert adapter.downloads == [GUID, fresh]
+    assert StaleKeyTracker.detail_calls == 1
+    assert db_session.query(Candidate).one().download_link == fresh
+
+
+def test_history_link_is_rewritten_with_the_current_key_without_extra_calls(db_session, tmp_path, monkeypatch):
+    monkeypatch.setattr(matching, "compute_unique_id", lambda path: None)
+    content = b"0123456789abcdef" * 4
+    tracker, index = _orphan(db_session, tmp_path, content)
+    current = "https://itatorrents.xyz/torrent/download/4242.currentkey"
+
+    class KeyedTracker(HistoryTracker):
+        def rewrite_download_link(self, url):
+            return url.replace("deadbeefpasskey", "currentkey")
+
+        def get_torrent_detail(self, torrent_id_remote):
+            raise AssertionError("con la chiave attuale nota non serve il dettaglio")
+
+    adapter = KeyedTracker(torrent=_single_file_torrent(content, "Interstellar.mkv"))
+    matching.run_media_to_torrent_matching(db_session, tracker, adapter, index)
+
+    assert adapter.downloads == [current]
+    assert db_session.query(Candidate).one().download_link == current
+
+
+def test_pipeline_remembers_the_learned_key_and_the_api_never_returns_it(db_session, tmp_path, monkeypatch):
+    from app import adapter_factory
+    from app.api.trackers import TrackerResponse
+
+    tracker = Tracker(label="itt", adapter_type="unit3d", base_url="https://itatorrents.xyz", api_token="x")
+    db_session.add(tracker)
+    db_session.commit()
+
+    class Learning:
+        rss_key = "learnedkey"
+
+        def search_by_tmdb(self, tmdb_id):
+            return []
+
+    monkeypatch.setattr(adapter_factory, "build_tracker_adapter", lambda row: Learning())
+    run = pipeline.start_run(db_session, "manual")
+    pipeline.run_bulk_import(db_session, run, str(tmp_path / "data"))
+
+    db_session.refresh(tracker)
+    assert tracker.rss_key == "learnedkey"
+    body = TrackerResponse.from_model(tracker).model_dump()
+    assert body["has_rss_key"] is True
+    assert "learnedkey" not in str(body)

@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS tracker (
     adapter_type            TEXT NOT NULL,          -- "unit3d", future: "gazelle", etc.
     base_url                TEXT NOT NULL,
     api_token               TEXT NOT NULL,          -- encrypted at rest
+    rss_key                 TEXT,                   -- encrypted at rest; the key in UNIT3D download links
+                                                    -- (/torrent/download/<id>.<rss_key>). Learned automatically
+                                                    -- from the API's download_link, optional manual override:
+                                                    -- rewrites links saved by Sonarr/Radarr before a key change
     announce_url            TEXT,                   -- personal announce URL, needed only for creating a NEW
                                                       -- .torrent to upload (SPEC.md §9) — distinct from base_url
                                                       -- (the API host). Null for a tracker only used for
@@ -139,6 +143,9 @@ CREATE TABLE IF NOT EXISTS run_log (
                             ('scanning','resolving','indexing','matching','executing','reconciling')),
     phase_total         INTEGER,          -- total for the current phase, for live status (X/Y)
     phase_done          INTEGER,          -- done so far in the current phase
+    phase_detail        TEXT,             -- what the current phase is on: disk/client/tracker, rate-limit wait
+    phases_json         TEXT,             -- per phase {status,done,total,skipped,started_at,finished_at},
+                                          -- app/run_progress.py — the status popup's stepper
     items_total         INTEGER,          -- precounted when the run starts (total scan)
     items_scanned       INTEGER DEFAULT 0,
     matches_found        INTEGER DEFAULT 0,

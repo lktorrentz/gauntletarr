@@ -7,6 +7,7 @@ arriva in Fase 5 con APScheduler) così la richiesta HTTP non resta
 bloccata per la durata di una run su una libreria grande.
 """
 
+import json
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -21,22 +22,51 @@ from app.models import RunLog
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
 
+class PhaseProgressResponse(BaseModel):
+    """Una fase della run (app/run_progress.py): done include gli elementi
+    saltati (skipped), così done/total è sempre l'avanzamento vero."""
+
+    status: str  # "running" | "done"
+    done: int
+    total: int | None
+    skipped: int = 0
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
 class RunResponse(BaseModel):
     id: int
     run_type: str
     started_at: datetime
     finished_at: datetime | None
     current_phase: str | None
+    phase_total: int | None = None
+    phase_done: int | None = None
+    phase_detail: str | None = None
+    # Solo le fasi già iniziate, nell'ordine della pipeline: quelle assenti
+    # sono ancora da fare (o non sono mai partite, se la run è finita).
+    phases: dict[str, PhaseProgressResponse] = {}
     items_scanned: int
+    matches_found: int = 0
+    auto_executed: int = 0
+    pending_review: int = 0
     errors: int
     last_error: str | None
 
     @classmethod
     def from_model(cls, run: RunLog) -> "RunResponse":
+        try:
+            phases = json.loads(run.phases_json) if run.phases_json else {}
+        except ValueError:
+            phases = {}
         return cls(
             id=run.id, run_type=run.run_type, started_at=run.started_at,
             finished_at=run.finished_at, current_phase=run.current_phase,
-            items_scanned=run.items_scanned, errors=run.errors, last_error=run.last_error,
+            phase_total=run.phase_total, phase_done=run.phase_done, phase_detail=run.phase_detail,
+            phases=phases,
+            items_scanned=run.items_scanned or 0, matches_found=run.matches_found or 0,
+            auto_executed=run.auto_executed or 0, pending_review=run.pending_review or 0,
+            errors=run.errors or 0, last_error=run.last_error,
         )
 
 

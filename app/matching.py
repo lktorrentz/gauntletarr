@@ -40,6 +40,7 @@ from app.models import (
     SeedFile,
     Tracker,
 )
+from app.run_progress import NULL_PROGRESS
 from app.torrent_file import TorrentInfo, TorrentMetainfoError, compute_info_hash, parse_torrent_info
 from app.torrent_layout import (
     CONFIDENCE_NO_MATCH,
@@ -105,7 +106,7 @@ class MatchContext:
             except TrackerRateLimitedError:
                 raise
             except (UploadError, NotSupportedError, TorrentMetainfoError):
-                logger.warning("Download/parsing del .torrent fallito: %s", url.split("?")[0], exc_info=True)
+                logger.warning("Download/parsing del .torrent fallito: %s", url, exc_info=True)
                 self._torrents[url] = None
         return self._torrents[url]
 
@@ -219,21 +220,46 @@ def match_from_history(ctx: MatchContext, anchor: MediaFile | SeedFile, media_it
     chiamante decide se ripiegare sulla ricerca."""
     if grab.torrent_id_remote in ctx.evaluated_packs:
         return []
-    parsed = ctx.fetch_torrent(grab.download_url)
+    # Prima il link della history con la chiave attuale (se il tracker la
+    # conosce: nessuna chiamata in più), poi, se rifiutato, il dettaglio.
+    rewrite = getattr(ctx.tracker_adapter, "rewrite_download_link", None)
+    download_link = rewrite(grab.download_url) if rewrite else grab.download_url
+    parsed = ctx.fetch_torrent(download_link)
+    if parsed is None:
+        # Il link della history contiene la chiave di quando è stato fatto il
+        # grab: se nel frattempo è cambiata il tracker lo rifiuta. Il
+        # dettaglio del torrent (una chiamata) dà il link con la chiave
+        # attuale — ed è quello che deve finire nel candidato, perché è il
+        # link che poi scaricherà il client.
+        download_link = _current_download_link(ctx, grab.torrent_id_remote)
+        parsed = ctx.fetch_torrent(download_link) if download_link else None
     if parsed is None:
         return None
     layout = layout_from_torrent(parsed)
-    evaluation = _evaluate(ctx, layout, anchor, download_link=grab.download_url, unique_ids=None,
+    evaluation = _evaluate(ctx, layout, anchor, download_link=download_link, unique_ids=None,
                            single_unique_id=None)
     if len(layout.videos) > 1:
         ctx.evaluated_packs.add(grab.torrent_id_remote)
     candidate = _persist(
         ctx, media_item_id=media_item_id, torrent_id_remote=grab.torrent_id_remote, name=parsed.name,
-        size_bytes=parsed.total_length, layout=layout, evaluation=evaluation, download_link=grab.download_url,
+        size_bytes=parsed.total_length, layout=layout, evaluation=evaluation, download_link=download_link,
         info_hash=grab.info_hash, source="history",
     )
     ctx.session.commit()
     return [candidate]
+
+
+def _current_download_link(ctx: MatchContext, torrent_id_remote: str) -> str | None:
+    get_detail = getattr(ctx.tracker_adapter, "get_torrent_detail", None)
+    if get_detail is None:
+        return None
+    try:
+        return get_detail(torrent_id_remote).download_link
+    except TrackerRateLimitedError:
+        raise
+    except (UploadError, NotSupportedError, KeyError, ValueError):
+        logger.warning("Dettaglio del torrent %s non disponibile", torrent_id_remote, exc_info=True)
+        return None
 
 
 def _anchor_path(anchor: MediaFile | SeedFile) -> str:
@@ -363,7 +389,8 @@ def _new_totals() -> dict:
 
 
 def run_media_to_torrent_matching(
-    session: Session, tracker_row: Tracker, tracker_adapter: TrackerAdapter, arr_index: ArrIndex | None = None
+    session: Session, tracker_row: Tracker, tracker_adapter: TrackerAdapter, arr_index: ArrIndex | None = None,
+    progress=NULL_PROGRESS,
 ) -> dict:
     """Un errore su un singolo file lo salta (loggato, contato in "failed")
     senza fermare gli altri; un TrackerRateLimitedError invece ferma il
@@ -375,11 +402,14 @@ def run_media_to_torrent_matching(
     totals = _new_totals()
     interval = get_rematch_interval(session)
     ctx = MatchContext(session, tracker_row, tracker_adapter, "media_to_torrent", arr_index)
-    for media_file in orphan_media_files(session, load_exclusions(session)):
+    orphans = orphan_media_files(session, load_exclusions(session))
+    progress.add_total(len(orphans))
+    for media_file in orphans:
         tmdb_id = media_file.media_item.tmdb_id
         attempt = _attempt_for(session, tracker_row, media_file_id=media_file.id)
         if _is_fresh(attempt, media_file.size_bytes, tmdb_id, interval):
             totals["skipped_fresh"] += 1
+            progress.advance(skipped=1)
             continue
         try:
             candidates, from_history = find_candidates(ctx, media_file, media_file.media_item_id, tmdb_id)
@@ -393,6 +423,7 @@ def run_media_to_torrent_matching(
             logger.exception("Matching fallito per media_file %s su tracker %r", media_file.id, tracker_row.label)
             session.rollback()
             totals["failed"] += 1
+            progress.advance()
             continue
         _record_attempt(
             session, attempt, tracker_row, media_file.size_bytes, tmdb_id, media_file_id=media_file.id
@@ -400,11 +431,14 @@ def run_media_to_torrent_matching(
         totals["files"] += 1
         totals["from_history"] += int(from_history)
         totals["candidates"] += len(candidates)
+        progress.advance()
+        progress.result(candidates=len(candidates))
     return totals
 
 
 def run_torrent_to_client_matching(
-    session: Session, tracker_row: Tracker, tracker_adapter: TrackerAdapter, arr_index: ArrIndex | None = None
+    session: Session, tracker_row: Tracker, tracker_adapter: TrackerAdapter, arr_index: ArrIndex | None = None,
+    progress=NULL_PROGRESS,
 ) -> dict:
     """Stesse regole di run_media_to_torrent_matching, direzione opposta."""
     from app.review import create_review_for_seed_file  # import qui: evita un ciclo review<->matching
@@ -412,11 +446,14 @@ def run_torrent_to_client_matching(
     totals = _new_totals()
     interval = get_rematch_interval(session)
     ctx = MatchContext(session, tracker_row, tracker_adapter, "torrent_to_client", arr_index)
-    for seed_file in orphan_seed_files_with_identity(session, load_exclusions(session)):
+    orphans = orphan_seed_files_with_identity(session, load_exclusions(session))
+    progress.add_total(len(orphans))
+    for seed_file in orphans:
         media_item = seed_file.media_file.media_item
         attempt = _attempt_for(session, tracker_row, seed_file_id=seed_file.id)
         if _is_fresh(attempt, seed_file.size_bytes, media_item.tmdb_id, interval):
             totals["skipped_fresh"] += 1
+            progress.advance(skipped=1)
             continue
         try:
             candidates, from_history = find_candidates(ctx, seed_file, media_item.id, media_item.tmdb_id)
@@ -430,6 +467,7 @@ def run_torrent_to_client_matching(
             logger.exception("Matching fallito per seed_file %s su tracker %r", seed_file.id, tracker_row.label)
             session.rollback()
             totals["failed"] += 1
+            progress.advance()
             continue
         _record_attempt(
             session, attempt, tracker_row, seed_file.size_bytes, media_item.tmdb_id, seed_file_id=seed_file.id
@@ -437,4 +475,6 @@ def run_torrent_to_client_matching(
         totals["files"] += 1
         totals["from_history"] += int(from_history)
         totals["candidates"] += len(candidates)
+        progress.advance()
+        progress.result(candidates=len(candidates))
     return totals

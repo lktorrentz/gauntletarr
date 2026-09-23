@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel
 
-from app import auth, db, scheduler, startup_checks
+from app import auth, db, pipeline, scheduler, startup_checks
 from app.api.auth import router as auth_router
 from app.api.dashboard import router as dashboard_router
 from app.api.disks import router as disks_router
@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
     session_factory = db.make_session_factory(engine)
     with session_factory() as session:
         startup_checks.verify_secret_key(session)
+        pipeline.close_interrupted_runs(session)
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = session_factory

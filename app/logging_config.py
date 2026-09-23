@@ -8,11 +8,34 @@ lì) con soglia configurabile via env LOG_LEVEL (default INFO)."""
 
 import logging
 import os
+import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
 LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
+# Credenziali che finiscono dentro gli URL e da lì nei log (httpx logga ogni
+# richiesta, i traceback riportano l'URL): chiave nei link di download
+# UNIT3D (/torrent/download/<id>.<rsskey>), passkey negli announce, token e
+# api key nei parametri. I log si leggono dalla UI e si incollano in giro:
+# mai una credenziale in chiaro, né su stdout né nel file.
+_REDACTIONS = [
+    (re.compile(r"(/torrent/download/\d+\.)[A-Za-z0-9]+"), r"\1<redacted>"),
+    (re.compile(r"(/announce/)[A-Za-z0-9]{16,}"), r"\1<redacted>"),
+    (re.compile(r"(?i)\b(api_?token|api_?key|apikey|passkey|rsskey|torrent_pass|token)=[^&\s\"']+"), r"\1=<redacted>"),
+]
+
+
+def redact(text: str) -> str:
+    for pattern, replacement in _REDACTIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+class RedactingFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        return redact(super().format(record))
 
 
 def configure_logging() -> None:
@@ -23,7 +46,7 @@ def configure_logging() -> None:
     root.setLevel(level)
 
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATEFMT))
+    handler.setFormatter(RedactingFormatter(LOG_FORMAT, LOG_DATEFMT))
     root.handlers = [handler]
 
     # httpx/httpcore a DEBUG loggerebbero ogni singola richiesta/risposta
@@ -53,6 +76,6 @@ def add_file_handler(log_dir: Path) -> None:
 
     log_dir.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(log_dir / "app.log", maxBytes=5_000_000, backupCount=3)
-    handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATEFMT))
+    handler.setFormatter(RedactingFormatter(LOG_FORMAT, LOG_DATEFMT))
     handler._gauntletarr_file_handler = True
     root.addHandler(handler)

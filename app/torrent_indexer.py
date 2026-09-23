@@ -22,6 +22,7 @@ errore esplicito.
 
 import logging
 import os
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -51,7 +52,11 @@ def _resolve_seed_file_id(
 
 
 def index_torrent_client(
-    session: Session, torrent_client: TorrentClient, adapter: TorrentClientAdapter, run: RunLog
+    session: Session,
+    torrent_client: TorrentClient,
+    adapter: TorrentClientAdapter,
+    run: RunLog,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, int]:
     """Interroga l'adapter e popola client_torrent/client_torrent_file per
     QUESTO client, collegandoli ai seed_file dei dischi ad esso associati
@@ -60,7 +65,9 @@ def index_torrent_client(
     a un seed_file — non è un errore, solo una configurazione incompleta."""
     now = datetime.now(UTC)
     logger.debug("Client %r: chiamata adapter.list_torrents()...", torrent_client.label)
-    torrents: list[ClientTorrentInfo] = adapter.list_torrents()
+    torrents: list[ClientTorrentInfo] = (
+        adapter.list_torrents(on_progress=on_progress) if on_progress is not None else adapter.list_torrents()
+    )
     logger.debug("Client %r: adapter.list_torrents() ha restituito %d torrent", torrent_client.label, len(torrents))
 
     torrent_rows = [

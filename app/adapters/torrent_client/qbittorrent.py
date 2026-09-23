@@ -27,6 +27,7 @@ suo swagger/OpenAPI reale, non solo dedotto. Vedi app/adapters/torrent_client/qu
 
 import logging
 import time
+from collections.abc import Callable
 
 from app.adapters.torrent_client.base import (
     CHECKING_STATES,
@@ -119,9 +120,10 @@ class QBittorrentAdapter(TorrentClientAdapter):
             amount_left=getattr(torrent, "amount_left", None),
         )
 
-    def list_torrents(self) -> list[ClientTorrentInfo]:
+    def list_torrents(self, on_progress: Callable[[int, int], None] | None = None) -> list[ClientTorrentInfo]:
         result = []
-        for torrent in self._client.torrents_info():
+        torrents = list(self._client.torrents_info())
+        for i, torrent in enumerate(torrents):
             files = [
                 ClientTorrentFileInfo(path_in_torrent=f.name, size_bytes=f.size)
                 for f in self._client.torrents_files(torrent_hash=torrent.hash)
@@ -137,4 +139,6 @@ class QBittorrentAdapter(TorrentClientAdapter):
                     files=files,
                 )
             )
+            if on_progress is not None:
+                on_progress(i + 1, len(torrents))
         return result

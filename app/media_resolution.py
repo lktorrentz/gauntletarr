@@ -17,6 +17,7 @@ from app.exclusions import load_exclusions
 from app.file_types import is_video
 from app.models import MediaFile, MediaItem
 from app.poster_cache import download_poster
+from app.run_progress import NULL_PROGRESS
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def get_or_create_media_item(session: Session, resolved: ResolvedMedia) -> Media
 
 
 def resolve_unmatched_media_files(
-    session: Session, resolver: MediaResolverAdapter, posters_dir: str
+    session: Session, resolver: MediaResolverAdapter, posters_dir: str, progress=NULL_PROGRESS
 ) -> dict[str, int]:
     """Per ogni media_file senza media_item_id ancora, prova a risolverlo.
     Un fallimento di rete/resolver su un singolo file viene loggato e
@@ -50,17 +51,18 @@ def resolve_unmatched_media_files(
     I file esclusi (Configuration > Exclusions) non vengono mai risolti:
     niente chiamate TMDB per sample, trailer e simili."""
     exclusions = load_exclusions(session)
-    media_files = session.query(MediaFile).filter(MediaFile.media_item_id.is_(None)).all()
+    videos = [
+        mf for mf in session.query(MediaFile).filter(MediaFile.media_item_id.is_(None)).all()
+        if is_video(mf.relative_path)  # nfo, sottotitoli, immagini: nessuna identità da cercare
+    ]
+    excluded = sum(1 for mf in videos if exclusions.is_excluded(mf.relative_path))
+    media_files = [mf for mf in videos if not exclusions.is_excluded(mf.relative_path)]
+    progress.add_total(len(media_files))
     resolved = 0
     unresolved = 0
-    excluded = 0
 
     for mf in media_files:
-        if not is_video(mf.relative_path):
-            continue  # nfo, sottotitoli, immagini: nessuna identità da cercare
-        if exclusions.is_excluded(mf.relative_path):
-            excluded += 1
-            continue
+        progress.advance()
         abs_path = os.path.join(mf.disk.root_path, mf.relative_path)
         try:
             result = resolver.resolve(abs_path)

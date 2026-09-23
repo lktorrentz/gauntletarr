@@ -13,6 +13,7 @@ aggiunge/modifica mai nulla sul client.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -73,8 +74,10 @@ class TorrentClientAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def list_torrents(self) -> list[ClientTorrentInfo]:
+    def list_torrents(self, on_progress: Callable[[int, int], None] | None = None) -> list[ClientTorrentInfo]:
         """Ogni torrent noto al client, coi suoi file. Usata per popolare
         client_torrent/client_torrent_file (Fase 2) — mai per aggiungere o
-        modificare nulla sul client."""
+        modificare nulla sul client. `on_progress(fatti, totale)` dopo ogni
+        torrent, per l'avanzamento della run: il totale è noto appena il
+        client restituisce l'elenco, i file arrivano poi uno a uno."""
         raise NotImplementedError

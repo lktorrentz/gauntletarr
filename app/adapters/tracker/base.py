@@ -16,10 +16,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from typing import Literal
+from urllib.parse import urlsplit
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+def host_of_url(url: str | None) -> str | None:
+    host = urlsplit(url).netloc.lower() if url else ""
+    return host.removeprefix("www.") or None
 
 
 class NotSupportedError(Exception):
@@ -202,6 +208,7 @@ class Unit3dTrackerAdapter(TrackerAdapter):
         http_client: httpx.Client | None = None,
         cache_ttl_seconds: int = 600,
         sleep: Callable[[float], None] = time.sleep,
+        rss_key: str | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_token = api_token
@@ -210,6 +217,14 @@ class Unit3dTrackerAdapter(TrackerAdapter):
         self._cache_ttl_seconds = cache_ttl_seconds
         self._search_cache: dict[int, tuple[float, list[TorrentCandidate]]] = {}
         self._sleep = sleep
+        # Chiave attuale dei link di download: quella salvata sul tracker,
+        # poi sempre aggiornata dal download_link di ogni risposta dell'API
+        # (che la conosce per definizione), vedi rewrite_download_link().
+        self.rss_key = rss_key
+        # Chiamato con i secondi di attesa prima di un retry su 429, e con
+        # None quando si riprende: la run lo mostra nel popup di stato invece
+        # di sembrare bloccata (app/pipeline.py).
+        self.on_rate_limit_wait: Callable[[float | None], None] | None = None
 
     def search_by_tmdb(self, tmdb_id: int) -> list[TorrentCandidate]:
         cached = self._search_cache.get(tmdb_id)
@@ -298,6 +313,26 @@ class Unit3dTrackerAdapter(TrackerAdapter):
             raise UploadError(f"UNIT3D upload response has no recognizable torrent id: {response_data!r}")
         return match.group(1)
 
+    _DOWNLOAD_KEY_RE = re.compile(r"(/torrent/download/\d+\.)([A-Za-z0-9]+)$")
+
+    def _learn_rss_key(self, download_link: str | None) -> None:
+        match = self._DOWNLOAD_KEY_RE.search(urlsplit(download_link).path) if download_link else None
+        if match and host_of_url(download_link) == host_of_url(self.base_url):
+            self.rss_key = match.group(2)
+
+    def rewrite_download_link(self, url: str) -> str:
+        """Lo stesso link di download con la chiave attuale: un link salvato
+        altrove prima di un cambio di chiave (history di Sonarr/Radarr)
+        torna valido senza chiedere niente al tracker. Invariato se la
+        chiave non è nota, se non è un link di questo tracker o se non ha la
+        forma /torrent/download/<id>.<chiave>."""
+        if not self.rss_key or host_of_url(url) != host_of_url(self.base_url):
+            return url
+        parts = urlsplit(url)
+        if not self._DOWNLOAD_KEY_RE.search(parts.path):
+            return url
+        return parts._replace(path=self._DOWNLOAD_KEY_RE.sub(rf"\g<1>{self.rss_key}", parts.path)).geturl()
+
     def download_torrent(self, url: str) -> bytes:
         # Il download_link di UNIT3D è già autenticato (passkey nell'URL):
         # nessun header Bearer, il token API non deve seguire un URL che
@@ -335,7 +370,16 @@ class Unit3dTrackerAdapter(TrackerAdapter):
                 )
             wait = self._retry_wait_seconds(response, attempt)
             logger.warning("Tracker %s ha risposto 429, nuovo tentativo tra %.0fs", self.base_url, wait)
+            if self.on_rate_limit_wait is not None:
+                self.on_rate_limit_wait(wait)
             self._sleep(wait)
+            if self.on_rate_limit_wait is not None:
+                self.on_rate_limit_wait(None)
+        if response.is_redirect and "/login" in response.headers.get("location", ""):
+            # UNIT3D rimanda al login un link di download con una chiave non
+            # più valida (rsskey rigenerata, o link salvato altrove, es. nella
+            # history di Sonarr/Radarr) invece di rispondere 401/403.
+            raise UploadError("The tracker rejected the link (redirect to login): its key is no longer valid")
         try:
             response.raise_for_status()
         except httpx.HTTPError as exc:
@@ -344,6 +388,7 @@ class Unit3dTrackerAdapter(TrackerAdapter):
 
     def _to_candidate(self, item: dict) -> TorrentCandidate:
         attrs = item["attributes"]
+        self._learn_rss_key(attrs.get("download_link"))
         files = attrs.get("files") or []
         folder, file_list, file_sizes = self._normalize_pack_structure(attrs.get("folder"), files)
         return TorrentCandidate(

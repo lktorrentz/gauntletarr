@@ -98,3 +98,56 @@ def test_zero_length_file_returns_empty_result(tmp_path):
     result = verify_file_pieces(str(path), piece_length=16, pieces=[], total_length=0, file_offset=0, file_length=0)
 
     assert result.clean is False
+
+
+def test_sampling_reads_only_a_spread_of_pieces(tmp_path, monkeypatch):
+    content = bytes(range(256)) * 64  # 16 KiB, 1024 piece da 16 byte
+    path = tmp_path / "movie.mkv"
+    path.write_bytes(content)
+    import builtins
+
+    reads = []
+    real_open = builtins.open
+
+    class Spy:
+        def __init__(self, fh):
+            self._fh = fh
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            self._fh.close()
+
+        def seek(self, pos):
+            reads.append(pos)
+            return self._fh.seek(pos)
+
+        def read(self, n):
+            return self._fh.read(n)
+
+    monkeypatch.setattr(builtins, "open", lambda p, mode="r": Spy(real_open(p, mode)))
+    result = verify_file_pieces(
+        str(path), piece_length=16, pieces=_pieces(content, 16), total_length=len(content),
+        file_offset=0, file_length=len(content), max_pieces=8,
+    )
+
+    assert result.ok == 8 and result.mismatches == 0 and result.clean
+    assert reads[0] == 0 and reads[-1] == len(content) - 16  # primo e ultimo piece compresi
+    assert len(reads) == 8
+
+
+def test_sampling_still_catches_a_corrupted_sampled_piece(tmp_path):
+    content = b"0123456789abcdef" * 64
+    tampered = bytearray(content)
+    tampered[-1] ^= 0xFF  # ultimo piece: sempre nel campione
+    path = tmp_path / "movie.mkv"
+    path.write_bytes(bytes(tampered))
+
+    result = verify_file_pieces(
+        str(path), piece_length=16, pieces=_pieces(content, 16), total_length=len(content),
+        file_offset=0, file_length=len(content), max_pieces=8,
+    )
+
+    assert result.mismatches == 1
+    assert result.clean is False

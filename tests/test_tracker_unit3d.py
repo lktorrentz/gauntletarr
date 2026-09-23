@@ -156,3 +156,44 @@ def test_download_torrent_goes_through_the_adapter_without_bearer_token():
 
     assert content == b"d4:infod4:name1:xee"
     assert "authorization" not in seen[0].headers
+
+
+def test_redirect_to_login_is_a_clear_error():
+    adapter = _adapter(lambda r: httpx.Response(302, headers={"location": "https://tracker.example/login"}))
+
+    with pytest.raises(UploadError, match="no longer valid"):
+        adapter.download_torrent("https://tracker.example/torrent/download/1.oldkey")
+
+
+def _search_item(download_link):
+    return {"type": "torrent", "id": "5", "attributes": {
+        "name": "x", "size": 1, "files": [], "download_link": download_link,
+    }}
+
+
+def test_rss_key_is_learned_from_api_download_links_and_used_to_rewrite_old_links():
+    adapter = _adapter(lambda r: httpx.Response(
+        200, json={"data": [_search_item("https://tracker.example/torrent/download/5.newkey123")]}
+    ))
+    assert adapter.rewrite_download_link("https://tracker.example/torrent/download/9.oldkey") == (
+        "https://tracker.example/torrent/download/9.oldkey"  # chiave ancora ignota: invariato
+    )
+
+    adapter.search_by_tmdb(1)
+
+    assert adapter.rss_key == "newkey123"
+    assert adapter.rewrite_download_link("https://tracker.example/torrent/download/9.oldkey") == (
+        "https://tracker.example/torrent/download/9.newkey123"
+    )
+    # Mai un link di un altro tracker, né un URL con un'altra forma.
+    assert adapter.rewrite_download_link("https://other.example/torrent/download/9.k") == (
+        "https://other.example/torrent/download/9.k"
+    )
+    assert adapter.rewrite_download_link("https://tracker.example/torrents/9") == "https://tracker.example/torrents/9"
+
+
+def test_a_configured_rss_key_is_used_before_any_api_call():
+    adapter = _adapter(lambda r: httpx.Response(500), rss_key="manualkey")
+    assert adapter.rewrite_download_link("https://tracker.example/torrent/download/9.old") == (
+        "https://tracker.example/torrent/download/9.manualkey"
+    )

@@ -19,6 +19,8 @@ app/pipeline.py, non qui — questo modulo resta scoped al solo filesystem.
 
 import logging
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -31,33 +33,63 @@ from app.models import Disk, MediaFile, RunLog, SeedFile
 logger = logging.getLogger(__name__)
 
 
-def _walk_files(abs_root: str):
-    """Ogni file sotto abs_root, come (path assoluto, stat). Un errore di
-    stat su un singolo file (permessi, file sparito durante il walk) viene
-    loggato e saltato — non deve mai far fallire l'intero scan."""
+def _list_files(abs_root: str) -> list[str]:
+    """Ogni file sotto abs_root, solo i nomi (nessuno stat): un primo giro
+    veloce che dà il totale per l'avanzamento prima della parte lenta."""
     if not os.path.isdir(abs_root):
         logger.warning("Percorso non raggiungibile, salto: %s", abs_root)
-        return
-    for dirpath, _dirnames, filenames in os.walk(abs_root):
-        for name in filenames:
-            full_path = os.path.join(dirpath, name)
-            try:
-                yield full_path, os.stat(full_path)
-            except OSError as exc:
-                logger.warning("Impossibile leggere %r: %s", full_path, exc)
+        return []
+    return [os.path.join(dirpath, name) for dirpath, _dirs, names in os.walk(abs_root) for name in names]
 
 
-def scan_disk(session: Session, disk: Disk, run: RunLog) -> dict[str, int]:
+def _stat_files(paths: list[str], on_progress: Callable[[int], None] | None):
+    """(path, stat) per ogni file ancora leggibile. Un errore di stat su un
+    singolo file (permessi, file sparito dopo l'elenco) viene loggato e
+    saltato — non deve mai far fallire l'intero scan."""
+    for full_path in paths:
+        try:
+            st = os.stat(full_path)
+        except OSError as exc:
+            logger.warning("Impossibile leggere %r: %s", full_path, exc)
+            st = None
+        if st is not None:
+            yield full_path, st
+        if on_progress is not None:
+            on_progress(1)
+
+
+@dataclass
+class DiskFiles:
+    media: list[str]
+    seeds: list[str]
+
+    def __len__(self) -> int:
+        return len(self.media) + len(self.seeds)
+
+
+def list_disk_files(disk: Disk) -> DiskFiles:
+    media = _list_files(os.path.join(disk.root_path, disk.media_rel_path)) if disk.media_rel_path else []
+    seeds = _list_files(os.path.join(disk.root_path, disk.torrents_rel_path)) if disk.torrents_rel_path else []
+    return DiskFiles(media=media, seeds=seeds)
+
+
+def scan_disk(
+    session: Session,
+    disk: Disk,
+    run: RunLog,
+    files: DiskFiles | None = None,
+    on_progress: Callable[[int], None] | None = None,
+) -> dict[str, int]:
     """Scansiona un disco: la sua cartella media e la sua cartella torrent,
     se configurate — ogni file su entrambi i lati, video e non. I file
     extra (nfo, sottotitoli, sample) servono per ricreare torrent che li
     contengono; nasconderli da viste e conteggi è compito delle esclusioni
     (app/exclusions.py), mai dello scanner."""
     now = datetime.now(UTC)
+    files = files if files is not None else list_disk_files(disk)
     media_rows: list[dict] = []
-    if disk.media_rel_path:
-        abs_root = os.path.join(disk.root_path, disk.media_rel_path)
-        for full_path, st in _walk_files(abs_root):
+    if files.media:
+        for full_path, st in _stat_files(files.media, on_progress):
             media_rows.append({
                 "disk_id": disk.id,
                 "relative_path": os.path.relpath(full_path, disk.root_path),
@@ -97,9 +129,8 @@ def scan_disk(session: Session, disk: Disk, run: RunLog) -> dict[str, int]:
         inode_to_media_file_id.setdefault((st_dev, inode), media_file_id)
 
     seed_rows: list[dict] = []
-    if disk.torrents_rel_path:
-        abs_root = os.path.join(disk.root_path, disk.torrents_rel_path)
-        for full_path, st in _walk_files(abs_root):
+    if files.seeds:
+        for full_path, st in _stat_files(files.seeds, on_progress):
             seed_rows.append({
                 "disk_id": disk.id,
                 "relative_path": os.path.relpath(full_path, disk.root_path),
