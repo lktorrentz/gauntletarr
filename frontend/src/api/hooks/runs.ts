@@ -30,3 +30,12 @@ export function useTriggerRun() {
     },
   })
 }
+
+export function useCancelRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: number) =>
+      unwrap(api.POST('/api/runs/{run_id}/cancel', { params: { path: { run_id: runId } } })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['runs'] }),
+  })
+}

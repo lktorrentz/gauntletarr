@@ -26,6 +26,13 @@ COMMIT_EVERY = 50
 COMMIT_INTERVAL_SECONDS = 1.0
 
 
+class RunCancelled(BaseException):  # noqa: N818 (non è un errore: è una richiesta dell'utente)
+    """L'utente ha chiesto di fermare la run ("Stop run"). BaseException e
+    non Exception di proposito: ogni fase intercetta Exception per isolare
+    i propri errori e proseguire (un file, un client, un tracker) — una
+    richiesta di stop deve invece attraversarle tutte fino alla pipeline."""
+
+
 class RunProgress:
     def __init__(self, session: Session, run: RunLog):
         self._session = session
@@ -84,7 +91,9 @@ class RunProgress:
         self._run.phase_total = None
         self._run.phase_done = None
         self._run.phase_detail = None
-        self._flush()
+        # Anche dopo uno stop: qui la richiesta è già stata gestita, un
+        # nuovo controllo la rilancerebbe e la run non finirebbe mai.
+        self._flush(check_cancel=False)
 
     # --- interni --------------------------------------------------------
 
@@ -102,11 +111,20 @@ class RunProgress:
         if state.get("total") is None:
             state["total"] = state["done"]
 
-    def _flush(self) -> None:
+    def _flush(self, check_cancel: bool = True) -> None:
         self._run.phases_json = json.dumps(self._phases)
         self._session.commit()
         self._pending = 0
         self._last_commit = time.monotonic()
+        if check_cancel:
+            self._check_cancel()
+
+    def _check_cancel(self) -> None:
+        # Scritta da un'altra sessione (POST /api/runs/{id}/cancel): una
+        # lettura diretta, mai il valore in cache sull'oggetto run.
+        requested = self._session.query(RunLog.cancel_requested_at).filter_by(id=self._run.id).scalar()
+        if requested is not None:
+            raise RunCancelled()
 
 
 class NullProgress:

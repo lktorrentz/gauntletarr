@@ -2,6 +2,8 @@ export const runStatus = {
   'runStatus.inProgress': 'Run #{id} in progress',
   'runStatus.completed': 'Run completed',
   'runStatus.completedWithErrors': 'Run completed with errors',
+  'runStatus.stopping': 'Stopping run #{id}…',
+  'runStatus.stopped': 'Run stopped',
   'runStatus.starting': 'Starting…',
   'runStatus.summary': '{scanned} files scanned, {errors} errors',
   'runStatus.dismiss': 'Dismiss',

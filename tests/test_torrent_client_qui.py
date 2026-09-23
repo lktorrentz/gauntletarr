@@ -181,3 +181,26 @@ def test_fetch_all_torrents_paginates_until_a_short_page():
     torrents = adapter.list_torrents()
 
     assert {t.info_hash for t in torrents} == {"h0", "h1", "h2"}
+
+
+def test_list_torrents_reads_the_qbittorrent_style_save_path():
+    """L'istanza qui reale restituisce save_path (nomi qBittorrent), non il
+    savePath dello swagger: col solo savePath il path era vuoto per ogni
+    torrent e nessun file veniva collegato."""
+    from app.adapters.torrent_client.qui import QuiTorrentClientAdapter
+
+    def handler(request):
+        path = request.url.path
+        if path.endswith("/files"):
+            return httpx.Response(200, json=[{"name": "Movie.mkv", "size": 10}])
+        if path.endswith("/trackers"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json={"torrents": [
+            {"hash": "h1", "name": "Movie", "save_path": "/data/torrents/completed/", "state": "uploading"},
+        ], "total": 1})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://qui")
+    adapter = QuiTorrentClientAdapter(base_url="http://qui", api_token="k", instance_id=1, http_client=client)
+
+    (torrent,) = adapter.list_torrents()
+    assert torrent.save_path == "/data/torrents/completed"

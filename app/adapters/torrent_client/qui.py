@@ -10,7 +10,9 @@ pragmatica originale (vedi ancora qbittorrent.py in questo pacchetto):
   altra chiamata vive sotto `/api/instances/{instanceID}/...` — qui NON è
   la WebUI API nativa di qBittorrent pointed elsewhere, ha una propria API
   di aggregazione con nomi di campo/percorsi diversi (es. `savepath` in
-  ingresso, `savePath` in uscita).
+  ingresso). In uscita la lista torrent usa invece i nomi di qBittorrent
+  (`save_path`, `amount_left`): lo swagger dice `savePath`, l'istanza vera
+  (e Auditorr, che ci gira sopra) no — si leggono entrambi.
 - `POST /api/instances/{id}/torrents` (multipart: `torrent` binario oppure
   `urls`) risponde 201 senza corpo — nessun info_hash restituito, stesso
   problema già risolto in qbittorrent.py con un diff prima/dopo sulla lista.
@@ -172,7 +174,11 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
                 ClientTorrentInfo(
                     info_hash=info_hash,
                     name=torrent.get("name", ""),
-                    save_path=torrent.get("savePath") or "",
+                    # La lista torrent di qui usa i nomi di campo di qBittorrent
+                    # (save_path), verificato sull'istanza reale e come fa
+                    # Auditorr: con il solo "savePath" il path restava vuoto
+                    # per ogni torrent e nessun file veniva mai collegato.
+                    save_path=(torrent.get("save_path") or torrent.get("savePath") or "").rstrip("/"),
                     state=torrent.get("state") or "",
                     category=torrent.get("category") or None,
                     tracker_url=self._first_tracker_url(info_hash),

@@ -42,8 +42,8 @@ from sqlalchemy.orm import Session
 
 from app import adapter_factory, arr, health, matching, media_resolution, review, scanner, torrent_indexer
 from app.adapter_factory import TmdbApiKeyMissingError
-from app.models import Disk, RunLog, TorrentClient, Tracker
-from app.run_progress import RunProgress
+from app.models import Disk, RunLog, SeedFile, TorrentClient, Tracker
+from app.run_progress import RunCancelled, RunProgress
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +199,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             progress.detail("TMDB not configured: skipped")
 
         phase("indexing", total=0)
+        indexing_failed = False
         torrent_clients = session.query(TorrentClient).filter_by(enabled=True).all()
         logger.info(
             "Run #%s: %d client torrent abilitat%s da indicizzare",
@@ -226,6 +227,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                 )
             except Exception as exc:
                 errors = _record_failure(session, run, errors, f"client torrent {torrent_client.label!r}", exc)
+                indexing_failed = True
                 continue
             logger.info(
                 "Run #%s: client %r indicizzato — %d torrent, %d file",
@@ -233,6 +235,33 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             )
             totals["torrents_indexed"] += counts["torrents_indexed"]
             totals["files_indexed"] += counts["files_indexed"]
+            totals["files_linked"] = totals.get("files_linked", 0) + counts.get("files_linked", 0)
+
+        # Il matching torrent -> client cerca sul tracker ogni file lato
+        # torrent che nessun client traccia. Se l'indicizzazione non è
+        # affidabile (un client fallito, o nessun file collegato a un file su
+        # disco: disco non associato o percorsi diversi) OGNI file lato
+        # torrent risulta orfano, e cercarli tutti costerebbe ore di tracker
+        # per candidati di file che in realtà sono già in seed.
+        t2c_problem = None
+        skip_t2c = not torrent_clients  # nessun client: niente a cui aggiungere un torrent, non un errore
+        if skip_t2c:
+            logger.info("Run #%s: nessun client torrent abilitato, matching torrent -> client saltato", run.id)
+        elif session.query(SeedFile).count():
+            if indexing_failed:
+                t2c_problem = "a torrent client could not be indexed"
+            elif not totals.get("files_linked"):
+                t2c_problem = (
+                    "no file of the torrent clients is linked to a file on disk: the client probably sees "
+                    "them under a different path, set its root path on the disk (Configuration > Mapping > "
+                    "Torrent clients)"
+                )
+        if t2c_problem:
+            logger.warning("Run #%s: matching torrent -> client saltato: %s", run.id, t2c_problem)
+            errors += 1
+            run.errors = errors
+            run.last_error = f"Torrent → client matching skipped: {t2c_problem}"
+            session.commit()
 
         phase("matching", total=0)
         trackers = session.query(Tracker).filter_by(enabled=True).all()
@@ -261,7 +290,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                 )
                 # Già in rate limit: la seconda direzione peggiorerebbe solo il blocco.
                 t2c = None
-                if not m2t["rate_limited"]:
+                if not m2t["rate_limited"] and not t2c_problem and not skip_t2c:
                     current["detail"] = f"{where} · torrent → client"
                     progress.detail(current["detail"])
                     t2c = matching.run_torrent_to_client_matching(
@@ -309,6 +338,14 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             logger.info("Run #%s: reconcile dei seed_job in corso completato", run.id)
         except Exception as exc:
             errors = _record_failure(session, run, errors, "reconcile dei seed_job in corso", exc)
+    except RunCancelled:
+        # Stop richiesto dall'utente: non un errore. Il lavoro già salvato
+        # resta (file scansionati, identità, match_attempt, candidati): la
+        # run successiva riparte da lì.
+        session.rollback()
+        stopped_in = run.current_phase or "start"
+        logger.info("Run #%s fermata dall'utente durante '%s'", run.id, stopped_in)
+        run.last_error = f"Stopped by the user during '{stopped_in}'"
     except Exception as exc:
         # Rete di sicurezza: qualunque cosa sfugga ai blocchi già protetti
         # sopra (es. una query() o un commit() di per sé fallito, non solo

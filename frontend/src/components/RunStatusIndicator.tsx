@@ -6,6 +6,7 @@ import {
   CircleDashedIcon,
   CircleIcon,
   Loader2Icon,
+  SquareIcon,
   XIcon,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -167,7 +168,8 @@ export function RunStatusIndicator() {
   const run = isActive ? latestRun : completedFlash
   if (!run) return null
 
-  const hasErrors = !isActive && run.errors > 0
+  const stopped = !isActive && run.cancelled
+  const hasErrors = !isActive && !stopped && run.errors > 0
   const elapsedEnd = run.finished_at ? new Date(run.finished_at).getTime() : now
   const elapsed = (elapsedEnd - new Date(run.started_at).getTime()) / 1000
   const toggle = () => {
@@ -182,6 +184,8 @@ export function RunStatusIndicator() {
       <div className="flex items-start gap-3 px-4 py-3">
         {isActive ? (
           <Loader2Icon className="mt-0.5 size-4 shrink-0 animate-spin text-primary" />
+        ) : stopped ? (
+          <SquareIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         ) : hasErrors ? (
           <AlertCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
         ) : (
@@ -191,8 +195,12 @@ export function RunStatusIndicator() {
           <p className="flex items-center justify-between gap-2 font-medium">
             <span className="truncate">
               {isActive
-                ? t('runStatus.inProgress', { id: run.id })
-                : hasErrors
+                ? run.cancel_requested
+                  ? t('runStatus.stopping', { id: run.id })
+                  : t('runStatus.inProgress', { id: run.id })
+                : stopped
+                  ? t('runStatus.stopped')
+                  : hasErrors
                   ? t('runStatus.completedWithErrors')
                   : t('runStatus.completed')}
             </span>
@@ -233,7 +241,9 @@ export function RunStatusIndicator() {
               {t('runStatus.errors', { count: run.errors })}
             </span>
           </div>
-          {hasErrors && run.last_error && <p className="text-xs text-destructive">{run.last_error}</p>}
+          {(hasErrors || stopped) && run.last_error && (
+            <p className={cn('text-xs', stopped ? 'text-muted-foreground' : 'text-destructive')}>{run.last_error}</p>
+          )}
           {!isActive && run.pending_review > 0 && (
             <Link to="/reseeding" className="text-xs font-medium text-primary hover:underline">
               {t('runStatus.reviewPending', { count: run.pending_review })}

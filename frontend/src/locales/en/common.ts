@@ -14,4 +14,7 @@ export const common = {
   'common.leaveBlank': 'Leave blank to keep it unchanged',
   'common.runNow': 'Run now',
   'common.runFailed': 'Run failed: {message}',
+  'common.stopRun': 'Stop run',
+  'common.stopping': 'Stopping…',
+  'common.stopFailed': 'Could not stop the run: {message}',
 } as const

@@ -59,7 +59,7 @@ def test_resolves_seed_file_by_path_same_root(db_session):
 
     counts = torrent_indexer.index_torrent_client(db_session, tc, adapter, run)
 
-    assert counts == {"torrents_indexed": 1, "files_indexed": 1}
+    assert counts == {"torrents_indexed": 1, "files_indexed": 1, "files_linked": 1}
     ctf = db_session.query(ClientTorrentFile).one()
     assert ctf.seed_file_id == seed_file.id
 
@@ -175,5 +175,28 @@ def test_client_with_no_disks_still_indexes_torrents_without_linking(db_session)
 
     counts = torrent_indexer.index_torrent_client(db_session, tc, adapter, run)
 
-    assert counts == {"torrents_indexed": 1, "files_indexed": 1}
+    assert counts == {"torrents_indexed": 1, "files_indexed": 1, "files_linked": 0}
     assert db_session.query(ClientTorrentFile).one().seed_file_id is None
+
+
+def test_client_without_associations_is_matched_against_every_disk_by_path(db_session):
+    """Caso comune (TRaSH Guides): client e Gauntletarr vedono gli stessi
+    percorsi, nessuna associazione disco-client da configurare."""
+    disk = Disk(label="FUSE", root_path="/data", torrents_rel_path="torrents")
+    tc = TorrentClient(label="qui", adapter_type="qui", base_url="http://qui")
+    db_session.add_all([disk, tc])
+    db_session.commit()
+    run = pipeline.start_run(db_session, run_type="manual")
+    seed_file = _make_seed_file(db_session, disk, "torrents/completed/tv/Show.S01E06.mkv", run)
+
+    adapter = FakeAdapter([
+        ClientTorrentInfo(
+            info_hash="h1", name="Show.S01E06.mkv", save_path="/data/torrents/completed/tv", state="uploading",
+            files=[ClientTorrentFileInfo(path_in_torrent="Show.S01E06.mkv", size_bytes=123)],
+        )
+    ])
+
+    counts = torrent_indexer.index_torrent_client(db_session, tc, adapter, run)
+
+    assert counts["files_linked"] == 1
+    assert db_session.query(ClientTorrentFile).one().seed_file_id == seed_file.id

@@ -21,6 +21,7 @@ export const errors = {
   'errors.path_outside_scope': 'Path outside the allowed scope: {path}',
 
   'errors.run_not_found': 'Run {id} not found.',
+  'errors.run_already_finished': 'Run {id} has already finished.',
 
   'errors.review_not_found': 'Review {id} not found.',
   'errors.seed_job_not_found': 'SeedJob {id} not found.',

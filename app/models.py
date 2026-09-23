@@ -205,6 +205,7 @@ class RunLog(Base):
     phase_done: Mapped[int | None]
     phase_detail: Mapped[str | None]
     phases_json: Mapped[str | None]
+    cancel_requested_at: Mapped[datetime | None]
     items_total: Mapped[int | None]
     items_scanned: Mapped[int] = mapped_column(server_default=text("0"))
     matches_found: Mapped[int] = mapped_column(server_default=text("0"))

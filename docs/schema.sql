@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS run_log (
     phase_total         INTEGER,          -- total for the current phase, for live status (X/Y)
     phase_done          INTEGER,          -- done so far in the current phase
     phase_detail        TEXT,             -- what the current phase is on: disk/client/tracker, rate-limit wait
+    cancel_requested_at TIMESTAMP,        -- "Stop run": the pipeline stops at its next progress update
     phases_json         TEXT,             -- per phase {status,done,total,skipped,started_at,finished_at},
                                           -- app/run_progress.py — the status popup's stepper
     items_total         INTEGER,          -- precounted when the run starts (total scan)

@@ -199,3 +199,38 @@ def test_pipeline_records_rate_limit_and_skips_the_other_direction(db_session, m
     assert run.finished_at is not None
     assert run.errors >= 1
     assert "rate limit" in run.last_error
+
+
+def test_torrent_to_client_matching_is_skipped_when_no_client_file_is_linked(db_session, monkeypatch, tmp_path):
+    """Disco non associato al client (o percorsi diversi): ogni file lato
+    torrent risulterebbe orfano, e cercarli tutti sul tracker costerebbe ore
+    per file già in seed — il caso reale che ha rallentato una run."""
+    from app import adapter_factory
+    from app.adapters.torrent_client.base import ClientTorrentFileInfo, ClientTorrentInfo
+    from app.models import SeedFile, TorrentClient
+
+    tracker, _ = _setup(db_session)
+    run0 = pipeline.start_run(db_session, "manual")
+    db_session.add(SeedFile(disk_id=1, relative_path="torrents/a.mkv", size_bytes=1, st_dev=1, inode=9,
+                            last_scan_id=run0.id, last_seen_at=datetime.now(UTC)))
+    db_session.add(
+        TorrentClient(label="q", adapter_type="qbittorrent", base_url="http://q", username="u", password="p")
+    )
+    db_session.commit()
+
+    class Client:
+        def list_torrents(self, on_progress=None):
+            return [ClientTorrentInfo(info_hash="h", name="a", save_path="", state="uploading",
+                                      files=[ClientTorrentFileInfo(path_in_torrent="a.mkv", size_bytes=1)])]
+
+    monkeypatch.setattr(adapter_factory, "build_torrent_client_adapter", lambda row: Client())
+    monkeypatch.setattr(adapter_factory, "build_tracker_adapter", lambda row: CountingTracker())
+    t2c_calls = []
+    monkeypatch.setattr(matching, "run_torrent_to_client_matching", lambda *a, **k: t2c_calls.append(a))
+
+    run = pipeline.start_run(db_session, "manual")
+    pipeline.run_bulk_import(db_session, run, str(tmp_path))
+
+    assert t2c_calls == []
+    assert run.errors >= 1
+    assert run.last_error.startswith("Torrent → client matching skipped: no file of the torrent clients")

@@ -118,3 +118,37 @@ def test_runs_left_open_by_a_restart_are_closed_with_a_visible_error(db_session)
     assert run.errors == 1
     assert "matching" in run.last_error
     assert pipeline.close_interrupted_runs(db_session) == 0
+
+
+def test_stop_request_ends_the_run_cleanly_at_the_next_progress_update(db_session, tmp_path, monkeypatch):
+    from app.models import RunLog
+
+    _disk_with_files(db_session, tmp_path)
+    run = pipeline.start_run(db_session, "manual")
+    real_scan = scanner.scan_disk
+
+    def scan_then_stop(session, disk, run_, files=None, on_progress=None):
+        # Come farebbe POST /api/runs/{id}/cancel da un'altra sessione.
+        session.query(RunLog).filter_by(id=run_.id).update({"cancel_requested_at": datetime.now(UTC)})
+        session.commit()
+        return real_scan(session, disk, run_, files=files, on_progress=on_progress)
+
+    monkeypatch.setattr(scanner, "scan_disk", scan_then_stop)
+    monkeypatch.setattr("app.run_progress.COMMIT_EVERY", 1)
+    pipeline.run_bulk_import(db_session, run, str(tmp_path / "data"))
+
+    assert run.finished_at is not None
+    assert run.last_error == "Stopped by the user during 'scanning'"
+    assert run.errors == 0  # uno stop voluto non è un errore
+    assert set(json.loads(run.phases_json)) == {"scanning"}  # nessuna fase successiva avviata
+    response = RunResponse.from_model(run)
+    assert response.cancelled is True and response.current_phase is None
+
+
+def test_cancel_endpoint(client):
+    trigger = client.post("/api/runs")
+    run_id = trigger.json()["id"]
+
+    # La run del TestClient finisce subito (BackgroundTasks sincroni): stop tardivo = 409.
+    assert client.post(f"/api/runs/{run_id}/cancel").status_code == 409
+    assert client.post("/api/runs/9999/cancel").status_code == 404

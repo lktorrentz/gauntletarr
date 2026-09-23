@@ -8,7 +8,7 @@ bloccata per la durata di una run su una libreria grande.
 """
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -52,6 +52,8 @@ class RunResponse(BaseModel):
     pending_review: int = 0
     errors: int
     last_error: str | None
+    cancel_requested: bool = False  # "Stop run" chiesto, la pipeline si ferma al prossimo aggiornamento
+    cancelled: bool = False  # finita perché fermata dall'utente
 
     @classmethod
     def from_model(cls, run: RunLog) -> "RunResponse":
@@ -67,6 +69,8 @@ class RunResponse(BaseModel):
             items_scanned=run.items_scanned or 0, matches_found=run.matches_found or 0,
             auto_executed=run.auto_executed or 0, pending_review=run.pending_review or 0,
             errors=run.errors or 0, last_error=run.last_error,
+            cancel_requested=run.cancel_requested_at is not None,
+            cancelled=run.cancel_requested_at is not None and run.finished_at is not None,
         )
 
 
@@ -87,6 +91,22 @@ def trigger_bulk_import(
     background_tasks.add_task(
         _run_bulk_import_bg, request.app.state.session_factory, run.id, request.app.state.settings.data_dir
     )
+    return RunResponse.from_model(run)
+
+
+@router.post("/{run_id}/cancel", response_model=RunResponse)
+def cancel_run(run_id: int, session: Session = Depends(get_session)):
+    """Chiede lo stop di una run in corso: la pipeline lo vede al prossimo
+    aggiornamento dell'avanzamento (circa ogni secondo) e si ferma senza
+    perdere il lavoro già salvato. Idempotente finché la run è in corso."""
+    run = session.get(RunLog, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=coded_detail("run_not_found", id=run_id))
+    if run.finished_at is not None:
+        raise HTTPException(status_code=409, detail=coded_detail("run_already_finished", id=run_id))
+    if run.cancel_requested_at is None:
+        run.cancel_requested_at = datetime.now(UTC)
+        session.commit()
     return RunResponse.from_model(run)
 
 

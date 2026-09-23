@@ -7,6 +7,10 @@ client_torrent_file.seed_file_id per PATH contro seed_file.relative_path
 del disco giusto — collegamento per path, non per inode (docs/SPEC.md
 sezione 4: più stabile, comunque riverificato a ogni poll).
 
+Un client senza dischi associati viene confrontato con tutti i dischi per
+path esatto: è il caso comune in cui client e Gauntletarr montano gli
+stessi percorsi, e non deve richiedere nessuna configurazione.
+
 Un client può vedere il filesystem da una radice diversa dalla nostra
 (container/mount diversi per lo stesso disco fisico): se impostato,
 disk_torrent_client.torrent_client_root_path (per questo specifico client,
@@ -60,9 +64,8 @@ def index_torrent_client(
 ) -> dict[str, int]:
     """Interroga l'adapter e popola client_torrent/client_torrent_file per
     QUESTO client, collegandoli ai seed_file dei dischi ad esso associati
-    (disk_torrent_client). Un client senza dischi associati viene comunque
-    indicizzato (client_torrent creati), ma nessun file risulterà collegato
-    a un seed_file — non è un errore, solo una configurazione incompleta."""
+    (disk_torrent_client), o di tutti i dischi se non ne ha nessuno
+    associato (stessi percorsi fra client e Gauntletarr)."""
     now = datetime.now(UTC)
     logger.debug("Client %r: chiamata adapter.list_torrents()...", torrent_client.label)
     torrents: list[ClientTorrentInfo] = (
@@ -98,10 +101,12 @@ def index_torrent_client(
     links = session.query(DiskTorrentClient).filter_by(torrent_client_id=torrent_client.id).all()
     disks = [session.get(Disk, link.disk_id) for link in links]
     if not disks:
-        logger.debug(
-            "Client %r: nessun disco associato — nessun client_torrent_file risulterà collegato a un seed_file",
-            torrent_client.label,
-        )
+        # Nessuna associazione esplicita: il caso comune (TRaSH Guides) è che
+        # client e Gauntletarr vedano gli stessi percorsi, quindi i file del
+        # client si cercano su tutti i dischi per path esatto. L'associazione
+        # serve solo a limitare i dischi o a dare una radice diversa.
+        disks = session.query(Disk).all()
+        logger.debug("Client %r: nessun disco associato, confronto con tutti i dischi", torrent_client.label)
     root_path_by_disk_id = {link.disk_id: link.torrent_client_root_path for link in links}
     seed_lookup_by_disk: dict[int, dict[str, int]] = {
         disk.id: dict(session.query(SeedFile.relative_path, SeedFile.id).filter_by(disk_id=disk.id).all())
@@ -129,4 +134,15 @@ def index_torrent_client(
     )
     session.commit()
 
-    return {"torrents_indexed": len(torrent_rows), "files_indexed": len(file_rows)}
+    linked = sum(1 for row in file_rows if row["seed_file_id"] is not None)
+    if disks and file_rows and not linked:
+        sample = next((t for t in torrents if t.files), None)
+        logger.warning(
+            "Client %r: %d file indicizzati, nessuno collegato a un file su disco — il client li vede sotto "
+            "percorsi diversi (es. %r, radici dei dischi %r): associa il disco al client con l'override della "
+            "radice (Configuration > Mapping > Torrent clients)",
+            torrent_client.label, len(file_rows),
+            os.path.join(sample.save_path, sample.files[0].path_in_torrent) if sample else None,
+            [root_path_by_disk_id.get(d.id) or d.root_path for d in disks],
+        )
+    return {"torrents_indexed": len(torrent_rows), "files_indexed": len(file_rows), "files_linked": linked}

@@ -1,16 +1,41 @@
-import { PlayIcon } from 'lucide-react'
+import { Loader2Icon, PlayIcon, SquareIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { useTriggerRun } from '@/api/hooks/runs'
+import { useCancelRun, useRuns, useTriggerRun } from '@/api/hooks/runs'
 import { Button } from '@/components/ui/button'
 import { t } from '@/lib/i18n'
 
-// Stesso trigger di ReseedingPage (POST /api/runs) — vive nel TopHeader
-// (globale, ogni pagina) invece che solo sulla Dashboard: lanciare uno
-// scan richiedeva di sapere che "Reseeding" è anche la pagina delle run,
-// tutt'altro che intuitivo (richiesta esplicita dell'utente).
+// Stesso trigger di ReseedingPage (POST /api/runs), nel TopHeader della
+// Dashboard. Mentre una run è in corso diventa "Stop run" (richiesta
+// esplicita: un modo di fermarla se lanciata per sbaglio) — la pipeline si
+// ferma al prossimo aggiornamento dell'avanzamento, senza perdere il lavoro
+// già salvato (app/run_progress.py RunCancelled).
 export function RunNowButton() {
+  const { data: runs } = useRuns()
   const triggerRun = useTriggerRun()
+  const cancelRun = useCancelRun()
+  const activeRun = runs?.find((r) => r.finished_at == null)
+
+  if (activeRun) {
+    const stopping = activeRun.cancel_requested || cancelRun.isPending
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        className="text-destructive hover:text-destructive"
+        disabled={stopping}
+        onClick={() =>
+          cancelRun.mutate(activeRun.id, {
+            onError: (error) => toast.error(t('common.stopFailed', { message: error.message })),
+          })
+        }
+      >
+        {stopping ? <Loader2Icon className="size-4 animate-spin" /> : <SquareIcon className="size-4" />}
+        {stopping ? t('common.stopping') : t('common.stopRun')}
+      </Button>
+    )
+  }
+
   return (
     <Button
       size="sm"
