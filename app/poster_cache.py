@@ -2,7 +2,9 @@
 
 Scaricato una sola volta per tmdb_id, mai in DB (solo il path relativo
 TMDB, media_item.tmdb_poster_path) — l'immagine vive sul filesystem sotto
-data_dir/posters/{tmdb_id}.jpg.
+data_dir/posters/{content_type}-{tmdb_id}.jpg: film e serie hanno
+numerazioni separate su TMDB, col solo tmdb_id il film 1399 e la serie
+1399 si sovrascrivevano a vicenda.
 """
 
 import os
@@ -12,10 +14,16 @@ import httpx
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
 
-def download_poster(posters_dir: str, tmdb_id: int, poster_path: str, client: httpx.Client | None = None) -> str:
+def poster_file(posters_dir: str, content_type: str, tmdb_id: int) -> str:
+    return os.path.join(posters_dir, f"{'tv' if content_type == 'tv' else 'movie'}-{tmdb_id}.jpg")
+
+
+def download_poster(
+    posters_dir: str, content_type: str, tmdb_id: int, poster_path: str, client: httpx.Client | None = None
+) -> str:
     """Idempotente: se il file esiste già non lo riscarica. Ritorna il path locale."""
     os.makedirs(posters_dir, exist_ok=True)
-    local_path = os.path.join(posters_dir, f"{tmdb_id}.jpg")
+    local_path = poster_file(posters_dir, content_type, tmdb_id)
     if os.path.exists(local_path):
         return local_path
 

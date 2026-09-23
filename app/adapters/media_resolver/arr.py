@@ -54,4 +54,6 @@ class ArrResolver(MediaResolverAdapter):
             episode_number=identity.episode_number,
             poster_path=poster_path,
             source=identity.source,
+            title=identity.title,
+            year=identity.year,
         )

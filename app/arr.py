@@ -73,6 +73,8 @@ class ArrIdentity:
     season_number: int | None = None
     episode_number: int | None = None
     poster_path: str | None = None  # path relativo TMDB, solo da Radarr (Sonarr dà artwork TVDB)
+    title: str | None = None
+    year: int | None = None
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,7 @@ class ArrIndex:
     # ogni file di un download, anche dopo il rename di Sonarr/Radarr — è ciò
     # che collega i file di un season pack ai singoli episodi importati.
     _imports: dict[tuple[str, int], tuple[str, int]] = field(default_factory=dict)
+    _by_tmdb: dict[tuple[str, int], ArrIdentity] | None = None
 
     def add_identity(self, path: str, size: int, identity: ArrIdentity) -> None:
         self._identities.setdefault((path_key(path), size), identity)
@@ -103,6 +106,15 @@ class ArrIndex:
 
     def identity_for(self, path: str, size: int) -> ArrIdentity | None:
         return self._identities.get((path_key(path), size))
+
+    def details_for(self, content_type: str, tmdb_id: int) -> ArrIdentity | None:
+        """Un'identità qualunque con quel tmdb_id: titolo, anno e (film)
+        poster valgono per tutti i file dello stesso contenuto."""
+        if self._by_tmdb is None:
+            self._by_tmdb = {}
+            for identity in self._identities.values():
+                self._by_tmdb.setdefault((identity.content_type, identity.tmdb_id), identity)
+        return self._by_tmdb.get((content_type, tmdb_id))
 
     def grab_for(self, path: str, size: int) -> ArrGrab | None:
         return self._grabs.get((path_key(path), size))
@@ -219,7 +231,7 @@ def _index_radarr(api: ArrApi, index: ArrIndex) -> None:
             movie_file["path"], movie_file["size"],
             ArrIdentity(
                 source="radarr", content_type="movie", tmdb_id=movie["tmdbId"],
-                poster_path=_tmdb_poster_path(movie),
+                poster_path=_tmdb_poster_path(movie), title=movie.get("title"), year=movie.get("year") or None,
             ),
         )
     _index_history(api, index)
@@ -245,6 +257,7 @@ def _index_sonarr(api: ArrApi, index: ArrIndex) -> None:
                 ArrIdentity(
                     source="sonarr", content_type="tv", tmdb_id=series["tmdbId"],
                     season_number=numbers[0], episode_number=numbers[1],
+                    title=series.get("title"), year=series.get("year") or None,
                 ),
             )
     _index_history(api, index)

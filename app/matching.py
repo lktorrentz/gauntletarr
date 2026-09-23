@@ -41,6 +41,7 @@ from app.models import (
     Tracker,
 )
 from app.run_progress import NULL_PROGRESS
+from app.scan_state import is_current, latest_scan_by_disk
 from app.torrent_file import TorrentInfo, TorrentMetainfoError, compute_info_hash, parse_torrent_info
 from app.torrent_layout import (
     CONFIDENCE_NO_MATCH,
@@ -289,10 +290,12 @@ def orphan_media_files(session: Session, exclusions: CompiledExclusions | None =
     linked_ids = {
         row[0] for row in session.query(SeedFile.media_file_id).filter(SeedFile.media_file_id.isnot(None)).all()
     }
+    latest = latest_scan_by_disk(session, MediaFile)
     return [
         mf
         for mf in session.query(MediaFile).filter(MediaFile.media_item_id.isnot(None)).all()
         if mf.id not in linked_ids
+        and is_current(mf, latest)  # un file sparito dal disco non si cerca più
         and is_video(mf.relative_path)
         and not (exclusions and exclusions.is_excluded(mf.relative_path))
     ]
@@ -317,8 +320,9 @@ def orphan_seed_files_with_identity(
         .all()
     }
     result = []
+    latest = latest_scan_by_disk(session, SeedFile)
     for sf in session.query(SeedFile).filter(SeedFile.media_file_id.isnot(None)).all():
-        if sf.id in tracked_ids:
+        if sf.id in tracked_ids or not is_current(sf, latest):
             continue
         if not is_video(sf.relative_path):
             continue

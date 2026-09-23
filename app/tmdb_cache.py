@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db_utils import bulk_upsert
 from app.models import TmdbSearchCache
-from app.tmdb_client import TMDBSearchClient
+from app.tmdb_client import TMDBSearchClient, year_of
 
 
 class CachingTMDBClient:
@@ -37,7 +37,10 @@ class CachingTMDBClient:
             .one_or_none()
         )
         if cached is not None:
-            return {"id": cached.tmdb_id, "poster_path": cached.poster_path}
+            return {
+                "id": cached.tmdb_id, "poster_path": cached.poster_path,
+                "title": cached.result_title, "year": cached.result_year,
+            }
 
         result = search_fn(query, year)
         if result is None:
@@ -48,9 +51,11 @@ class CachingTMDBClient:
             [{
                 "content_type": content_type, "query": normalized_query, "year": normalized_year,
                 "tmdb_id": result["id"], "poster_path": result.get("poster_path"),
+                "result_title": result.get("title") or result.get("name"),
+                "result_year": year_of(result.get("release_date") or result.get("first_air_date")),
             }],
             conflict_cols=["content_type", "query", "year"],
-            update_cols=["tmdb_id", "poster_path"],
+            update_cols=["tmdb_id", "poster_path", "result_title", "result_year"],
         )
         self._session.commit()
         return result

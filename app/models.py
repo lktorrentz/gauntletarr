@@ -235,6 +235,8 @@ class MediaItem(Base):
     season_number: Mapped[int | None]
     episode_number: Mapped[int | None]
     tmdb_poster_path: Mapped[str | None]
+    title: Mapped[str | None]
+    year: Mapped[int | None]
     created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
 
 
@@ -255,6 +257,8 @@ class TmdbSearchCache(Base):
     year: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     tmdb_id: Mapped[int] = mapped_column(nullable=False)
     poster_path: Mapped[str | None]
+    result_title: Mapped[str | None]
+    result_year: Mapped[int | None]
     resolved_at: Mapped[datetime] = mapped_column(nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
 

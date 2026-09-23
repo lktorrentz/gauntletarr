@@ -24,8 +24,9 @@ from sqlalchemy.orm import Session
 
 from app.adapter_factory import build_torrent_client_adapter
 from app.executor import ExecutionError, execute_review, reconcile_seed_job, retry_seed_job
-from app.models import Candidate, MatchReview, MediaFile, SeedFile, SeedJob, TorrentClient
+from app.models import Candidate, ClientTorrentFile, MatchReview, MediaFile, SeedFile, SeedJob, TorrentClient
 from app.run_progress import NULL_PROGRESS
+from app.scan_state import is_current, latest_scan_by_disk
 from app.settings_repo import get_setting
 
 logger = logging.getLogger(__name__)
@@ -207,6 +208,51 @@ def reject(session: Session, review: MatchReview, decided_by: str = "user") -> M
     review.decided_at = datetime.now(UTC)
     session.commit()
     return review
+
+
+def close_resolved_reviews(session: Session) -> int:
+    """Chiude (rifiuto di sistema, mai contato come un "no" dell'utente, vedi
+    _user_rejected_torrents) le review ancora in coda il cui file non ha più
+    bisogno di niente: libreria -> torrent con un hardlink ormai presente,
+    torrent -> client con il file ormai tracciato da un client, o un file
+    non più presente sul disco. Senza questo, una review restava in coda
+    per sempre: il matching sostituisce solo le review dei file che ricerca,
+    e un file non più orfano non lo ricerca più. Chiamata dalla pipeline
+    dopo scan e indicizzazione, prima del matching."""
+    active = [
+        r for r in session.query(MatchReview).filter(MatchReview.status.in_(READY_FOR_DECISION_STATUSES)).all()
+        if not session.query(SeedJob).filter_by(candidate_id=r.candidate_id).count()
+    ]
+    if not active:
+        return 0
+    hardlinked = {
+        row[0] for row in session.query(SeedFile.media_file_id).filter(SeedFile.media_file_id.isnot(None)).all()
+    }
+    tracked = {
+        row[0]
+        for row in session.query(ClientTorrentFile.seed_file_id)
+        .filter(ClientTorrentFile.seed_file_id.isnot(None))
+        .all()
+    }
+    latest_media = latest_scan_by_disk(session, MediaFile)
+    latest_seed = latest_scan_by_disk(session, SeedFile)
+    closed = 0
+    for review in active:
+        if review.media_file_id is not None:
+            mf = review.media_file
+            resolved = mf is None or not is_current(mf, latest_media) or mf.id in hardlinked
+        else:
+            sf = review.seed_file
+            resolved = sf is None or not is_current(sf, latest_seed) or sf.id in tracked
+        if resolved:
+            review.status = "rejected"
+            review.decided_by = "system"
+            review.decided_at = datetime.now(UTC)
+            closed += 1
+    if closed:
+        session.commit()
+        logger.info("%d review chiuse: il loro file non è più orfano o non esiste più", closed)
+    return closed
 
 
 AUTO_EXECUTE_SETTING = "auto_execute_above_threshold"

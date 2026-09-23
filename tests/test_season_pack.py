@@ -317,11 +317,10 @@ def test_review_api_summarizes_the_pack(db_session, tmp_path, monkeypatch):
 def test_health_ignores_excluded_files(db_session, tmp_path):
     from app import health
 
-    disk, _tracker, _ = _library(db_session, tmp_path, with_srt=False)
-    run = pipeline.start_run(db_session, "manual")
+    disk, _tracker, (e01, _e02) = _library(db_session, tmp_path, with_srt=False)
     db_session.add(MediaFile(  # poster scritto dal media server: escluso dal preset di default
         disk_id=disk.id, relative_path="media/tv/Show/poster.jpg", size_bytes=10_000_000,
-        st_dev=1, inode=77, last_scan_id=run.id, last_seen_at=datetime.now(UTC),
+        st_dev=1, inode=77, last_scan_id=e01.last_scan_id, last_seen_at=datetime.now(UTC),
     ))
     db_session.commit()
 

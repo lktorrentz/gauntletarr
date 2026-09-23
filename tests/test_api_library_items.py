@@ -45,7 +45,7 @@ def test_library_items_empty_when_no_data(client):
 
 
 def test_poster_not_cached_returns_404(client):
-    response = client.get("/api/library/posters/999999.jpg")
+    response = client.get("/api/library/posters/movie/999999.jpg")
     assert response.status_code == 404
 
 

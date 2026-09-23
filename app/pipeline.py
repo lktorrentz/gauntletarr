@@ -40,10 +40,21 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from app import adapter_factory, arr, health, matching, media_resolution, review, scanner, torrent_indexer
+from app import (
+    adapter_factory,
+    arr,
+    health,
+    matching,
+    media_resolution,
+    review,
+    scanner,
+    settings_repo,
+    torrent_indexer,
+)
 from app.adapter_factory import TmdbApiKeyMissingError
 from app.models import Disk, RunLog, SeedFile, TorrentClient, Tracker
 from app.run_progress import RunCancelled, RunProgress
+from app.tmdb_client import TMDBClient
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +208,22 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                 errors = _record_failure(session, run, errors, "risoluzione TMDB", exc)
         else:
             progress.detail("TMDB not configured: skipped")
+        # Titoli e poster mancanti (voci create prima che si salvassero, o
+        # poster mai scaricati): una richiesta per contenuto, non per file.
+        try:
+            tmdb_key = settings_repo.get_setting(session, "tmdb_api_key")
+            details = TMDBClient(api_key=tmdb_key).details if tmdb_key else None
+            progress.detail("Completing titles and posters")
+            filled = media_resolution.complete_media_items(
+                session, os.path.join(data_dir, "posters"), arr_index, details, progress=progress
+            )
+            if filled["completed"] or filled["failed"]:
+                logger.info(
+                    "Run #%s: titoli/poster completati per %d contenuti (%d falliti)",
+                    run.id, filled["completed"], filled["failed"],
+                )
+        except Exception as exc:
+            errors = _record_failure(session, run, errors, "completamento di titoli e poster", exc)
 
         phase("indexing", total=0)
         indexing_failed = False
@@ -262,6 +289,11 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             run.errors = errors
             run.last_error = f"Torrent → client matching skipped: {t2c_problem}"
             session.commit()
+
+        try:
+            review.close_resolved_reviews(session)
+        except Exception as exc:
+            errors = _record_failure(session, run, errors, "pulizia della coda di revisione", exc)
 
         phase("matching", total=0)
         trackers = session.query(Tracker).filter_by(enabled=True).all()

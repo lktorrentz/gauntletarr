@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.file_types import is_video
 from app.models import MediaFile
+from app.scan_state import is_current, latest_scan_by_disk
 
 _CHUNK_SIZE = 64 * 1024
 
@@ -48,7 +49,10 @@ def find_duplicate_media_files(session: Session, disk_id: int | None = None) -> 
         query = query.filter_by(disk_id=disk_id)
 
     groups: dict[tuple[int, str], list[MediaFile]] = {}
+    latest = latest_scan_by_disk(session, MediaFile)
     for mf in query.all():
+        if not is_current(mf, latest):
+            continue  # sparito dal disco: non è più una copia di niente
         if not is_video(mf.relative_path):
             continue  # copie di nfo/immagini: rumore, nessuno spazio rilevante sprecato
         groups.setdefault((mf.size_bytes, mf.content_hash), []).append(mf)

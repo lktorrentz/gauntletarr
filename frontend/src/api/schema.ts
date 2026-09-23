@@ -344,7 +344,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/library/posters/{tmdb_id}.jpg": {
+    "/api/library/posters/{content_type}/{tmdb_id}.jpg": {
         parameters: {
             query?: never;
             header?: never;
@@ -352,7 +352,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Poster */
-        get: operations["get_poster_api_library_posters__tmdb_id__jpg_get"];
+        get: operations["get_poster_api_library_posters__content_type___tmdb_id__jpg_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1416,6 +1416,16 @@ export interface components {
             excluded: boolean;
             /** Linked Paths */
             linked_paths: string[];
+            /**
+             * Duplicate
+             * @default false
+             */
+            duplicate: boolean;
+            /**
+             * In Review
+             * @default false
+             */
+            in_review: boolean;
         };
         /** MediaItemOverview */
         MediaItemOverview: {
@@ -1431,6 +1441,10 @@ export interface components {
             episode_number: number | null;
             /** Has Poster */
             has_poster: boolean;
+            /** Title */
+            title?: string | null;
+            /** Year */
+            year?: number | null;
             /** Files */
             files: components["schemas"]["MediaItemFile"][];
         };
@@ -2725,11 +2739,12 @@ export interface operations {
             };
         };
     };
-    get_poster_api_library_posters__tmdb_id__jpg_get: {
+    get_poster_api_library_posters__content_type___tmdb_id__jpg_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                content_type: string;
                 tmdb_id: number;
             };
             cookie?: never;

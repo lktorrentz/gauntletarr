@@ -18,9 +18,11 @@ Definizione usata qui (coerente con la tabella di SPEC.md sezione 3):
 
 from sqlalchemy.orm import Session
 
+from app.duplicates import find_duplicate_media_files
 from app.exclusions import CompiledExclusions
 from app.file_types import is_video
-from app.models import ClientTorrentFile, MediaFile, MediaItem, SeedFile
+from app.models import ClientTorrentFile, MatchReview, MediaFile, MediaItem, SeedFile, SeedJob
+from app.scan_state import is_current, latest_scan_by_disk
 
 _NO_EXCLUSIONS = CompiledExclusions(patterns=[])
 
@@ -57,6 +59,7 @@ def media_file_states(
         .all()
     } if tracked_seed_file_ids else set()
     linked_paths = _media_file_to_seed_paths(session)
+    latest = latest_scan_by_disk(session, MediaFile)
 
     return [
         {
@@ -69,6 +72,7 @@ def media_file_states(
             "linked_paths": linked_paths.get(mf.id, []),
         }
         for mf in query.order_by(MediaFile.relative_path).all()
+        if is_current(mf, latest)  # file spariti dal disco: mai mostrati né contati
     ]
 
 
@@ -88,6 +92,8 @@ def seed_file_states(
         row[0]: row[1] for row in session.query(MediaFile.id, MediaFile.relative_path).all()
     }
 
+    latest_seed = latest_scan_by_disk(session, SeedFile)
+
     def _state(sf: SeedFile) -> str:
         if sf.id not in tracked_seed_file_ids:
             return "orphan_torrent"
@@ -105,6 +111,7 @@ def seed_file_states(
             "linked_paths": [media_paths_by_id[sf.media_file_id]] if sf.media_file_id in media_paths_by_id else [],
         }
         for sf in query.order_by(SeedFile.relative_path).all()
+        if is_current(sf, latest_seed)
     ]
 
 
@@ -124,8 +131,28 @@ def media_items_overview(
     if disk_id is not None:
         query = query.filter_by(disk_id=disk_id)
 
+    # Stati per la vista poster (pallini): duplicati (stesso contenuto su
+    # inode diversi, app/duplicates.py) e file con un match in attesa di
+    # approvazione in Reseeding.
+    duplicate_ids = {
+        f["media_file_id"] for group in find_duplicate_media_files(session, disk_id=disk_id) for f in group["files"]
+    }
+    in_review_ids = {
+        row[0]
+        for row in session.query(MatchReview.media_file_id)
+        .outerjoin(SeedJob, SeedJob.candidate_id == MatchReview.candidate_id)
+        .filter(
+            MatchReview.media_file_id.isnot(None),
+            MatchReview.status.in_(("pending", "auto_approved")),
+            SeedJob.id.is_(None),
+        )
+        .all()
+    }
+
     files_by_item: dict[int, list[MediaFile]] = {}
     for mf in query.all():
+        if mf.id not in states_by_id:
+            continue  # sparito dal disco (ultimo scan riuscito non l'ha visto): mai "orphan"
         files_by_item.setdefault(mf.media_item_id, []).append(mf)
 
     if not files_by_item:
@@ -145,6 +172,8 @@ def media_items_overview(
             "season_number": item.season_number,
             "episode_number": item.episode_number,
             "has_poster": item.tmdb_poster_path is not None,
+            "title": item.title,
+            "year": item.year,
             "files": [
                 {
                     "media_file_id": mf.id,
@@ -153,6 +182,8 @@ def media_items_overview(
                     "state": states_by_id.get(mf.id, "orphan_media"),
                     "excluded": excluded_by_id.get(mf.id, False),
                     "linked_paths": linked_by_id.get(mf.id, []),
+                    "duplicate": mf.id in duplicate_ids,
+                    "in_review": mf.id in in_review_ids,
                 }
                 for mf in files_by_item[item.id]
             ],

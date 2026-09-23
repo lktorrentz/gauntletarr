@@ -8,7 +8,7 @@ import guessit
 
 from app.adapters.media_resolver.base import MediaResolverAdapter, ResolvedMedia
 from app.content_type_guess import guess_content_type_from_guessit
-from app.tmdb_client import TMDBSearchClient
+from app.tmdb_client import TMDBSearchClient, year_of
 
 
 def _first_if_list(value):
@@ -18,6 +18,15 @@ def _first_if_list(value):
     if isinstance(value, list):
         return value[0] if value else None
     return value
+
+
+def _result_title(result: dict) -> str | None:
+    return result.get("title") or result.get("name")
+
+
+def _result_year(result: dict) -> int | None:
+    # Dalla cache arriva già "year"; da una ricerca TMDB vera la data.
+    return result.get("year") or year_of(result.get("release_date") or result.get("first_air_date"))
 
 
 class FilenameParserResolver(MediaResolverAdapter):
@@ -39,7 +48,8 @@ class FilenameParserResolver(MediaResolverAdapter):
             if result is None:
                 return None
             return ResolvedMedia(
-                tmdb_id=result["id"], content_type="movie", poster_path=result.get("poster_path"), source=self.SOURCE
+                tmdb_id=result["id"], content_type="movie", poster_path=result.get("poster_path"), source=self.SOURCE,
+                title=_result_title(result), year=_result_year(result),
             )
 
         season = _first_if_list(guess.get("season"))
@@ -53,4 +63,5 @@ class FilenameParserResolver(MediaResolverAdapter):
             tmdb_id=result["id"], content_type="tv",
             season_number=season, episode_number=episode,
             poster_path=result.get("poster_path"), source=self.SOURCE,
+            title=_result_title(result), year=_result_year(result),
         )

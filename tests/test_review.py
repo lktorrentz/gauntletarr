@@ -180,3 +180,64 @@ def test_list_ready_for_review_excludes_reviews_with_seed_job(db_session):
     db_session.commit()
 
     assert review.list_ready_for_review(db_session) == []
+
+
+def _review_for(db_session, candidate, **file_ids):
+    r = MatchReview(candidate_id=candidate.id, status="pending", **file_ids)
+    db_session.add(r)
+    db_session.commit()
+    return r
+
+
+def test_queue_is_cleaned_of_files_that_no_longer_need_anything(db_session):
+    from app.models import ClientTorrent, ClientTorrentFile, TorrentClient
+
+    tracker = _tracker(db_session)
+    item = _media_item(db_session)
+    mf = _media_file_stub(db_session, item)
+    sf = _seed_file_stub(db_session, mf)
+    still_orphan_mf = MediaFile(
+        disk_id=mf.disk_id, relative_path="movies/y.mkv", size_bytes=1, st_dev=1, inode=5,
+        media_item_id=item.id, last_scan_id=mf.last_scan_id, last_seen_at=datetime.now(UTC),
+    )
+    db_session.add(still_orphan_mf)
+    db_session.commit()
+    c = _candidate(db_session, item, tracker, confidence=0.5)
+    c2 = _candidate(db_session, item, tracker, confidence=0.5, direction="torrent_to_client")
+    m2t_open = _review_for(db_session, c, media_file_id=still_orphan_mf.id)
+    m2t_linked = _review_for(db_session, c, media_file_id=mf.id)
+    t2c_tracked = _review_for(db_session, c2, seed_file_id=sf.id)
+
+    # mf ha ora un hardlink (sf.media_file_id), sf è ora tracciato da un client.
+    sf.media_file_id = mf.id
+    client = TorrentClient(label="q", adapter_type="qbittorrent", base_url="http://q")
+    db_session.add(client)
+    db_session.commit()
+    ct = ClientTorrent(torrent_client_id=client.id, info_hash="h", name="x", save_path="/x", state="uploading",
+                       last_polled_at=datetime.now(UTC))
+    db_session.add(ct)
+    db_session.commit()
+    db_session.add(ClientTorrentFile(client_torrent_id=ct.id, path_in_torrent="x.mkv", size_bytes=1,
+                                     seed_file_id=sf.id, last_scan_id=sf.last_scan_id))
+    db_session.commit()
+
+    assert review.close_resolved_reviews(db_session) == 2
+    assert m2t_open.status == "pending"
+    assert (m2t_linked.status, m2t_linked.decided_by) == ("rejected", "system")
+    assert (t2c_tracked.status, t2c_tracked.decided_by) == ("rejected", "system")
+
+
+def test_review_of_a_file_gone_from_disk_is_closed(db_session):
+    tracker = _tracker(db_session)
+    item = _media_item(db_session)
+    gone = _media_file_stub(db_session, item)
+    later = pipeline.start_run(db_session, "manual")
+    db_session.add(MediaFile(  # l'ultimo scan del disco ha visto solo questo file
+        disk_id=gone.disk_id, relative_path="movies/other.mkv", size_bytes=1, st_dev=1, inode=8,
+        media_item_id=item.id, last_scan_id=later.id, last_seen_at=datetime.now(UTC),
+    ))
+    db_session.commit()
+    r = _review_for(db_session, _candidate(db_session, item, tracker, confidence=0.5), media_file_id=gone.id)
+
+    assert review.close_resolved_reviews(db_session) == 1
+    assert r.status == "rejected"

@@ -19,6 +19,8 @@ class ResolvedMedia:
     # Chi ha davvero risolto il file, se diverso dal SOURCE del resolver
     # (ArrResolver: "radarr"/"sonarr", o il resolver di ripiego).
     source: str | None = None
+    title: str | None = None  # titolo del film / nome della serie, per la vista poster
+    year: int | None = None
 
 
 class MediaResolverAdapter(ABC):

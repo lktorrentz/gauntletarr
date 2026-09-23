@@ -15,6 +15,7 @@ from app import duplicates, library
 from app.api_errors import coded_detail
 from app.deps import get_session
 from app.exclusions import CompiledExclusions, load_exclusions
+from app.poster_cache import poster_file
 
 router = APIRouter(prefix="/api", tags=["library"])
 
@@ -51,6 +52,8 @@ class MediaItemFile(BaseModel):
     state: str
     excluded: bool
     linked_paths: list[str]
+    duplicate: bool = False  # altra copia dello stesso contenuto su un inode diverso
+    in_review: bool = False  # match trovato, in attesa di approvazione in Reseeding
 
 
 class DuplicateFile(BaseModel):
@@ -72,6 +75,8 @@ class MediaItemOverview(BaseModel):
     season_number: int | None
     episode_number: int | None
     has_poster: bool
+    title: str | None = None
+    year: int | None = None
     files: list[MediaItemFile]
 
 
@@ -102,10 +107,12 @@ def list_duplicates(disk_id: int | None = None, session: Session = Depends(get_s
     return duplicates.find_duplicate_media_files(session, disk_id=disk_id)
 
 
-@router.get("/library/posters/{tmdb_id}.jpg")
-def get_poster(tmdb_id: int, request: Request):
+@router.get("/library/posters/{content_type}/{tmdb_id}.jpg")
+def get_poster(content_type: str, tmdb_id: int, request: Request):
     posters_dir = os.path.join(request.app.state.settings.data_dir, "posters")
-    local_path = os.path.join(posters_dir, f"{tmdb_id}.jpg")
+    local_path = poster_file(posters_dir, content_type, tmdb_id)
     if not os.path.isfile(local_path):
         raise HTTPException(status_code=404, detail=coded_detail("poster_not_cached"))
-    return FileResponse(local_path, media_type="image/jpeg")
+    # Il frontend li scarica con fetch + header di autenticazione (un <img>
+    # non manda l'header): la cache del browser evita di riscaricarli.
+    return FileResponse(local_path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})

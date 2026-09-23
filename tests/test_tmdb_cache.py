@@ -30,7 +30,7 @@ def test_second_lookup_with_same_key_does_not_hit_the_underlying_client(db_sessi
     second = client.search_tv("Game of Thrones", 2011)
 
     assert first == {"id": 1399, "poster_path": "/got.jpg"}
-    assert second == {"id": 1399, "poster_path": "/got.jpg"}
+    assert second == {"id": 1399, "poster_path": "/got.jpg", "title": None, "year": None}
     assert inner.tv_calls == 1
     assert db_session.query(TmdbSearchCache).count() == 1
 

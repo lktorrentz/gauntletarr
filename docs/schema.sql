@@ -178,7 +178,10 @@ CREATE TABLE IF NOT EXISTS media_item (
     season_number       INTEGER,                -- null for a movie
     episode_number       INTEGER,                -- null for a movie or a complete season pack
     tmdb_poster_path    TEXT,                    -- relative TMDB path; the image itself is cached on the
-                                                  -- filesystem (data/posters/{tmdb_id}.jpg), never in the DB
+                                                  -- filesystem (data/posters/{content_type}-{tmdb_id}.jpg,
+                                                  -- movie and tv ids are separate namespaces on TMDB), never in the DB
+    title               TEXT,                    -- movie title / series name, from Radarr/Sonarr or TMDB
+    year                INTEGER,                 -- release year / first air year
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 -- SQLite treats NULL as always distinct in UNIQUE: a plain unique constraint
@@ -209,6 +212,8 @@ CREATE TABLE IF NOT EXISTS tmdb_search_cache (
     year            INTEGER NOT NULL DEFAULT 0,
     tmdb_id         INTEGER NOT NULL,
     poster_path     TEXT,
+    result_title    TEXT,                   -- what TMDB returned, not what was searched
+    result_year     INTEGER,
     resolved_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(content_type, query, year)
 );
