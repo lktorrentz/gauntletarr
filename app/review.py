@@ -3,9 +3,11 @@
 Vedi docs/SPEC.md sezione 8. Ogni file orfano (media_file o seed_file)
 produce al massimo UNA riga di review, sul suo candidate a confidence più
 alta — le alternative restano visibili in `candidate` per audit ma non
-generano righe di review proprie. Sopra soglia -> auto_approved
-(l'esecuzione vera richiede comunque conferma umana esplicita, vedi
-approve()). Sotto soglia ma con un candidato plausibile -> pending.
+generano righe di review proprie. Sopra soglia -> auto_approved, cioè
+"consigliata": viene eseguita da sola SOLO se l'utente ha acceso
+l'esecuzione automatica (auto_execute_enabled, spenta di default),
+altrimenti aspetta la sua approvazione come le altre (approve()).
+Sotto soglia ma con un candidato plausibile -> pending.
 Nessun candidato plausibile (confidence 0.0 per tutti) -> nessuna riga di
 review, niente da decidere.
 
@@ -207,23 +209,37 @@ def reject(session: Session, review: MatchReview, decided_by: str = "user") -> M
     return review
 
 
+AUTO_EXECUTE_SETTING = "auto_execute_above_threshold"
+
+
+def auto_execute_enabled(session: Session) -> bool:
+    """Spenta di default, e resta spenta finché l'utente non la accende
+    esplicitamente (Configuration > Mapping). Decisione dell'utente: niente
+    che modifichi file o client (hardlink, torrent aggiunti) parte senza
+    una sua approvazione. Sopra soglia una review è solo "consigliata"
+    (status auto_approved) e aspetta in coda come le altre."""
+    return (get_setting(session, AUTO_EXECUTE_SETTING) or "").lower() == "true"
+
+
 def execute_auto_approved(session: Session, progress=NULL_PROGRESS) -> dict[str, int]:
-    """Esegue automaticamente ogni review che il sistema ha già classificato
-    auto_approved (confidence sopra soglia, docs/SPEC.md sezione 8) e non ha
-    ancora un seed_job — mai le review 'pending', che restano sempre in
-    attesa di un'approvazione umana esplicita via API. Chiamata da
-    app/pipeline.py subito dopo il matching di ogni run."""
+    """Esegue le review sopra soglia (auto_approved) senza ancora un
+    seed_job — SOLO se l'utente ha acceso l'esecuzione automatica, mai di
+    default (auto_execute_enabled). Le 'pending' non vengono mai eseguite
+    qui. Chiamata da app/pipeline.py dopo il matching di ogni run."""
     reviews = [
         r
         for r in session.query(MatchReview).filter(MatchReview.status == "auto_approved").all()
         if not session.query(SeedJob).filter_by(candidate_id=r.candidate_id).count()
     ]
+    if not auto_execute_enabled(session):
+        progress.detail(f"Automatic execution is off: {len(reviews)} recommended, waiting for your approval")
+        return {"executed": 0, "waiting": len(reviews)}
     progress.add_total(len(reviews))
     for review in reviews:
         approve(session, review, decided_by="system")
         progress.advance()
         progress.result(executed=1)
-    return {"executed": len(reviews)}
+    return {"executed": len(reviews), "waiting": 0}
 
 
 def list_ready_for_review(session: Session) -> list[MatchReview]:

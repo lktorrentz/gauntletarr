@@ -207,7 +207,7 @@ Both views share the same backend/API — it's just `?view=tree|grid` over the s
 ## 8. Reseeding engine and execution
 
 Inherits ratio-guardian §9-11 in full:
-- A configurable confidence threshold (default 0.95) above which execution is automatic, below which it goes to the manual review queue — **same logic for both directions** (media→torrent and torrent→client, section 3), possibly with different thresholds for each (see the note in section 6).
+- A configurable confidence threshold per direction (defaults 0.95 media→torrent, 0.98 torrent→client, see the note in section 6). A match above its threshold is **recommended** in the review queue, not executed. **Nothing that modifies files or the torrent client runs without the user's explicit approval** (user decision, 2026-09-23, after a run auto-executed 20 reviews unasked). Automatic execution of recommended matches is an opt-in setting (`auto_execute_above_threshold`, Configuration → Mapping), off by default.
 - Hardlink with the exact name the tracker expects (media→torrent direction only — in the torrent→client direction the file is already in the right place, only the torrent gets added to the client).
 - Forced recheck, never skipped.
 - Periodic reconciliation of recheck status (async on the client).

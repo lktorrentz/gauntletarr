@@ -1,7 +1,7 @@
 export const reseeding = {
   'reseeding.loadingCandidates': 'Loading candidates…',
   'reseeding.allCandidatesEvaluated': 'All candidates evaluated for this item:',
-  'reseeding.autoApproved': 'auto-approved',
+  'reseeding.autoApproved': 'recommended',
   'reseeding.approve': 'Approve',
   'reseeding.approveFailed': 'Approve failed: {message}',
   'reseeding.reject': 'Reject',

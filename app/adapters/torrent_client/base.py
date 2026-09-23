@@ -59,14 +59,27 @@ class TorrentAddTimeoutError(Exception):
     """Il torrent non è comparso nel client entro il timeout dopo l'aggiunta."""
 
 
+class TorrentAlreadyInClientError(Exception):
+    """Il torrent (stesso infohash) è già nel client: qBittorrent ignora in
+    silenzio un duplicato, senza questo controllo sembrerebbe un timeout."""
+
+
 class TorrentClientAdapter(ABC):
     @abstractmethod
-    def add_torrent(self, torrent_file_or_url: str, save_path: str, force_recheck: bool = True) -> str:
+    def add_torrent(
+        self, torrent_file_or_url: str, save_path: str, force_recheck: bool = True,
+        expected_info_hash: str | None = None,
+    ) -> str:
         """Aggiunge il torrent puntando a save_path (il file già hardlinkato,
         o già presente per la direzione torrent->client di SPEC.md sezione 3).
         force_recheck deve essere True di default e non deve mai essere
         impostabile a False da nessun chiamante del motore di matching
-        (Fase 4). Ritorna l'info_hash del torrent aggiunto."""
+        (Fase 4). Ritorna l'info_hash del torrent aggiunto.
+
+        expected_info_hash (se noto: il .torrent è già stato scaricato e
+        analizzato dal matching) rende l'attesa precisa — si aspetta proprio
+        quel torrent, non "un torrent nuovo qualunque" — e trasforma un
+        duplicato in TorrentAlreadyInClientError invece di un timeout."""
         raise NotImplementedError
 
     @abstractmethod

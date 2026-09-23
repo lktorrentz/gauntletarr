@@ -4,6 +4,7 @@ con/senza hardlink.
 """
 
 import os
+from datetime import UTC, datetime
 
 from app import library, pipeline, scanner
 from app.models import Disk, MediaFile
@@ -164,3 +165,30 @@ def test_scan_populates_content_hash(db_session, tmp_path):
 
     mf = db_session.query(MediaFile).one()
     assert mf.content_hash is not None
+
+
+def test_bulk_upsert_writes_more_rows_than_a_single_sqlite_statement_allows(db_session):
+    """Con ogni file della libreria registrato, un disco arriva a decine di
+    migliaia di righe: in un'unica istruzione superava il limite di
+    parametri di SQLite e lo scan falliva (0 file scansionati)."""
+    from app.db_utils import UPSERT_CHUNK_ROWS, bulk_upsert
+    from app.models import Disk, MediaFile
+
+    disk = Disk(label="d", root_path="/mnt/d", media_rel_path="media")
+    db_session.add(disk)
+    db_session.commit()
+    run = pipeline.start_run(db_session, "manual")
+    import sqlite3
+
+    limit = sqlite3.connect(":memory:").getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER)
+    rows = [
+        {"disk_id": disk.id, "relative_path": f"media/f{i}.nfo", "size_bytes": i, "st_dev": 1, "inode": i,
+         "nlink": 1, "content_hash": None, "last_scan_id": run.id, "last_seen_at": datetime.now(UTC)}
+        for i in range(limit // 9 + UPSERT_CHUNK_ROWS)  # oltre il limite in un'unica istruzione
+    ]
+
+    bulk_upsert(db_session, MediaFile.__table__, rows, conflict_cols=["disk_id", "relative_path"],
+                update_cols=["size_bytes"])
+    db_session.commit()
+
+    assert db_session.query(MediaFile).count() == len(rows)

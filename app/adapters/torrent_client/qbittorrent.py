@@ -35,6 +35,7 @@ from app.adapters.torrent_client.base import (
     ClientTorrentFileInfo,
     ClientTorrentInfo,
     TorrentAddTimeoutError,
+    TorrentAlreadyInClientError,
     TorrentClientAdapter,
     TorrentStatus,
 )
@@ -50,7 +51,7 @@ class QBittorrentAdapter(TorrentClientAdapter):
         password: str | None,
         client=None,
         poll_interval: float = 0.5,
-        poll_timeout: float = 15.0,
+        poll_timeout: float = 30.0,
     ):
         self.base_url = base_url
         self.username = username
@@ -64,7 +65,10 @@ class QBittorrentAdapter(TorrentClientAdapter):
 
             self._client = qbittorrentapi.Client(host=base_url, username=username, password=password)
 
-    def add_torrent(self, torrent_file_or_url: str, save_path: str, force_recheck: bool = True) -> str:
+    def add_torrent(
+        self, torrent_file_or_url: str, save_path: str, force_recheck: bool = True,
+        expected_info_hash: str | None = None,
+    ) -> str:
         if not force_recheck:
             raise ValueError(
                 "force_recheck=False non è permesso: il recheck reale è "
@@ -72,20 +76,31 @@ class QBittorrentAdapter(TorrentClientAdapter):
             )
 
         before_hashes = {t.hash for t in self._client.torrents_info()}
+        expected = expected_info_hash.lower() if expected_info_hash else None
+        if expected and expected in {h.lower() for h in before_hashes}:
+            raise TorrentAlreadyInClientError(
+                f"Torrent {expected} is already in the client (possibly with another save path): nothing added"
+            )
         self._client.torrents_add(
             urls=torrent_file_or_url,
             save_path=save_path,
             is_skip_checking=False,
             use_auto_torrent_management=False,
         )
-        info_hash = self._wait_for_new_hash(before_hashes)
+        info_hash = self._wait_for_new_hash(before_hashes, expected)
         self._client.torrents_recheck(torrent_hashes=info_hash)
         return info_hash
 
-    def _wait_for_new_hash(self, before_hashes: set[str]) -> str:
+    def _wait_for_new_hash(self, before_hashes: set[str], expected: str | None = None) -> str:
         deadline = time.monotonic() + self.poll_timeout
         while time.monotonic() < deadline:
             current_hashes = {t.hash for t in self._client.torrents_info()}
+            if expected is not None:
+                found = next((h for h in current_hashes if h.lower() == expected), None)
+                if found is not None:
+                    return found
+                time.sleep(self.poll_interval)
+                continue
             new_hashes = current_hashes - before_hashes
             if new_hashes:
                 if len(new_hashes) > 1:

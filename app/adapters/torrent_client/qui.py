@@ -45,6 +45,7 @@ from app.adapters.torrent_client.base import (
     ClientTorrentFileInfo,
     ClientTorrentInfo,
     TorrentAddTimeoutError,
+    TorrentAlreadyInClientError,
     TorrentClientAdapter,
     TorrentStatus,
 )
@@ -60,7 +61,7 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
         instance_id: int,
         http_client=None,
         poll_interval: float = 0.5,
-        poll_timeout: float = 15.0,
+        poll_timeout: float = 60.0,
         page_limit: int = 2000,
     ):
         self.base_url = base_url.rstrip("/")
@@ -77,7 +78,10 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
                 base_url=self.base_url, headers={"X-API-Key": api_token}, timeout=30.0
             )
 
-    def add_torrent(self, torrent_file_or_url: str, save_path: str, force_recheck: bool = True) -> str:
+    def add_torrent(
+        self, torrent_file_or_url: str, save_path: str, force_recheck: bool = True,
+        expected_info_hash: str | None = None,
+    ) -> str:
         if not force_recheck:
             raise ValueError(
                 "force_recheck=False non è permesso: il recheck reale è "
@@ -85,6 +89,11 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
             )
 
         before_hashes = {t["hash"] for t in self._fetch_all_torrents() if t.get("hash")}
+        expected = expected_info_hash.lower() if expected_info_hash else None
+        if expected and expected in {h.lower() for h in before_hashes}:
+            raise TorrentAlreadyInClientError(
+                f"Torrent {expected} is already in the client (possibly with another save path): nothing added"
+            )
 
         # L'endpoint dichiara multipart/form-data come unico content-type
         # accettato (nessun application/json né form url-encoded) — anche i
@@ -102,14 +111,20 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
         response = self._client.post(f"/api/instances/{self.instance_id}/torrents", files=files)
         response.raise_for_status()
 
-        info_hash = self._wait_for_new_hash(before_hashes)
+        info_hash = self._wait_for_new_hash(before_hashes, expected)
         self._bulk_action([info_hash], "recheck")
         return info_hash
 
-    def _wait_for_new_hash(self, before_hashes: set[str]) -> str:
+    def _wait_for_new_hash(self, before_hashes: set[str], expected: str | None = None) -> str:
         deadline = time.monotonic() + self.poll_timeout
         while time.monotonic() < deadline:
             current_hashes = {t["hash"] for t in self._fetch_all_torrents() if t.get("hash")}
+            if expected is not None:
+                found = next((h for h in current_hashes if h.lower() == expected), None)
+                if found is not None:
+                    return found
+                time.sleep(self.poll_interval)
+                continue
             new_hashes = current_hashes - before_hashes
             if new_hashes:
                 return next(iter(new_hashes))

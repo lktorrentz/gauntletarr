@@ -1,6 +1,41 @@
+import { toast } from 'sonner'
+
+import { useSetSetting, useSetting } from '@/api/hooks/settings'
 import { SettingField } from '@/components/SettingField'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { t } from '@/lib/i18n'
+
+// Spenta di default (app/review.py auto_execute_enabled): decisione
+// dell'utente, niente che modifichi file o client parte senza la sua
+// approvazione. Accesa solo con una scelta esplicita qui.
+const AUTO_EXECUTE_KEY = 'auto_execute_above_threshold'
+
+function AutoExecuteSwitch() {
+  const { data } = useSetting(AUTO_EXECUTE_KEY)
+  const setSetting = useSetSetting(AUTO_EXECUTE_KEY)
+  const enabled = (data?.value ?? '').toLowerCase() === 'true'
+  return (
+    <div className="flex items-start gap-3 border-t pt-4">
+      <Switch
+        id="auto-execute"
+        checked={enabled}
+        disabled={setSetting.isPending}
+        onCheckedChange={(on) =>
+          setSetting.mutate(on ? 'true' : 'false', {
+            onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
+          })
+        }
+        className="mt-0.5"
+      />
+      <div className="grid gap-1">
+        <Label htmlFor="auto-execute">{t('integrations.autoExecuteLabel')}</Label>
+        <p className="text-xs text-muted-foreground">{t('integrations.autoExecuteHelp')}</p>
+      </div>
+    </div>
+  )
+}
 
 export function AutoApproveSection() {
   return (
@@ -25,6 +60,7 @@ export function AutoApproveSection() {
             type="number"
             placeholder="0.98"
           />
+          <AutoExecuteSwitch />
         </CardContent>
       </Card>
       <Card>

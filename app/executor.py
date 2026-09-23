@@ -162,7 +162,10 @@ def _execute_layout_media_to_torrent(
         logger.info("Creati %d hardlink per candidate %s", len(created), candidate.id)
 
         client_save_path = _client_visible_path(session, disk, torrent_client_id, target_root)
-        info_hash = adapter.add_torrent(candidate.download_link, save_path=client_save_path, force_recheck=True)
+        info_hash = adapter.add_torrent(
+            candidate.download_link, save_path=client_save_path, force_recheck=True,
+            expected_info_hash=candidate.info_hash,
+        )
         seed_job.info_hash = info_hash
         seed_job.torrent_added_at = datetime.now(UTC)
         seed_job.recheck_status = "pending"
@@ -229,7 +232,10 @@ def _execute_layout_torrent_to_client(
     session.commit()
     try:
         client_save_path = _client_visible_path(session, disk, torrent_client_id, save_path_local)
-        info_hash = adapter.add_torrent(candidate.download_link, save_path=client_save_path, force_recheck=True)
+        info_hash = adapter.add_torrent(
+            candidate.download_link, save_path=client_save_path, force_recheck=True,
+            expected_info_hash=candidate.info_hash,
+        )
         seed_job.info_hash = info_hash
         seed_job.torrent_added_at = datetime.now(UTC)
         seed_job.recheck_status = "pending"
@@ -321,7 +327,10 @@ def _create_hardlink_then_seed(
         logger.info("Hardlink creato per candidate %s: %s", candidate.id, target_path)
 
         client_save_path = _client_visible_path(session, disk, torrent_client_id, target_root)
-        info_hash = adapter.add_torrent(candidate.download_link, save_path=client_save_path, force_recheck=True)
+        info_hash = adapter.add_torrent(
+            candidate.download_link, save_path=client_save_path, force_recheck=True,
+            expected_info_hash=candidate.info_hash,
+        )
         seed_job.info_hash = info_hash
         seed_job.torrent_added_at = datetime.now(UTC)
         seed_job.recheck_status = "pending"
@@ -362,7 +371,10 @@ def _execute_torrent_to_client(
     save_path_local = os.path.dirname(source_path)
     try:
         client_save_path = _client_visible_path(session, disk, torrent_client_id, save_path_local)
-        info_hash = adapter.add_torrent(candidate.download_link, save_path=client_save_path, force_recheck=True)
+        info_hash = adapter.add_torrent(
+            candidate.download_link, save_path=client_save_path, force_recheck=True,
+            expected_info_hash=candidate.info_hash,
+        )
         seed_job.info_hash = info_hash
         seed_job.torrent_added_at = datetime.now(UTC)
         seed_job.recheck_status = "pending"

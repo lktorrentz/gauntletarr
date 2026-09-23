@@ -204,3 +204,22 @@ def test_list_torrents_reads_the_qbittorrent_style_save_path():
 
     (torrent,) = adapter.list_torrents()
     assert torrent.save_path == "/data/torrents/completed"
+
+
+def test_add_torrent_waits_for_the_expected_hash():
+    mock = _QuiMock(pages=[[{"hash": "other", "name": "o", "state": "uploading", "progress": 1.0}]])
+    mock.next_hash = "ABCDEF"
+    adapter = _adapter(mock)
+
+    assert adapter.add_torrent("magnet:?xt=...", save_path="/t", expected_info_hash="abcdef") == "ABCDEF"
+
+
+def test_add_torrent_already_in_the_client_is_a_clear_error():
+    from app.adapters.torrent_client.base import TorrentAlreadyInClientError
+
+    mock = _QuiMock(pages=[[{"hash": "abcdef", "name": "x", "state": "uploading", "progress": 1.0}]])
+    adapter = _adapter(mock)
+
+    with pytest.raises(TorrentAlreadyInClientError, match="already in the client"):
+        adapter.add_torrent("magnet:?xt=...", save_path="/t", expected_info_hash="ABCDEF")
+    assert mock.added_calls == []  # nessuna aggiunta tentata

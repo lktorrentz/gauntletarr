@@ -328,7 +328,13 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
         try:
             exec_counts = review.execute_auto_approved(session, progress=progress)
             totals["auto_executed"] = exec_counts["executed"]
-            logger.info("Run #%s: %d review eseguite automaticamente", run.id, exec_counts["executed"])
+            if exec_counts.get("waiting"):
+                logger.info(
+                    "Run #%s: esecuzione automatica disattivata, %d review consigliate in attesa di approvazione",
+                    run.id, exec_counts["waiting"],
+                )
+            else:
+                logger.info("Run #%s: %d review eseguite automaticamente", run.id, exec_counts["executed"])
         except Exception as exc:
             errors = _record_failure(session, run, errors, "esecuzione automatica delle review", exc)
 

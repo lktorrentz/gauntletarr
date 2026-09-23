@@ -24,7 +24,7 @@ class FakeAdapter:
         self.recheck_status = recheck_status
         self.add_torrent_calls = []
 
-    def add_torrent(self, torrent_file_or_url, save_path, force_recheck=True):
+    def add_torrent(self, torrent_file_or_url, save_path, force_recheck=True, expected_info_hash=None):
         assert force_recheck is True
         self.add_torrent_calls.append({"url": torrent_file_or_url, "save_path": save_path})
         return self.info_hash

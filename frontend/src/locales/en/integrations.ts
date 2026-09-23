@@ -1,14 +1,17 @@
 export const integrations = {
   'integrations.arrUsageDescription':
     'Read-only. On every run, files these instances know are identified without a TMDB search, and orphan files are matched to the torrent they were imported from (from the history) without searching the tracker. Files are matched by folder, file name and exact size, so no path mapping is needed.',
-  'integrations.autoApproveThresholdsTitle': 'Auto-approval thresholds',
+  'integrations.autoApproveThresholdsTitle': 'Recommendation thresholds',
   'integrations.rematchTitle': 'Tracker search frequency',
   'integrations.rematchDescription':
     'An orphan file already searched on a tracker is not searched again on every run: its candidates and review stay as they are until the file changes or this interval passes. Keeps runs from hitting tracker rate limits.',
   'integrations.rematchLabel': 'Search again after (days)',
   'integrations.rematchHelp': 'Default: 7. Use 0 to search every orphan on every run.',
   'integrations.autoApproveThresholdsDescription':
-    'Minimum confidence (0.0–1.0) above which a match runs automatically, per direction.',
+    'A match at or above its threshold is marked as recommended in the review queue. Nothing is ever executed without your approval unless you turn on automatic execution below.',
+  'integrations.autoExecuteLabel': 'Execute recommended matches automatically',
+  'integrations.autoExecuteHelp':
+    'Off by default. When on, every run executes the recommended matches on its own: it creates hardlinks and adds torrents to your client (always with a full recheck) without asking. Leave it off to approve each one yourself.',
 
   'integrations.addInstance': 'Add instance',
   'integrations.addInstanceTitled': 'Add {name} instance',

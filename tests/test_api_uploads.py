@@ -50,7 +50,7 @@ class _FakeTorrentClientAdapter:
     def __init__(self):
         self.add_calls = []
 
-    def add_torrent(self, torrent_file_or_url, save_path, force_recheck=True):
+    def add_torrent(self, torrent_file_or_url, save_path, force_recheck=True, expected_info_hash=None):
         self.add_calls.append((torrent_file_or_url, save_path, force_recheck))
         return "deadbeef"
 

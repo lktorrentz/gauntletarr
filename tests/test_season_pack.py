@@ -93,7 +93,7 @@ class FakeClient:
         self.added = []
         self.status = status
 
-    def add_torrent(self, url, save_path, force_recheck=True):
+    def add_torrent(self, url, save_path, force_recheck=True, expected_info_hash=None):
         assert force_recheck is True
         self.added.append((url, save_path))
         return "packhash"
@@ -233,7 +233,7 @@ def test_failed_client_add_removes_only_the_new_hardlinks(db_session, tmp_path, 
     matching.run_media_to_torrent_matching(db_session, tracker, PackTracker([_pack_candidate()]))
 
     class Down(FakeClient):
-        def add_torrent(self, url, save_path, force_recheck=True):
+        def add_torrent(self, url, save_path, force_recheck=True, expected_info_hash=None):
             raise RuntimeError("client down")
 
     try:
@@ -328,3 +328,37 @@ def test_health_ignores_excluded_files(db_session, tmp_path):
     snapshot = health.compute_snapshot(db_session)
 
     assert snapshot["total_media_size"] == len(E01) + len(E02)
+
+
+def test_nothing_is_executed_without_approval_by_default(db_session, tmp_path, monkeypatch):
+    """Decisione dell'utente: niente che tocchi file o client parte senza
+    una sua approvazione — nemmeno un pack verificato al 99%."""
+    from app import review
+    from app.models import SeedJob
+
+    _no_mediainfo(monkeypatch)
+    _disk, tracker, _ = _library(db_session, tmp_path)
+    matching.run_media_to_torrent_matching(db_session, tracker, PackTracker([_pack_candidate()]))
+    assert db_session.query(MatchReview).one().status == "auto_approved"  # consigliata, non eseguita
+
+    counts = review.execute_auto_approved(db_session)
+
+    assert counts == {"executed": 0, "waiting": 1}
+    assert db_session.query(SeedJob).count() == 0
+    assert not (tmp_path / "torrents" / FOLDER).exists()
+
+
+def test_automatic_execution_only_when_the_user_turns_it_on(db_session, tmp_path, monkeypatch):
+    from app import review, settings_repo
+    from app.models import SeedJob
+
+    _no_mediainfo(monkeypatch)
+    _disk, tracker, _ = _library(db_session, tmp_path)
+    matching.run_media_to_torrent_matching(db_session, tracker, PackTracker([_pack_candidate()]))
+    settings_repo.set_setting(db_session, review.AUTO_EXECUTE_SETTING, "true")
+    monkeypatch.setattr(review, "_build_torrent_client_adapter_or_none", lambda session: (FakeClient(), None))
+
+    counts = review.execute_auto_approved(db_session)
+
+    assert counts == {"executed": 1, "waiting": 0}
+    assert db_session.query(SeedJob).count() == 1
