@@ -1,34 +1,19 @@
-import { useState } from 'react'
-
 import { useSeedFiles } from '@/api/hooks/library'
-import { FileFilterBar } from '@/components/FileFilterBar'
-import { FileTree } from '@/components/FileTree'
-import { Card, CardContent } from '@/components/ui/card'
+import { FileBrowser } from '@/components/FileBrowser'
 import { t } from '@/lib/i18n'
+import type { StatusOption } from '@/lib/library-filters'
+
+const STATUS_OPTIONS: StatusOption[] = [
+  { value: 'all', label: t('library.stateAll') },
+  { value: 'seeding', label: t('library.stateSeeding') },
+  { value: 'ignored', label: t('library.stateIgnored') },
+  { value: 'orphan_torrent', label: t('library.stateOrphanTorrent') },
+]
 
 export function TorrentFolderView() {
   const { data, isPending } = useSeedFiles()
-  const [statusFilter, setStatusFilter] = useState<'all' | 'seeding' | 'problem'>('all')
-  const [showExcluded, setShowExcluded] = useState(false)
 
   if (isPending) return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
 
-  const files = data ?? []
-
-  return (
-    <div className="grid gap-3">
-      <FileFilterBar
-        files={files}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        showExcluded={showExcluded}
-        onShowExcludedChange={setShowExcluded}
-      />
-      <Card>
-        <CardContent className="pt-4">
-          <FileTree files={files} statusFilter={statusFilter} showExcluded={showExcluded} />
-        </CardContent>
-      </Card>
-    </div>
-  )
+  return <FileBrowser files={data ?? []} statusOptions={STATUS_OPTIONS} />
 }

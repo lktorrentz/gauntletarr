@@ -29,3 +29,10 @@ export function useUnmatched(diskId?: number) {
     queryFn: () => unwrap(api.GET('/api/library/unmatched', { params: { query: { disk_id: diskId } } })),
   })
 }
+
+export function useLibraryDuplicates(diskId?: number) {
+  return useQuery({
+    queryKey: ['library', 'duplicates', diskId],
+    queryFn: () => unwrap(api.GET('/api/library/duplicates', { params: { query: { disk_id: diskId } } })),
+  })
+}

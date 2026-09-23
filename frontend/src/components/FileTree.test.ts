@@ -34,3 +34,22 @@ describe('buildTree', () => {
     expect(tree.children.get('readme.txt')?.file?.relative_path).toBe('readme.txt')
   })
 })
+
+describe('buildTree size aggregation', () => {
+  it('sums sizes and file counts recursively up to the root', () => {
+    const tree = buildTree([
+      file({ relative_path: 'tv/Show/S01/e1.mkv', size_bytes: 100 }),
+      file({ relative_path: 'tv/Show/S01/e2.mkv', size_bytes: 200 }),
+      file({ relative_path: 'tv/Show/S02/e1.mkv', size_bytes: 50 }),
+      file({ relative_path: 'movies/A/a.mkv', size_bytes: 1000 }),
+    ])
+
+    const show = tree.children.get('tv')!.children.get('Show')!
+    expect(show.children.get('S01')!.sizeBytes).toBe(300)
+    expect(show.sizeBytes).toBe(350)
+    expect(show.fileCount).toBe(3)
+    expect(tree.sizeBytes).toBe(1350)
+    expect(tree.fileCount).toBe(4)
+  })
+})
+
