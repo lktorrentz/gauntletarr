@@ -21,6 +21,7 @@ from app.adapters.image_host.ptpimg import PtpimgAdapter
 from app.adapters.image_host.ptscreens import PtscreensAdapter
 from app.adapters.image_host.seedpool_cdn import SeedpoolCdnAdapter
 from app.adapters.image_host.utppm import UtppmAdapter
+from app.adapters.media_resolver.arr import ArrResolver
 from app.adapters.media_resolver.base import MediaResolverAdapter
 from app.adapters.media_resolver.filename_parser import FilenameParserResolver
 from app.adapters.torrent_client.base import TorrentClientAdapter
@@ -28,6 +29,7 @@ from app.adapters.torrent_client.qbittorrent import QBittorrentAdapter
 from app.adapters.torrent_client.qui import QuiTorrentClientAdapter
 from app.adapters.tracker.base import TrackerAdapter, Unit3dTrackerAdapter
 from app.api_errors import CodedError
+from app.arr import ArrIndex
 from app.models import TorrentClient, Tracker
 from app.tmdb_cache import CachingTMDBClient
 from app.tmdb_client import TMDBClient
@@ -65,12 +67,25 @@ class TmdbApiKeyMissingError(CodedError):
     pass
 
 
-def build_media_resolver(session: Session) -> MediaResolverAdapter:
+def build_media_resolver(session: Session, arr_index: ArrIndex | None = None) -> MediaResolverAdapter:
+    """Con un indice Radarr/Sonarr non vuoto, prima quello e poi guessit +
+    TMDB come ripiego; senza chiave TMDB resta comunque utilizzabile per i
+    soli file che Radarr/Sonarr conoscono. TmdbApiKeyMissingError solo se
+    non c'è nessuna delle due fonti."""
     tmdb_api_key = settings_repo.get_setting(session, "tmdb_api_key")
-    if not tmdb_api_key:
+    has_arr = arr_index is not None and len(arr_index) > 0
+    if not tmdb_api_key and not has_arr:
         raise TmdbApiKeyMissingError("tmdb_api_key_missing")
-    tmdb_client = CachingTMDBClient(session, TMDBClient(api_key=tmdb_api_key))
-    return FilenameParserResolver(tmdb_client)
+
+    default_resolver = None
+    tv_poster_lookup = None
+    if tmdb_api_key:
+        raw_tmdb = TMDBClient(api_key=tmdb_api_key)
+        default_resolver = FilenameParserResolver(CachingTMDBClient(session, raw_tmdb))
+        tv_poster_lookup = raw_tmdb.tv_poster_path
+    if not has_arr:
+        return default_resolver
+    return ArrResolver(arr_index, fallback=default_resolver, tv_poster_lookup=tv_poster_lookup)
 
 
 def build_tracker_adapter(tracker: Tracker) -> TrackerAdapter:

@@ -13,6 +13,7 @@ import os
 from sqlalchemy.orm import Session
 
 from app.adapters.media_resolver.base import MediaResolverAdapter, ResolvedMedia
+from app.exclusions import load_exclusions
 from app.models import MediaFile, MediaItem
 from app.poster_cache import download_poster
 
@@ -44,12 +45,19 @@ def resolve_unmatched_media_files(
 ) -> dict[str, int]:
     """Per ogni media_file senza media_item_id ancora, prova a risolverlo.
     Un fallimento di rete/resolver su un singolo file viene loggato e
-    contato come unresolved — non deve mai far fallire l'intero giro."""
+    contato come unresolved — non deve mai far fallire l'intero giro.
+    I file esclusi (Configuration > Exclusions) non vengono mai risolti:
+    niente chiamate TMDB per sample, trailer e simili."""
+    exclusions = load_exclusions(session)
     media_files = session.query(MediaFile).filter(MediaFile.media_item_id.is_(None)).all()
     resolved = 0
     unresolved = 0
+    excluded = 0
 
     for mf in media_files:
+        if exclusions.is_excluded(mf.relative_path):
+            excluded += 1
+            continue
         abs_path = os.path.join(mf.disk.root_path, mf.relative_path)
         try:
             result = resolver.resolve(abs_path)
@@ -64,7 +72,7 @@ def resolve_unmatched_media_files(
 
         media_item = get_or_create_media_item(session, result)
         mf.media_item_id = media_item.id
-        mf.resolver_source = resolver.SOURCE
+        mf.resolver_source = result.source or resolver.SOURCE
         session.commit()
         resolved += 1
 
@@ -76,4 +84,4 @@ def resolve_unmatched_media_files(
                 # resta identificato, mostrerà solo un placeholder in UI (§6).
                 logger.warning("Download poster fallito per tmdb_id=%s", result.tmdb_id, exc_info=True)
 
-    return {"resolved": resolved, "unresolved": unresolved}
+    return {"resolved": resolved, "unresolved": unresolved, "excluded": excluded}

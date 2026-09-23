@@ -11,18 +11,16 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app import duplicates, library, settings_repo
+from app import duplicates, library
 from app.api_errors import coded_detail
 from app.deps import get_session
-from app.exclusions import CompiledExclusions, compile_exclusions
+from app.exclusions import CompiledExclusions, load_exclusions
 
 router = APIRouter(prefix="/api", tags=["library"])
 
 
 def _load_exclusions(session: Session) -> CompiledExclusions:
-    custom = settings_repo.get_setting(session, "exclusion_patterns")
-    presets = settings_repo.get_setting(session, "exclusion_presets")
-    return compile_exclusions(custom, presets)
+    return load_exclusions(session)
 
 
 class MediaFileState(BaseModel):

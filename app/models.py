@@ -435,6 +435,27 @@ class MatchReview(Base):
     seed_file: Mapped["SeedFile | None"] = relationship()
 
 
+class MatchAttempt(Base):
+    """Vedi docs/schema.sql: ultima ricerca di un file orfano su un tracker,
+    per non ripeterla a ogni run finché il file (size, identità) non cambia
+    o non passa rematch_interval_days."""
+
+    __tablename__ = "match_attempt"
+    __table_args__ = (
+        CheckConstraint("(media_file_id IS NULL) <> (seed_file_id IS NULL)", name="ck_match_attempt_one_file"),
+        UniqueConstraint("tracker_id", "media_file_id"),
+        UniqueConstraint("tracker_id", "seed_file_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tracker_id: Mapped[int] = mapped_column(ForeignKey("tracker.id", ondelete="CASCADE"), nullable=False)
+    media_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_file.id", ondelete="CASCADE"))
+    seed_file_id: Mapped[int | None] = mapped_column(ForeignKey("seed_file.id", ondelete="CASCADE"))
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    tmdb_id: Mapped[int] = mapped_column(nullable=False)
+    attempted_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
 class SeedJob(Base):
     __tablename__ = "seed_job"
     __table_args__ = (

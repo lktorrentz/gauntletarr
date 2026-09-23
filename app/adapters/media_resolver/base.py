@@ -2,7 +2,7 @@
 
 Vedi ratio-guardian per il precedente diretto: default = filename parser
 (guessit) + lookup TMDB, mai una dipendenza da Sonarr/Radarr (adapter
-opzionale, non implementato in questa fase).
+opzionale, app/adapters/media_resolver/arr.py).
 """
 
 from abc import ABC, abstractmethod
@@ -16,6 +16,9 @@ class ResolvedMedia:
     season_number: int | None = None
     episode_number: int | None = None
     poster_path: str | None = None  # path relativo TMDB (es. "/abc123.jpg"), non un URL completo
+    # Chi ha davvero risolto il file, se diverso dal SOURCE del resolver
+    # (ArrResolver: "radarr"/"sonarr", o il resolver di ripiego).
+    source: str | None = None
 
 
 class MediaResolverAdapter(ABC):

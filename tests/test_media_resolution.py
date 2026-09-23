@@ -49,7 +49,7 @@ def test_resolves_and_creates_media_item(db_session, tmp_path):
 
     counts = media_resolution.resolve_unmatched_media_files(db_session, resolver, str(tmp_path / "posters"))
 
-    assert counts == {"resolved": 1, "unresolved": 0}
+    assert counts == {"resolved": 1, "unresolved": 0, "excluded": 0}
     mf = db_session.query(MediaFile).one()
     assert mf.media_item_id is not None
     assert mf.resolver_source == "filename_parser"
@@ -69,7 +69,7 @@ def test_two_files_same_movie_share_one_media_item(db_session, tmp_path):
 
     counts = media_resolution.resolve_unmatched_media_files(db_session, resolver, str(tmp_path / "posters"))
 
-    assert counts == {"resolved": 2, "unresolved": 0}
+    assert counts == {"resolved": 2, "unresolved": 0, "excluded": 0}
     assert db_session.query(MediaItem).count() == 1
 
 
@@ -96,7 +96,7 @@ def test_unresolvable_file_counted_as_unresolved(db_session, tmp_path):
 
     counts = media_resolution.resolve_unmatched_media_files(db_session, resolver, str(tmp_path / "posters"))
 
-    assert counts == {"resolved": 0, "unresolved": 1}
+    assert counts == {"resolved": 0, "unresolved": 1, "excluded": 0}
     mf = db_session.query(MediaFile).one()
     assert mf.media_item_id is None
 
@@ -113,7 +113,7 @@ def test_resolver_exception_on_one_file_does_not_abort_the_rest(db_session, tmp_
 
     counts = media_resolution.resolve_unmatched_media_files(db_session, resolver, str(tmp_path / "posters"))
 
-    assert counts == {"resolved": 1, "unresolved": 1}
+    assert counts == {"resolved": 1, "unresolved": 1, "excluded": 0}
 
 
 def test_already_resolved_files_are_skipped(db_session, tmp_path):
@@ -133,4 +133,20 @@ def test_already_resolved_files_are_skipped(db_session, tmp_path):
 
     counts = media_resolution.resolve_unmatched_media_files(db_session, resolver, str(tmp_path / "posters"))
 
-    assert counts == {"resolved": 0, "unresolved": 0}
+    assert counts == {"resolved": 0, "unresolved": 0, "excluded": 0}
+
+
+def test_excluded_files_are_never_resolved(db_session, tmp_path):
+    from app import settings_repo
+
+    settings_repo.set_setting(db_session, "exclusion_presets", "scene_junk")
+    disk, run = _setup(db_session)
+    _make_media_file(db_session, disk, "movies/Interstellar.2014-sample.mkv", run)
+
+    class NeverCalled(FakeResolver):
+        def resolve(self, file_path):
+            raise AssertionError("un file escluso non deve mai arrivare al resolver")
+
+    counts = media_resolution.resolve_unmatched_media_files(db_session, NeverCalled({}), str(tmp_path / "posters"))
+
+    assert counts == {"resolved": 0, "unresolved": 0, "excluded": 1}

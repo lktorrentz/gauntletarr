@@ -64,9 +64,32 @@ def _supersede_active_reviews(session: Session, *, media_file_id: int | None, se
     return len(stale)
 
 
+def _user_rejected_torrents(
+    session: Session, *, media_file_id: int | None, seed_file_id: int | None
+) -> set[tuple[int, str]]:
+    """(tracker_id, torrent_id_remote) che l'utente ha già rifiutato per
+    questo file. Le review rifiutate dal sistema (superate da una run più
+    recente, vedi _supersede_active_reviews) non contano: solo una
+    decisione umana esplicita è un "no" da ricordare."""
+    query = (
+        session.query(Candidate.tracker_id, Candidate.torrent_id_remote)
+        .join(MatchReview, MatchReview.candidate_id == Candidate.id)
+        .filter(MatchReview.status == "rejected", MatchReview.decided_by != "system")
+    )
+    if media_file_id is not None:
+        query = query.filter(MatchReview.media_file_id == media_file_id)
+    else:
+        query = query.filter(MatchReview.seed_file_id == seed_file_id)
+    return {(tracker_id, remote) for tracker_id, remote in query.all()}
+
+
 def _create_review(
     session: Session, candidates: list[Candidate], *, media_file_id: int | None, seed_file_id: int | None
 ) -> MatchReview | None:
+    # Un torrent già rifiutato dall'utente per questo file non torna mai in
+    # coda a ogni nuova ricerca — resta solo nell'audit trail di candidate.
+    rejected = _user_rejected_torrents(session, media_file_id=media_file_id, seed_file_id=seed_file_id)
+    candidates = [c for c in candidates if (c.tracker_id, c.torrent_id_remote) not in rejected]
     if not candidates:
         return None
 

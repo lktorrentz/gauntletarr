@@ -468,7 +468,7 @@ function ArrInstancesCard({
             testConnectionMutation={testConnectionMutation}
           />
         </div>
-        <CardDescription>{t('integrations.notYetUsedDescription')}</CardDescription>
+        <CardDescription>{t('integrations.arrUsageDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>

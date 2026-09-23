@@ -160,6 +160,13 @@ A disk/torrents_rel_path can be associated with several configured clients at on
 
 Default: filename parsing (guessit) → TMDB lookup. Optional Sonarr/Radarr adapter for more reliable mapping, never assumed present.
 
+**Sonarr/Radarr adapter (implemented 2026-09-23, `app/arr.py`)**: read-only index built once per run from every enabled instance.
+- **Identity:** it gives the identity of every file Radarr/Sonarr know (`tmdbId`, season/episode), used by `ArrResolver` before guessit + TMDB, which stays the fallback. It also works with no TMDB key for the files the *arr instances know.
+- **Torrent of origin:** from the history, the torrent a file was imported from. The imported event links `importedPath`/`droppedPath` to a `downloadId`, and the grabbed event gives `guid` (for UNIT3D via Prowlarr, the download URL `…/torrent/download/<id>.<passkey>`) plus the info hash. The matching engine turns this into a single `source='history'` candidate: one `.torrent` download instead of a catalog search, with the same explicit confidence rules (size, then piece hash). It falls back to the catalog search when that candidate isn't plausible.
+- **Path matching:** automatic, with no path-mapping config. The folder and file name plus the exact size must match, because *arr paths live in their own container namespace.
+- **Posters:** Sonarr only exposes TVDB artwork, so a series' TMDB poster costs one `/tv/{id}` call per series, never a per-episode title search.
+- **Known gap:** Sonarr history is mostly season packs, which the matching engine doesn't support yet, so for TV the history only helps with single-episode torrents until season-pack matching exists.
+
 **Extension for the grid view**: at TMDB resolution time, download and cache the poster (`tmdb_poster_path` → local image, section 4). A `media_item` with no poster available (very niche content, or TMDB doesn't have it) shows a placeholder in the UI, never a blocking error.
 
 ### Matching engine (inherits ratio-guardian §7-8, integrated with smartmediareseed)

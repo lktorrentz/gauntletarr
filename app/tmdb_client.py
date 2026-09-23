@@ -1,7 +1,8 @@
 """Client TMDB minimale (solo ricerca, sezione 6 di docs/SPEC.md).
 
 Nessuna libreria wrapper esterna: due endpoint (search/movie, search/tv)
-sono l'unica cosa che serve al resolver di default. `client` iniettabile
+sono l'unica cosa che serve al resolver di default, più /tv/{id} per il
+solo poster delle serie risolte via Sonarr. `client` iniettabile
 per i test (stesso pattern di app/adapters/torrent_client/qbittorrent.py),
 mai una connessione reale nei test.
 """
@@ -32,6 +33,13 @@ class TMDBClient:
 
     def search_tv(self, query: str, year: int | None = None) -> dict | None:
         return self._search("/search/tv", query, {"first_air_date_year": year} if year else {})
+
+    def tv_poster_path(self, tmdb_id: int) -> str | None:
+        """Poster di una serie già identificata (ArrResolver: Sonarr non dà
+        artwork TMDB) — una chiamata di dettaglio, non una ricerca."""
+        response = self._client.get(f"/tv/{tmdb_id}", params={"api_key": self.api_key})
+        response.raise_for_status()
+        return response.json().get("poster_path")
 
     def _search(self, path: str, query: str, extra_params: dict) -> dict | None:
         params = {"api_key": self.api_key, "query": query, **extra_params}

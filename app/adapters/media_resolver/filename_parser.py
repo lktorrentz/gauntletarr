@@ -38,7 +38,9 @@ class FilenameParserResolver(MediaResolverAdapter):
             result = self._tmdb.search_movie(title, year)
             if result is None:
                 return None
-            return ResolvedMedia(tmdb_id=result["id"], content_type="movie", poster_path=result.get("poster_path"))
+            return ResolvedMedia(
+                tmdb_id=result["id"], content_type="movie", poster_path=result.get("poster_path"), source=self.SOURCE
+            )
 
         season = _first_if_list(guess.get("season"))
         episode = _first_if_list(guess.get("episode"))
@@ -50,5 +52,5 @@ class FilenameParserResolver(MediaResolverAdapter):
         return ResolvedMedia(
             tmdb_id=result["id"], content_type="tv",
             season_number=season, episode_number=episode,
-            poster_path=result.get("poster_path"),
+            poster_path=result.get("poster_path"), source=self.SOURCE,
         )

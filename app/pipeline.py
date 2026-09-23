@@ -40,7 +40,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from app import adapter_factory, health, matching, media_resolution, review, scanner, torrent_indexer
+from app import adapter_factory, arr, health, matching, media_resolution, review, scanner, torrent_indexer
 from app.adapter_factory import TmdbApiKeyMissingError
 from app.models import Disk, RunLog, TorrentClient, Tracker
 
@@ -111,8 +111,21 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             totals["seed_files_scanned"] += counts["seed_files_scanned"]
 
         _set_phase(session, run, "resolving")
+        # Radarr/Sonarr (opzionali) indicizzati una sola volta per run:
+        # servono sia alla risoluzione (identità senza TMDB) sia al matching
+        # (torrent d'origine dalla history, senza ricerca sul tracker).
+        arr_index = None
         try:
-            resolver = adapter_factory.build_media_resolver(session)
+            arr_index = arr.build_arr_index(session)
+            if len(arr_index):
+                logger.info(
+                    "Run #%s: Radarr/Sonarr — %d file identificati, %d con torrent d'origine nella history",
+                    run.id, arr_index.counts["identities"], arr_index.counts["grabs"],
+                )
+        except Exception as exc:
+            errors = _record_failure(session, run, errors, "indicizzazione Radarr/Sonarr", exc)
+        try:
+            resolver = adapter_factory.build_media_resolver(session, arr_index)
         except TmdbApiKeyMissingError:
             # Non ancora configurata: la risoluzione è opzionale a questo punto
             # del progetto (Fase 3), mai un errore bloccante — vedi docs/SPEC.md
@@ -166,14 +179,39 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             logger.debug("Run #%s: matching contro tracker %r", run.id, tracker_row.label)
             try:
                 tracker_adapter = adapter_factory.build_tracker_adapter(tracker_row)
-                m2t = matching.run_media_to_torrent_matching(session, tracker_row, tracker_adapter)
-                t2c = matching.run_torrent_to_client_matching(session, tracker_row, tracker_adapter)
+                m2t = matching.run_media_to_torrent_matching(session, tracker_row, tracker_adapter, arr_index)
+                # Già in rate limit: la seconda direzione peggiorerebbe solo il blocco.
+                t2c = (
+                    matching.run_torrent_to_client_matching(session, tracker_row, tracker_adapter, arr_index)
+                    if not m2t["rate_limited"]
+                    else None
+                )
             except Exception as exc:
                 errors = _record_failure(session, run, errors, f"tracker {tracker_row.label!r}", exc)
                 continue
-            candidates = m2t["candidates"] + t2c["candidates"]
-            logger.info("Run #%s: tracker %r — %d candidati trovati", run.id, tracker_row.label, candidates)
+            parts = [m2t] + ([t2c] if t2c else [])
+            candidates = sum(p["candidates"] for p in parts)
+            searched = sum(p["files"] for p in parts)
+            skipped = sum(p["skipped_fresh"] for p in parts)
+            from_history = sum(p["from_history"] for p in parts)
+            failed = sum(p["failed"] for p in parts)
+            rate_limited = any(p["rate_limited"] for p in parts)
+            logger.info(
+                "Run #%s: tracker %r — %d file cercati (%d via history Radarr/Sonarr), "
+                "%d già cercati di recente saltati, %d falliti, %d candidati trovati",
+                run.id, tracker_row.label, searched, from_history, skipped, failed, candidates,
+            )
             totals["candidates_found"] += candidates
+            if rate_limited or failed:
+                problem = (
+                    "rate limit (429) persistente, matching interrotto: i file rimanenti al prossimo giro"
+                    if rate_limited
+                    else f"{failed} file non cercati per errore (dettagli nei log)"
+                )
+                errors += 1
+                run.errors = errors
+                run.last_error = f"tracker {tracker_row.label!r}: {problem}"
+                session.commit()
 
         _set_phase(session, run, "executing")
         try:

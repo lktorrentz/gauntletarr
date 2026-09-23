@@ -341,6 +341,29 @@ CREATE TABLE IF NOT EXISTS match_review (
     decided_at      TIMESTAMP
 );
 
+-- One row per (tracker, orphan file) already searched on that tracker, so a
+-- run doesn't search the same unchanged orphan again on every run
+-- (app/matching.py). Exactly one of media_file_id / seed_file_id is set, same
+-- split as match_review: media_file_id for direction='media_to_torrent',
+-- seed_file_id for 'torrent_to_client'. A file is searched again only when
+-- the row is older than the rematch_interval_days setting, or when what the
+-- search depends on changed (size_bytes, tmdb_id) — otherwise the candidates
+-- and review already persisted from the last attempt stay as they are.
+-- NULLs never collide in a SQLite UNIQUE, so the two UNIQUEs below don't
+-- interfere with each other.
+CREATE TABLE IF NOT EXISTS match_attempt (
+    id              INTEGER PRIMARY KEY,
+    tracker_id      INTEGER NOT NULL REFERENCES tracker(id) ON DELETE CASCADE,
+    media_file_id   INTEGER REFERENCES media_file(id) ON DELETE CASCADE,
+    seed_file_id    INTEGER REFERENCES seed_file(id) ON DELETE CASCADE,
+    size_bytes      INTEGER NOT NULL,
+    tmdb_id         INTEGER NOT NULL,
+    attempted_at    TIMESTAMP NOT NULL,
+    CHECK ((media_file_id IS NULL) <> (seed_file_id IS NULL)),
+    UNIQUE(tracker_id, media_file_id),
+    UNIQUE(tracker_id, seed_file_id)
+);
+
 CREATE TABLE IF NOT EXISTS seed_job (
     id                          INTEGER PRIMARY KEY,
     candidate_id                INTEGER NOT NULL REFERENCES candidate(id) ON DELETE CASCADE,

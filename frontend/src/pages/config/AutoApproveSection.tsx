@@ -27,6 +27,21 @@ export function AutoApproveSection() {
           />
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('integrations.rematchTitle')}</CardTitle>
+          <CardDescription>{t('integrations.rematchDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SettingField
+            settingKey="rematch_interval_days"
+            label={t('integrations.rematchLabel')}
+            description={t('integrations.rematchHelp')}
+            type="number"
+            placeholder="7"
+          />
+        </CardContent>
+      </Card>
     </div>
   )
 }

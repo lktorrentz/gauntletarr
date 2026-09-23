@@ -16,6 +16,10 @@ sia al relative_path intero — un pattern senza "/" matcha ovunque nel path
 import fnmatch
 from dataclasses import dataclass
 
+from sqlalchemy.orm import Session
+
+from app import settings_repo
+
 # Preset per file "sidecar" dei client torrent più comuni — l'estensione
 # temporanea che ciascun client aggiunge a un file non ancora completo.
 # Non sono file di stato del client (.fastresume etc, quelli vivono nella
@@ -82,3 +86,17 @@ def compile_exclusions(custom_patterns_raw: str | None, enabled_presets_raw: str
     for key in parse_preset_keys(enabled_presets_raw):
         patterns.extend(PRESETS.get(key, []))
     return CompiledExclusions(patterns=patterns)
+
+
+def load_exclusions(session: Session) -> CompiledExclusions:
+    """Esclusioni correnti da app_settings (editabili da Configuration >
+    Exclusions). Una sola lettura per chiamante: la vista Library la fa a
+    ogni richiesta, la pipeline una volta per fase — risoluzione TMDB e
+    matching saltano i file esclusi, lo scanner invece li registra comunque
+    (così "Show excluded" funziona e cambiare un pattern non richiede un
+    nuovo scan)."""
+    return compile_exclusions(
+        settings_repo.get_setting(session, "exclusion_patterns"),
+        settings_repo.get_setting(session, "exclusion_presets"),
+    )
+

@@ -1,7 +1,12 @@
 export const integrations = {
-  'integrations.notYetUsedDescription':
-    'Not yet used by the resolver — saved for when it gets connected. Multi-instance from day one.',
+  'integrations.arrUsageDescription':
+    'Read-only. On every run, files these instances know are identified without a TMDB search, and orphan files are matched to the torrent they were imported from (from the history) without searching the tracker. Files are matched by folder, file name and exact size, so no path mapping is needed.',
   'integrations.autoApproveThresholdsTitle': 'Auto-approval thresholds',
+  'integrations.rematchTitle': 'Tracker search frequency',
+  'integrations.rematchDescription':
+    'An orphan file already searched on a tracker is not searched again on every run: its candidates and review stay as they are until the file changes or this interval passes. Keeps runs from hitting tracker rate limits.',
+  'integrations.rematchLabel': 'Search again after (days)',
+  'integrations.rematchHelp': 'Default: 7. Use 0 to search every orphan on every run.',
   'integrations.autoApproveThresholdsDescription':
     'Minimum confidence (0.0–1.0) above which a match runs automatically, per direction.',
 
