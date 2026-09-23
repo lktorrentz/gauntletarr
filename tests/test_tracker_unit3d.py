@@ -1,7 +1,12 @@
 import httpx
 import pytest
 
-from app.adapters.tracker.base import NotSupportedError, Unit3dTrackerAdapter, UploadError
+from app.adapters.tracker.base import (
+    NotSupportedError,
+    TrackerRateLimitedError,
+    Unit3dTrackerAdapter,
+    UploadError,
+)
 
 
 def _adapter(handler, **kwargs):
@@ -105,3 +110,49 @@ def test_raises_on_http_error():
 
     with pytest.raises(UploadError):
         adapter.search_by_tmdb(1)
+
+
+def test_429_waits_retry_after_then_succeeds():
+    responses = [httpx.Response(429, headers={"Retry-After": "7"}), httpx.Response(200, json={"data": []})]
+    slept: list[float] = []
+    adapter = _adapter(lambda request: responses.pop(0), sleep=slept.append)
+
+    assert adapter.search_by_tmdb(1) == []
+    assert slept == [7.0]
+
+
+def test_429_without_retry_after_backs_off_exponentially_then_gives_up():
+    slept: list[float] = []
+    adapter = _adapter(lambda request: httpx.Response(429), sleep=slept.append)
+
+    with pytest.raises(TrackerRateLimitedError):
+        adapter.search_by_tmdb(1)
+    assert slept == [5.0, 10.0, 20.0]
+
+
+def test_retry_after_is_capped():
+    responses = [httpx.Response(429, headers={"Retry-After": "3600"}), httpx.Response(200, json={"data": []})]
+    slept: list[float] = []
+    adapter = _adapter(lambda request: responses.pop(0), sleep=slept.append)
+
+    adapter.search_by_tmdb(1)
+    assert slept == [Unit3dTrackerAdapter._MAX_RETRY_WAIT_SECONDS]
+
+
+def test_rate_limited_error_is_still_an_upload_error():
+    # Il flusso di upload intercetta UploadError come un 502 pulito.
+    assert issubclass(TrackerRateLimitedError, UploadError)
+
+
+def test_download_torrent_goes_through_the_adapter_without_bearer_token():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=b"d4:infod4:name1:xee")
+
+    adapter = _adapter(handler)
+    content = adapter.download_torrent("https://tracker.example/torrent/download/1.abc")
+
+    assert content == b"d4:infod4:name1:xee"
+    assert "authorization" not in seen[0].headers

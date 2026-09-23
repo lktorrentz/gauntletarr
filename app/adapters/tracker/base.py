@@ -12,7 +12,9 @@ import re
 import time
 from abc import ABC, abstractmethod
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
 from typing import Literal
 
 import httpx
@@ -30,6 +32,14 @@ class UploadError(Exception):
     o risposta in un formato inatteso) — mai silenziato: la conferma umana
     obbligatoria (docs/SPEC.md §9) resta l'ultimo passo prima di questa
     chiamata, ma se il tracker stesso rifiuta va segnalato esplicitamente."""
+
+
+class TrackerRateLimitedError(UploadError):
+    """Il tracker continua a rispondere 429 anche dopo i retry con attesa.
+    Il matching smette di interrogare QUEL tracker per il resto della run
+    (continuare servirebbe solo a peggiorare il blocco), mai un errore del
+    singolo file. Sottoclasse di UploadError così il flusso di upload, che
+    già intercetta UploadError come un 502 pulito, resta invariato."""
 
 
 @dataclass
@@ -108,6 +118,14 @@ class TrackerAdapter(ABC):
         mai trattarlo come errore fatale."""
         raise NotSupportedError(f"{self.__class__.__name__} non supporta get_own_history()")
 
+    def download_torrent(self, url: str) -> bytes:
+        """Scarica un .torrent (download_link di un candidato) passando dallo
+        stesso rate limiting delle altre chiamate a questo tracker — mai con
+        un client HTTP a parte, altrimenti la verifica piece-hash di molti
+        candidati ambigui sfora il limite del tracker senza che il limiter
+        lo sappia. NotSupportedError se l'adapter non lo implementa."""
+        raise NotSupportedError(f"{self.__class__.__name__} non supporta download_torrent()")
+
     def upload_torrent(self, fields: UploadFields, torrent_path: str) -> str:
         """Pubblica un nuovo upload (docs/SPEC.md §9). Ritorna
         torrent_id_remote. NotSupportedError se l'adapter non lo implementa,
@@ -163,7 +181,14 @@ class Unit3dTrackerAdapter(TrackerAdapter):
       mai come certezza assoluta (vedi motore di matching).
     - Rispetta rate_limit_per_min configurato per il tracker; risultati di
       search_by_tmdb cachati in memoria per cache_ttl_seconds.
+    - Su 429 attende quanto indica Retry-After (secondi o data HTTP; senza,
+      un backoff esponenziale), al massimo _MAX_RETRY_WAIT_SECONDS per
+      tentativo e _MAX_429_RETRIES tentativi, poi TrackerRateLimitedError.
     """
+
+    _MAX_429_RETRIES = 3
+    _MAX_RETRY_WAIT_SECONDS = 120.0
+    _BASE_BACKOFF_SECONDS = 5.0
 
     _UNIQUE_ID_RE = re.compile(r"Unique ID\s*:\s*(\S+)")
     _GENERAL_SECTION_RE = re.compile(r"(?m)^\s*General\s*$")
@@ -176,6 +201,7 @@ class Unit3dTrackerAdapter(TrackerAdapter):
         rate_limit_per_min: int = 30,
         http_client: httpx.Client | None = None,
         cache_ttl_seconds: int = 600,
+        sleep: Callable[[float], None] = time.sleep,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_token = api_token
@@ -183,6 +209,7 @@ class Unit3dTrackerAdapter(TrackerAdapter):
         self._rate_limiter = _RateLimiter(rate_limit_per_min)
         self._cache_ttl_seconds = cache_ttl_seconds
         self._search_cache: dict[int, tuple[float, list[TorrentCandidate]]] = {}
+        self._sleep = sleep
 
     def search_by_tmdb(self, tmdb_id: int) -> list[TorrentCandidate]:
         cached = self._search_cache.get(tmdb_id)
@@ -271,12 +298,45 @@ class Unit3dTrackerAdapter(TrackerAdapter):
             raise UploadError(f"UNIT3D upload response has no recognizable torrent id: {response_data!r}")
         return match.group(1)
 
-    def _get(self, path: str, params: dict | None = None) -> httpx.Response:
-        self._rate_limiter.wait()
+    def download_torrent(self, url: str) -> bytes:
+        # Il download_link di UNIT3D è già autenticato (passkey nell'URL):
+        # nessun header Bearer, il token API non deve seguire un URL che
+        # potrebbe anche puntare fuori da base_url.
+        return self._get(url, authenticated=False).content
+
+    def _retry_wait_seconds(self, response: httpx.Response, attempt: int) -> float:
+        header = response.headers.get("Retry-After")
+        wait: float | None = None
+        if header:
+            try:
+                wait = float(header)
+            except ValueError:
+                try:
+                    wait = parsedate_to_datetime(header).timestamp() - time.time()
+                except (TypeError, ValueError):
+                    wait = None
+        if wait is None:
+            wait = self._BASE_BACKOFF_SECONDS * (2**attempt)
+        return min(max(wait, 1.0), self._MAX_RETRY_WAIT_SECONDS)
+
+    def _get(self, path: str, params: dict | None = None, authenticated: bool = True) -> httpx.Response:
+        headers = {"Authorization": f"Bearer {self.api_token}"} if authenticated else None
+        for attempt in range(self._MAX_429_RETRIES + 1):
+            self._rate_limiter.wait()
+            try:
+                response = self._client.get(path, params=params, headers=headers)
+            except httpx.HTTPError as exc:
+                raise UploadError(f"Request to the UNIT3D tracker failed: {exc}") from exc
+            if response.status_code != 429:
+                break
+            if attempt == self._MAX_429_RETRIES:
+                raise TrackerRateLimitedError(
+                    f"UNIT3D tracker still rate limiting (429) after {self._MAX_429_RETRIES} retries"
+                )
+            wait = self._retry_wait_seconds(response, attempt)
+            logger.warning("Tracker %s ha risposto 429, nuovo tentativo tra %.0fs", self.base_url, wait)
+            self._sleep(wait)
         try:
-            response = self._client.get(
-                path, params=params, headers={"Authorization": f"Bearer {self.api_token}"}
-            )
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise UploadError(f"Request to the UNIT3D tracker failed: {exc}") from exc
