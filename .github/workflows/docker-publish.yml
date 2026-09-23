@@ -98,6 +98,12 @@ jobs:
             GAUNTLETARR_COMMIT=${{ steps.version.outputs.commit }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Niente manifest di attestazione (piattaforma "unknown/unknown")
+          # nell'indice: con quelli il controllo/force update di Unraid non
+          # riconosce l'immagine nuova. Resta una lista di manifest Docker
+          # con le sole piattaforme vere (amd64, arm64).
+          provenance: false
+          sbom: false
 
       # Solo dopo un'immagine pubblicata: un tag esiste sempre anche su GHCR.
       - name: Tag and release
