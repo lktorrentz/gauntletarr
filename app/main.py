@@ -23,7 +23,7 @@ from app.api.uploads import router as uploads_router
 from app.config import load_settings
 from app.frontend import mount_frontend
 from app.logging_config import add_file_handler, configure_logging
-from app.version import __version__
+from app.version import __commit__, __version__
 
 configure_logging()
 
@@ -83,11 +83,12 @@ app.include_router(system_router, dependencies=[_protected])
 class HealthResponse(BaseModel):
     status: str
     version: str
+    commit: str | None = None  # commit dell'immagine, per riconoscere a colpo d'occhio la build in uso
 
 
 @app.get("/api/health", response_model=HealthResponse)
 def health():
-    return HealthResponse(status="ok", version=__version__)
+    return HealthResponse(status="ok", version=__version__, commit=__commit__)
 
 
 # Sempre per ultimo: il catch-all del frontend (app/frontend.py) non deve

@@ -2,6 +2,7 @@ export const application = {
   'application.buildTitle': 'Build',
   'application.buildDescription': 'Version and runtime details.',
   'application.version': 'Version',
+  'application.commit': 'Commit',
   'application.pythonVersion': 'Python',
   'application.platform': 'Platform',
   'application.uptime': 'Uptime',

@@ -979,10 +979,8 @@ export interface paths {
         /**
          * Update Check
          * @description Chiamata solo su richiesta esplicita dell'utente (bottone "Check for
-         *     updates" in UI), mai in automatico — nessuna release è ancora stata
-         *     pubblicata su questo repo (SPEC.md §"Repo"), quindi oggi risponderà
-         *     quasi sempre con note="Nessuna release pubblicata ancora", ma resta
-         *     pronto a funzionare non appena il maintainer inizia a taggare.
+         *     updates" in UI), mai in automatico. Confronta con l'ultima GitHub
+         *     Release, che la CI crea a ogni push su main (app/version.py).
          */
         get: operations["update_check_api_system_update_check_get"];
         put?: never;
@@ -1052,6 +1050,8 @@ export interface components {
         AppInfoResponse: {
             /** Version */
             version: string;
+            /** Commit */
+            commit?: string | null;
             /** Python Version */
             python_version: string;
             /** Platform */
@@ -1261,6 +1261,8 @@ export interface components {
             status: string;
             /** Version */
             version: string;
+            /** Commit */
+            commit?: string | null;
         };
         /** HistoryPoint */
         HistoryPoint: {

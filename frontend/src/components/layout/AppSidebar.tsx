@@ -80,7 +80,10 @@ function AppSidebarFooter() {
         <a href="/docs" target="_blank" rel="noreferrer" className="hover:underline">
           {t('layout.apiDocs')}
         </a>
-        <span>v{health?.version ?? '…'}</span>
+        <span title={health?.commit ? `commit ${health.commit}` : undefined}>
+          v{health?.version ?? '…'}
+          {health?.commit && <span className="opacity-60"> · {health.commit}</span>}
+        </span>
       </div>
       <div className="flex items-center justify-between border-t pt-2">
         <ThemeToggle />

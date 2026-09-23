@@ -1,10 +1,22 @@
 name: Build and publish Docker image
 
+# A ogni push su main: versione = patch successiva all'ultimo tag vX.Y.Z
+# (o BASE_VERSION di app/version.py se più alta, per i salti di minor),
+# immagine pubblicata come :latest, :X.Y.Z e :sha-xxxxxxx, poi tag git e
+# GitHub Release con le note generate dai commit. Nessun commit automatico
+# sul repo. Un tag vX.Y.Z spinto a mano pubblica esattamente quella
+# versione. I tag creati qui col GITHUB_TOKEN non fanno ripartire il
+# workflow (comportamento di GitHub Actions), quindi niente doppie build.
 on:
   push:
     branches: [main]
     tags: ["v*.*.*"]
   workflow_dispatch: {}
+
+# Due push ravvicinati non devono calcolare la stessa versione.
+concurrency:
+  group: docker-publish
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -14,11 +26,39 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write  # tag + release
       packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # servono i tag per calcolare la versione
+
+      - name: Compute version
+        id: version
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            release=false
+          else
+            base=$(sed -n 's/^BASE_VERSION = "\([0-9]*\.[0-9]*\.[0-9]*\)"/\1/p' app/version.py)
+            latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 | sed 's/^v//')
+            if [[ -z "$latest" ]]; then
+              IFS=. read -r major minor patch <<< "$base"
+              version="$major.$minor.$((patch + 1))"
+            elif [[ "$(printf '%s\n%s\n' "$base" "$latest" | sort -V | tail -n1)" == "$base" && "$base" != "$latest" ]]; then
+              version="$base"
+            else
+              IFS=. read -r major minor patch <<< "$latest"
+              version="$major.$minor.$((patch + 1))"
+            fi
+            release=true
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "commit=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "Version: $version (commit ${GITHUB_SHA::7})"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -40,8 +80,10 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
+            type=raw,value=${{ steps.version.outputs.version }}
             type=sha,format=short
+          labels: |
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -51,5 +93,25 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GAUNTLETARR_VERSION=${{ steps.version.outputs.version }}
+            GAUNTLETARR_COMMIT=${{ steps.version.outputs.commit }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Solo dopo un'immagine pubblicata: un tag esiste sempre anche su GHCR.
+      - name: Tag and release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          previous=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          git tag "v$VERSION" "$GITHUB_SHA"
+          git push origin "v$VERSION"
+          args=(--title "v$VERSION" --generate-notes)
+          if [[ -n "$previous" ]]; then
+            args+=(--notes-start-tag "$previous")
+          fi
+          gh release create "v$VERSION" "${args[@]}"

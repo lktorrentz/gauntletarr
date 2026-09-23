@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from app.config import Settings
 from app.deps import get_settings
-from app.version import __version__
+from app.version import __commit__, __version__
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -23,6 +23,7 @@ GITHUB_REPO = "lktorrentz/gauntletarr"
 
 class AppInfoResponse(BaseModel):
     version: str
+    commit: str | None = None
     python_version: str
     platform: str
     started_at: datetime
@@ -32,6 +33,7 @@ class AppInfoResponse(BaseModel):
 def app_info(request: Request):
     return AppInfoResponse(
         version=__version__,
+        commit=__commit__,
         python_version=platform.python_version(),
         platform=f"{platform.system().lower()}/{platform.machine()}",
         started_at=request.app.state.started_at,
@@ -59,10 +61,8 @@ def _parse_version(version: str) -> tuple[int, ...]:
 @router.get("/update-check", response_model=UpdateCheckResponse)
 def update_check():
     """Chiamata solo su richiesta esplicita dell'utente (bottone "Check for
-    updates" in UI), mai in automatico — nessuna release è ancora stata
-    pubblicata su questo repo (SPEC.md §"Repo"), quindi oggi risponderà
-    quasi sempre con note="Nessuna release pubblicata ancora", ma resta
-    pronto a funzionare non appena il maintainer inizia a taggare."""
+    updates" in UI), mai in automatico. Confronta con l'ultima GitHub
+    Release, che la CI crea a ogni push su main (app/version.py)."""
     now = datetime.now(UTC)
     try:
         response = httpx.get(

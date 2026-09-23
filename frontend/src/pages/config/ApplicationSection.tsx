@@ -42,6 +42,7 @@ export function ApplicationSection() {
           {info && (
             <>
               <InfoRow label={t('application.version')} value={info.version} />
+              <InfoRow label={t('application.commit')} value={info.commit ?? '—'} />
               <InfoRow label={t('application.pythonVersion')} value={info.python_version} />
               <InfoRow label={t('application.platform')} value={info.platform} />
               <InfoRow label={t('application.uptime')} value={formatUptime(info.started_at)} />

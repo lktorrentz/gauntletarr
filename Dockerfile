@@ -38,6 +38,13 @@ RUN chmod +x docker/entrypoint.sh
 # se manca config.yaml al suo interno viene seminato da config.example.yaml.
 ENV CONFIG_PATH=/app/config/config.yaml
 
+# Versione e commit decisi dalla CI (.github/workflows/docker-publish.yml,
+# app/version.py): vuoti in una build locale, che si mostra come "-dev".
+ARG GAUNTLETARR_VERSION=""
+ARG GAUNTLETARR_COMMIT=""
+ENV GAUNTLETARR_VERSION=${GAUNTLETARR_VERSION} \
+    GAUNTLETARR_COMMIT=${GAUNTLETARR_COMMIT}
+
 EXPOSE 8080
 
 ENTRYPOINT ["docker/entrypoint.sh"]
