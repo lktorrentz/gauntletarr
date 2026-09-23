@@ -5,16 +5,19 @@ base dati condivisa per la futura vista ad albero e a griglia poster
 API-only fino a quel punto)."""
 
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app import duplicates, library
+from app import adapter_factory, duplicates, library, library_detail, matching, settings_repo
+from app.api.reviews import ReviewResponse
 from app.api_errors import coded_detail
 from app.deps import get_session
 from app.exclusions import CompiledExclusions, load_exclusions
+from app.models import MediaFile, MediaItem, RunLog, Tracker
 from app.poster_cache import poster_file
 
 router = APIRouter(prefix="/api", tags=["library"])
@@ -32,6 +35,10 @@ class MediaFileState(BaseModel):
     state: str
     excluded: bool
     linked_paths: list[str]
+    # Contenuto a cui appartiene il file (per aprire la scheda di dettaglio),
+    # None se il file non ha un'identità (non risolto, nfo, immagini...).
+    content_type: str | None = None
+    tmdb_id: int | None = None
 
 
 class SeedFileState(BaseModel):
@@ -43,6 +50,8 @@ class SeedFileState(BaseModel):
     state: str
     excluded: bool
     linked_paths: list[str]
+    content_type: str | None = None  # dal file in libreria collegato, se c'è
+    tmdb_id: int | None = None
 
 
 class MediaItemFile(BaseModel):
@@ -116,3 +125,159 @@ def get_poster(content_type: str, tmdb_id: int, request: Request):
     # Il frontend li scarica con fetch + header di autenticazione (un <img>
     # non manda l'header): la cache del browser evita di riscaricarli.
     return FileResponse(local_path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+class DetailTorrent(BaseModel):
+    name: str
+    client: str
+    tracker: str | None
+    state: str
+
+
+class DetailHardlink(BaseModel):
+    relative_path: str
+    torrents: list[DetailTorrent]
+
+
+class DetailDuplicate(BaseModel):
+    relative_path: str
+    size_bytes: int
+
+
+class DetailFile(BaseModel):
+    media_file_id: int
+    season_number: int | None
+    episode_number: int | None
+    relative_path: str
+    size_bytes: int
+    is_video: bool
+    state: str
+    excluded: bool
+    in_review: bool
+    hardlinks: list[DetailHardlink]
+    duplicates: list[DetailDuplicate]
+
+
+class DetailSearch(BaseModel):
+    tracker: str
+    files_searched: int
+    last_searched_at: datetime
+    next_search_at: datetime | None
+
+
+class DetailCandidate(BaseModel):
+    id: int
+    name: str
+    tracker: str
+    torrent_id_remote: str
+    confidence: float
+    ambiguity_reason: str | None
+    source: str
+    direction: str
+    videos: int
+
+
+class DetailSeedJob(BaseModel):
+    id: int
+    candidate_name: str
+    final_status: str
+    recheck_status: str | None
+    error_message: str | None
+    torrent_added_at: datetime | None
+
+
+class ItemDetailResponse(BaseModel):
+    content_type: str
+    tmdb_id: int
+    title: str | None
+    year: int | None
+    has_poster: bool
+    imdb_id: str | None
+    arr_kind: str | None
+    arr_url: str | None
+    quality: str | None
+    total_size_bytes: int
+    files: list[DetailFile]
+    searches: list[DetailSearch]
+    candidates: list[DetailCandidate]
+    reviews: list[ReviewResponse]
+    seed_jobs: list[DetailSeedJob]
+
+
+def _content_type_or_404(content_type: str) -> str:
+    if content_type not in ("movie", "tv"):
+        raise HTTPException(status_code=404, detail=coded_detail("media_item_not_found"))
+    return content_type
+
+
+@router.get("/library/items/{content_type}/{tmdb_id}", response_model=ItemDetailResponse)
+def get_item_detail(content_type: str, tmdb_id: int, session: Session = Depends(get_session)):
+    """Scheda di dettaglio di un film o di un'intera serie (vista poster)."""
+    detail = library_detail.item_detail(session, _content_type_or_404(content_type), tmdb_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=coded_detail("media_item_not_found"))
+    detail["reviews"] = [ReviewResponse.from_model(r) for r in detail["reviews"]]
+    return detail
+
+
+class SearchNowResponse(BaseModel):
+    files_searched: int
+    candidates: int
+    rate_limited: bool
+
+
+@router.post("/library/items/{content_type}/{tmdb_id}/search", response_model=SearchNowResponse)
+def search_item_now(content_type: str, tmdb_id: int, session: Session = Depends(get_session)):
+    """Cerca subito sui tracker i file orfani di questo contenuto, ignorando
+    l'intervallo fra una ricerca e l'altra. Non modifica file né client:
+    al massimo crea review, che restano da approvare in Reseeding."""
+    _content_type_or_404(content_type)
+    if session.query(RunLog).filter(RunLog.finished_at.is_(None)).count():
+        raise HTTPException(status_code=409, detail=coded_detail("run_in_progress"))
+    mf_ids = {
+        mf.id for mf in session.query(MediaFile).join(MediaItem, MediaItem.id == MediaFile.media_item_id)
+        .filter(MediaItem.content_type == content_type, MediaItem.tmdb_id == tmdb_id).all()
+    }
+    if not mf_ids:
+        raise HTTPException(status_code=404, detail=coded_detail("media_item_not_found"))
+    totals = {"files": 0, "candidates": 0, "rate_limited": False}
+    for tracker_row in session.query(Tracker).filter_by(enabled=True).all():
+        result = matching.run_media_to_torrent_matching(
+            session, tracker_row, adapter_factory.build_tracker_adapter(tracker_row),
+            only_media_file_ids=mf_ids, force=True,
+        )
+        totals["files"] += result["files"]
+        totals["candidates"] += result["candidates"]
+        totals["rate_limited"] = totals["rate_limited"] or result["rate_limited"]
+    return SearchNowResponse(
+        files_searched=totals["files"], candidates=totals["candidates"], rate_limited=totals["rate_limited"]
+    )
+
+
+class ExcludeFileRequest(BaseModel):
+    relative_path: str
+
+
+class ExcludeFileResponse(BaseModel):
+    pattern: str
+
+
+def _fnmatch_literal(path: str) -> str:
+    """Un pattern che corrisponde solo a quel percorso: i caratteri speciali
+    di fnmatch (comuni nei nomi di release, es. "[TbZ]") vanno protetti."""
+    return "".join(f"[{ch}]" if ch in "[]*?" else ch for ch in path)
+
+
+@router.post("/library/exclude", response_model=ExcludeFileResponse)
+def exclude_file(body: ExcludeFileRequest, session: Session = Depends(get_session)):
+    """Aggiunge ai pattern personalizzati (Configuration > Exclusions) una
+    voce che esclude esattamente quel file. Nessun file viene toccato."""
+    pattern = _fnmatch_literal(body.relative_path.strip().strip("/"))
+    if not pattern:
+        raise HTTPException(status_code=400, detail=coded_detail("invalid_path"))
+    current = settings_repo.get_setting(session, "exclusion_patterns") or ""
+    lines = [line for line in current.splitlines() if line.strip()]
+    if pattern not in lines:
+        lines.append(pattern)
+        settings_repo.set_setting(session, "exclusion_patterns", "\n".join(lines))
+    return ExcludeFileResponse(pattern=pattern)

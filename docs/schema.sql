@@ -182,6 +182,10 @@ CREATE TABLE IF NOT EXISTS media_item (
                                                   -- movie and tv ids are separate namespaces on TMDB), never in the DB
     title               TEXT,                    -- movie title / series name, from Radarr/Sonarr or TMDB
     year                INTEGER,                 -- release year / first air year
+    imdb_id             TEXT,                    -- from Radarr/Sonarr, for the detail sheet's IMDb link
+    arr_kind            TEXT,                    -- 'radarr' | 'sonarr': who manages this content, if anyone
+    arr_instance_id     INTEGER,                 -- radarr_instance.id / sonarr_instance.id (no FK: two tables)
+    arr_slug            TEXT,                    -- titleSlug, for "Open in Radarr/Sonarr" ({base_url}/movie|series/{slug})
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 -- SQLite treats NULL as always distinct in UNIQUE: a plain unique constraint

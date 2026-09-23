@@ -91,3 +91,30 @@ def test_items_overview_flags_duplicates_and_files_in_review(db_session):
     flags = {f["relative_path"]: (f["duplicate"], f["in_review"]) for f in overview["files"]}
     assert flags == {"media/A1/a.mkv": (True, True), "media/A2/a.mkv": (True, False)}
     assert (overview["title"], overview["year"]) == ("A", 2000)
+
+
+def test_tree_views_expose_the_content_of_each_file_for_the_detail_sheet(db_session):
+    from datetime import UTC, datetime
+
+    from app import library, pipeline
+    from app.models import Disk, MediaFile, SeedFile
+
+    disk = Disk(label="d", root_path="/mnt/d", media_rel_path="media", torrents_rel_path="torrents")
+    item = MediaItem(content_type="tv", tmdb_id=1399, season_number=1, episode_number=1)
+    db_session.add_all([disk, item])
+    db_session.commit()
+    run = pipeline.start_run(db_session, "manual")
+    video = MediaFile(disk_id=disk.id, relative_path="media/tv/S01E01.mkv", size_bytes=1, st_dev=1, inode=1,
+                      media_item_id=item.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC))
+    nfo = MediaFile(disk_id=disk.id, relative_path="media/tv/S01E01.nfo", size_bytes=1, st_dev=1, inode=2,
+                    last_scan_id=run.id, last_seen_at=datetime.now(UTC))
+    db_session.add_all([video, nfo])
+    db_session.commit()
+    db_session.add(SeedFile(disk_id=disk.id, relative_path="torrents/S01E01.mkv", size_bytes=1, st_dev=1, inode=1,
+                            media_file_id=video.id, last_scan_id=run.id, last_seen_at=datetime.now(UTC)))
+    db_session.commit()
+
+    media = {f["relative_path"]: (f["content_type"], f["tmdb_id"]) for f in library.media_file_states(db_session)}
+    assert media == {"media/tv/S01E01.mkv": ("tv", 1399), "media/tv/S01E01.nfo": (None, None)}
+    (seed,) = library.seed_file_states(db_session)
+    assert (seed["content_type"], seed["tmdb_id"]) == ("tv", 1399)

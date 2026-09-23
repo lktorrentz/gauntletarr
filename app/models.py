@@ -237,6 +237,12 @@ class MediaItem(Base):
     tmdb_poster_path: Mapped[str | None]
     title: Mapped[str | None]
     year: Mapped[int | None]
+    imdb_id: Mapped[str | None]
+    # Chi gestisce questo contenuto (Radarr/Sonarr), per il link diretto
+    # nella scheda di dettaglio: tipo, istanza e titleSlug della sua pagina.
+    arr_kind: Mapped[str | None]
+    arr_instance_id: Mapped[int | None]
+    arr_slug: Mapped[str | None]
     created_at: Mapped[datetime | None] = mapped_column(server_default=text("CURRENT_TIMESTAMP"))
 
 

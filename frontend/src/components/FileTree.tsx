@@ -16,6 +16,10 @@ export interface TreeFileEntry {
   excluded: boolean
   linked_paths: string[]
   size_bytes: number
+  // Contenuto del file (scheda di dettaglio al clic), assente se il file
+  // non ha un'identità: non risolto, nfo, immagini.
+  content_type?: string | null
+  tmdb_id?: number | null
 }
 
 export interface TreeNode {
@@ -83,10 +87,12 @@ export function FileTree({
   files,
   expandAll = false,
   duplicateKeys,
+  onOpenFile,
 }: {
   files: TreeFileEntry[]
   expandAll?: boolean
   duplicateKeys?: Set<string>
+  onOpenFile?: (file: TreeFileEntry) => void
 }) {
   // Cartelle il cui stato aperto/chiuso differisce dal default (aperte al
   // primo livello, chiuse sotto) — così il default resta quello anche
@@ -159,8 +165,13 @@ export function FileTree({
             )
           }
           const file = node.file
+          const openable = onOpenFile != null && file.tmdb_id != null && file.content_type != null
           return (
-            <TableRow key={node.path} className={cn(file.excluded && 'opacity-60')}>
+            <TableRow
+              key={node.path}
+              className={cn(file.excluded && 'opacity-60', openable && 'cursor-pointer')}
+              onClick={openable ? () => onOpenFile(file) : undefined}
+            >
               <TableCell className="max-w-0" style={indent}>
                 <div className="flex items-center gap-1.5 pl-5">
                   {isVideo(node.name) ? (

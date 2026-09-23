@@ -75,6 +75,9 @@ class ArrIdentity:
     poster_path: str | None = None  # path relativo TMDB, solo da Radarr (Sonarr dà artwork TVDB)
     title: str | None = None
     year: int | None = None
+    imdb_id: str | None = None
+    instance_id: int | None = None  # radarr_instance.id / sonarr_instance.id
+    slug: str | None = None  # titleSlug della pagina in Radarr/Sonarr
 
 
 @dataclass(frozen=True)
@@ -145,6 +148,7 @@ class ArrApi:
             else None
         )
         self.label = instance.label
+        self.instance_id = instance.id
         self._client = client or httpx.Client(
             base_url=instance.base_url.rstrip("/"),
             headers={"X-Api-Key": instance.api_key},
@@ -232,6 +236,7 @@ def _index_radarr(api: ArrApi, index: ArrIndex) -> None:
             ArrIdentity(
                 source="radarr", content_type="movie", tmdb_id=movie["tmdbId"],
                 poster_path=_tmdb_poster_path(movie), title=movie.get("title"), year=movie.get("year") or None,
+                imdb_id=movie.get("imdbId") or None, instance_id=api.instance_id, slug=movie.get("titleSlug"),
             ),
         )
     _index_history(api, index)
@@ -258,6 +263,7 @@ def _index_sonarr(api: ArrApi, index: ArrIndex) -> None:
                     source="sonarr", content_type="tv", tmdb_id=series["tmdbId"],
                     season_number=numbers[0], episode_number=numbers[1],
                     title=series.get("title"), year=series.get("year") or None,
+                    imdb_id=series.get("imdbId") or None, instance_id=api.instance_id, slug=series.get("titleSlug"),
                 ),
             )
     _index_history(api, index)

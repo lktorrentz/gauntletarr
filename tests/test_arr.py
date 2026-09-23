@@ -39,6 +39,8 @@ def _single_file_torrent(content: bytes, name: str, piece_length: int = 16) -> b
 
 
 class FakeApi:
+    instance_id = None
+
     def __init__(self, responses: dict[str, object], history: dict[int, list[dict]] | None = None):
         self._responses = responses
         self._history = history or {}

@@ -21,6 +21,9 @@ class ResolvedMedia:
     source: str | None = None
     title: str | None = None  # titolo del film / nome della serie, per la vista poster
     year: int | None = None
+    imdb_id: str | None = None
+    arr_instance_id: int | None = None  # istanza Radarr/Sonarr che gestisce il contenuto (source dice quale)
+    arr_slug: str | None = None
 
 
 class MediaResolverAdapter(ABC):

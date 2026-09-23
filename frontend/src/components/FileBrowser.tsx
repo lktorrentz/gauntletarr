@@ -12,6 +12,7 @@ import {
   type LibraryFilters,
   type StatusOption,
 } from '@/lib/library-filters'
+import { ItemDetailSheet, type OpenItem } from '@/pages/library/ItemDetailSheet'
 
 // Struttura comune a "Media files" e "Torrent files": stesse card, stessa
 // toolbar, stesso tree — cambiano solo il dataset e gli stati possibili.
@@ -26,6 +27,7 @@ export function FileBrowser({
   duplicateKeys?: Set<string>
 }) {
   const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS)
+  const [openItem, setOpenItem] = useState<OpenItem | null>(null)
 
   const summary = useMemo(() => summarizeByState(files), [files])
   const excludedCount = useMemo(() => files.filter((f) => f.excluded).length, [files])
@@ -50,8 +52,17 @@ export function FileBrowser({
       <Card className="py-0">
         {/* Con una ricerca attiva ogni risultato va reso visibile subito,
             non sepolto in una cartella chiusa. */}
-        <FileTree files={filtered} expandAll={hasActiveSearchFilters(filters)} duplicateKeys={duplicateKeys} />
+        <FileTree
+          files={filtered}
+          expandAll={hasActiveSearchFilters(filters)}
+          duplicateKeys={duplicateKeys}
+          onOpenFile={(file) =>
+            file.content_type && file.tmdb_id != null &&
+            setOpenItem({ contentType: file.content_type, tmdbId: file.tmdb_id })
+          }
+        />
       </Card>
+      <ItemDetailSheet item={openItem} onClose={() => setOpenItem(null)} />
     </div>
   )
 }

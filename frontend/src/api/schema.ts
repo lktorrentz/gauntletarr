@@ -361,6 +361,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/library/items/{content_type}/{tmdb_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Item Detail
+         * @description Scheda di dettaglio di un film o di un'intera serie (vista poster).
+         */
+        get: operations["get_item_detail_api_library_items__content_type___tmdb_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/items/{content_type}/{tmdb_id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Item Now
+         * @description Cerca subito sui tracker i file orfani di questo contenuto, ignorando
+         *     l'intervallo fra una ricerca e l'altra. Non modifica file né client:
+         *     al massimo crea review, che restano da approvare in Reseeding.
+         */
+        post: operations["search_item_now_api_library_items__content_type___tmdb_id__search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/exclude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exclude File
+         * @description Aggiunge ai pattern personalizzati (Configuration > Exclusions) una
+         *     voce che esclude esattamente quel file. Nessun file viene toccato.
+         */
+        post: operations["exclude_file_api_library_exclude_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/torrent-clients": {
         parameters: {
             query?: never;
@@ -1194,6 +1257,106 @@ export interface components {
             unmatched: number;
             last_run: components["schemas"]["LastRunSummary"] | null;
         };
+        /** DetailCandidate */
+        DetailCandidate: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Tracker */
+            tracker: string;
+            /** Torrent Id Remote */
+            torrent_id_remote: string;
+            /** Confidence */
+            confidence: number;
+            /** Ambiguity Reason */
+            ambiguity_reason: string | null;
+            /** Source */
+            source: string;
+            /** Direction */
+            direction: string;
+            /** Videos */
+            videos: number;
+        };
+        /** DetailDuplicate */
+        DetailDuplicate: {
+            /** Relative Path */
+            relative_path: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /** DetailFile */
+        DetailFile: {
+            /** Media File Id */
+            media_file_id: number;
+            /** Season Number */
+            season_number: number | null;
+            /** Episode Number */
+            episode_number: number | null;
+            /** Relative Path */
+            relative_path: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Is Video */
+            is_video: boolean;
+            /** State */
+            state: string;
+            /** Excluded */
+            excluded: boolean;
+            /** In Review */
+            in_review: boolean;
+            /** Hardlinks */
+            hardlinks: components["schemas"]["DetailHardlink"][];
+            /** Duplicates */
+            duplicates: components["schemas"]["DetailDuplicate"][];
+        };
+        /** DetailHardlink */
+        DetailHardlink: {
+            /** Relative Path */
+            relative_path: string;
+            /** Torrents */
+            torrents: components["schemas"]["DetailTorrent"][];
+        };
+        /** DetailSearch */
+        DetailSearch: {
+            /** Tracker */
+            tracker: string;
+            /** Files Searched */
+            files_searched: number;
+            /**
+             * Last Searched At
+             * Format: date-time
+             */
+            last_searched_at: string;
+            /** Next Search At */
+            next_search_at: string | null;
+        };
+        /** DetailSeedJob */
+        DetailSeedJob: {
+            /** Id */
+            id: number;
+            /** Candidate Name */
+            candidate_name: string;
+            /** Final Status */
+            final_status: string;
+            /** Recheck Status */
+            recheck_status: string | null;
+            /** Error Message */
+            error_message: string | null;
+            /** Torrent Added At */
+            torrent_added_at: string | null;
+        };
+        /** DetailTorrent */
+        DetailTorrent: {
+            /** Name */
+            name: string;
+            /** Client */
+            client: string;
+            /** Tracker */
+            tracker: string | null;
+            /** State */
+            state: string;
+        };
         /** DiskAssociationResponse */
         DiskAssociationResponse: {
             /** Disk Id */
@@ -1263,6 +1426,16 @@ export interface components {
             /** Files */
             files: components["schemas"]["DuplicateFile"][];
         };
+        /** ExcludeFileRequest */
+        ExcludeFileRequest: {
+            /** Relative Path */
+            relative_path: string;
+        };
+        /** ExcludeFileResponse */
+        ExcludeFileResponse: {
+            /** Pattern */
+            pattern: string;
+        };
         /** ExclusionPresetResponse */
         ExclusionPresetResponse: {
             /** Key */
@@ -1306,6 +1479,39 @@ export interface components {
             pending_review: number;
             /** Errors */
             errors: number;
+        };
+        /** ItemDetailResponse */
+        ItemDetailResponse: {
+            /** Content Type */
+            content_type: string;
+            /** Tmdb Id */
+            tmdb_id: number;
+            /** Title */
+            title: string | null;
+            /** Year */
+            year: number | null;
+            /** Has Poster */
+            has_poster: boolean;
+            /** Imdb Id */
+            imdb_id: string | null;
+            /** Arr Kind */
+            arr_kind: string | null;
+            /** Arr Url */
+            arr_url: string | null;
+            /** Quality */
+            quality: string | null;
+            /** Total Size Bytes */
+            total_size_bytes: number;
+            /** Files */
+            files: components["schemas"]["DetailFile"][];
+            /** Searches */
+            searches: components["schemas"]["DetailSearch"][];
+            /** Candidates */
+            candidates: components["schemas"]["DetailCandidate"][];
+            /** Reviews */
+            reviews: components["schemas"]["ReviewResponse"][];
+            /** Seed Jobs */
+            seed_jobs: components["schemas"]["DetailSeedJob"][];
         };
         /** LastRunSummary */
         LastRunSummary: {
@@ -1401,6 +1607,10 @@ export interface components {
             excluded: boolean;
             /** Linked Paths */
             linked_paths: string[];
+            /** Content Type */
+            content_type?: string | null;
+            /** Tmdb Id */
+            tmdb_id?: number | null;
         };
         /** MediaItemFile */
         MediaItemFile: {
@@ -1666,6 +1876,15 @@ export interface components {
             /** Cron */
             cron?: string | null;
         };
+        /** SearchNowResponse */
+        SearchNowResponse: {
+            /** Files Searched */
+            files_searched: number;
+            /** Candidates */
+            candidates: number;
+            /** Rate Limited */
+            rate_limited: boolean;
+        };
         /** SeedFileState */
         SeedFileState: {
             /** Id */
@@ -1684,6 +1903,10 @@ export interface components {
             excluded: boolean;
             /** Linked Paths */
             linked_paths: string[];
+            /** Content Type */
+            content_type?: string | null;
+            /** Tmdb Id */
+            tmdb_id?: number | null;
         };
         /** SeedJobResponse */
         SeedJobResponse: {
@@ -2758,6 +2981,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_item_detail_api_library_items__content_type___tmdb_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                content_type: string;
+                tmdb_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_item_now_api_library_items__content_type___tmdb_id__search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                content_type: string;
+                tmdb_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchNowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exclude_file_api_library_exclude_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExcludeFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExcludeFileResponse"];
                 };
             };
             /** @description Validation Error */

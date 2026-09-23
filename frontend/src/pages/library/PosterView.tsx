@@ -1,20 +1,16 @@
-import { ImageOffIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useLibraryItems } from '@/api/hooks/library'
 import type { Schemas } from '@/api/client'
+import { AuthedPoster } from '@/components/AuthedPoster'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { getToken } from '@/lib/authToken'
 import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { ItemDetailSheet, type OpenItem } from '@/pages/library/ItemDetailSheet'
 
 type MediaItemOverview = Schemas['MediaItemOverview']
 
 const PAGE_SIZE = 40
-
-function tmdbUrl(item: { content_type: string; tmdb_id: number }) {
-  return `https://www.themoviedb.org/${item.content_type === 'tv' ? 'tv' : 'movie'}/${item.tmdb_id}`
-}
 
 // Una card per film, una per SERIE (non per episodio: a parità di
 // poster sarebbero migliaia di card identiche).
@@ -46,7 +42,7 @@ function StatusDots({ counts, showCounts }: { counts: Record<StatusKey, number>;
       {STATUS_DOTS.filter((d) => counts[d.key] > 0).map((d) => (
         <span
           key={d.key}
-          className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums"
+          className="flex items-center gap-1 text-[10px] text-white/80 tabular-nums"
           title={t(`library.status.${d.key}`)}
         >
           <span className={cn('size-2 rounded-full', d.className)} />
@@ -101,87 +97,36 @@ function cardLabel(card: PosterCard): string {
   return card.year ? `${card.title} (${card.year})` : card.title
 }
 
-// Il poster è protetto dal login come ogni altra API, e un <img src> non
-// manda l'header Authorization: lo si scarica con fetch + token e lo si
-// mostra da un object URL — solo quando la card entra nella parte visibile
-// della pagina, mai centinaia di richieste al caricamento.
-function useAuthedImage(url: string, enabled: boolean) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const [visible, setVisible] = useState(false)
-  const [src, setSrc] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    const node = ref.current
-    if (!enabled || !node || visible) return
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) setVisible(true)
-    }, { rootMargin: '300px' })
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [enabled, visible])
-
-  useEffect(() => {
-    if (!visible) return
-    let objectUrl: string | null = null
-    let cancelled = false
-    const token = getToken()
-    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(String(response.status)))))
-      .then((blob) => {
-        if (cancelled) return
-        objectUrl = URL.createObjectURL(blob)
-        setSrc(objectUrl)
-      })
-      .catch(() => !cancelled && setFailed(true))
-    return () => {
-      cancelled = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [url, visible])
-
-  return { ref, src, failed }
-}
-
-function Poster({ card, className }: { card: PosterCard; className?: string }) {
-  const { ref, src, failed } = useAuthedImage(
-    `/api/library/posters/${card.content_type === 'tv' ? 'tv' : 'movie'}/${card.tmdb_id}.jpg`,
-    card.has_poster,
-  )
+// Titolo e pallini dentro il poster, in basso, su una sfumatura scura
+// per restare leggibili su qualunque immagine. Il clic apre la scheda di
+// dettaglio (TMDB è uno dei link lì dentro).
+function GridCard({ card, onOpen }: { card: PosterCard; onOpen: () => void }) {
   return (
-    <div ref={ref} className={cn('bg-muted', className)}>
-      {src && !failed ? (
-        <img src={src} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-          <ImageOffIcon className="size-6" />
+    <button type="button" onClick={onOpen} className="group text-left" title={cardLabel(card)}>
+      <div className="relative aspect-[2/3] overflow-hidden rounded-md border transition group-hover:ring-2 group-hover:ring-primary/50">
+        <AuthedPoster
+          contentType={card.content_type}
+          tmdbId={card.tmdb_id}
+          hasPoster={card.has_poster}
+          className="h-full w-full"
+        />
+        <div className="absolute inset-x-0 bottom-0 grid gap-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-2 pt-8 pb-1.5">
+          <p className="line-clamp-2 text-xs font-medium text-white">{cardLabel(card)}</p>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] text-white/70">
+              {card.content_type === 'tv' && t('library.episodesCount', { count: card.episodes })}
+            </span>
+            <StatusDots counts={card.counts} showCounts={card.content_type === 'tv'} />
+          </div>
         </div>
-      )}
-    </div>
-  )
-}
-
-function GridCard({ card }: { card: PosterCard }) {
-  return (
-    <a href={tmdbUrl(card)} target="_blank" rel="noreferrer" className="group" title={cardLabel(card)}>
-      <div className="relative aspect-[2/3] overflow-hidden rounded-md border">
-        <Poster card={card} className="h-full w-full" />
       </div>
-      <p className="mt-1 truncate text-xs text-muted-foreground group-hover:underline">{cardLabel(card)}</p>
-      <div className="flex items-center justify-between gap-2">
-        <StatusDots counts={card.counts} showCounts={card.content_type === 'tv'} />
-        {card.content_type === 'tv' && (
-          <span className="text-[11px] text-muted-foreground/70">
-            {t('library.episodesCount', { count: card.episodes })}
-          </span>
-        )}
-      </div>
-    </a>
+    </button>
   )
 }
 
 export function PosterView() {
   const { data, isPending } = useLibraryItems()
+  const [openItem, setOpenItem] = useState<OpenItem | null>(null)
   const [contentType, setContentType] = useState<'movie' | 'tv'>('movie')
 
   const cards = useMemo(
@@ -230,11 +175,16 @@ export function PosterView() {
       ) : (
         <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
           {cards.slice(0, visibleCount).map((card) => (
-            <GridCard key={card.key} card={card} />
+            <GridCard
+              key={card.key}
+              card={card}
+              onOpen={() => setOpenItem({ contentType: card.content_type, tmdbId: card.tmdb_id })}
+            />
           ))}
           {visibleCount < cards.length && <div ref={sentinelRef} className="col-span-full h-px" />}
         </div>
       )}
+      <ItemDetailSheet item={openItem} onClose={() => setOpenItem(null)} />
     </div>
   )
 }

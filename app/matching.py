@@ -394,7 +394,7 @@ def _new_totals() -> dict:
 
 def run_media_to_torrent_matching(
     session: Session, tracker_row: Tracker, tracker_adapter: TrackerAdapter, arr_index: ArrIndex | None = None,
-    progress=NULL_PROGRESS,
+    progress=NULL_PROGRESS, only_media_file_ids: set[int] | None = None, force: bool = False,
 ) -> dict:
     """Un errore su un singolo file lo salta (loggato, contato in "failed")
     senza fermare gli altri; un TrackerRateLimitedError invece ferma il
@@ -407,11 +407,14 @@ def run_media_to_torrent_matching(
     interval = get_rematch_interval(session)
     ctx = MatchContext(session, tracker_row, tracker_adapter, "media_to_torrent", arr_index)
     orphans = orphan_media_files(session, load_exclusions(session))
+    if only_media_file_ids is not None:
+        # "Cerca ora" dalla scheda di dettaglio: solo i file di quel contenuto.
+        orphans = [mf for mf in orphans if mf.id in only_media_file_ids]
     progress.add_total(len(orphans))
     for media_file in orphans:
         tmdb_id = media_file.media_item.tmdb_id
         attempt = _attempt_for(session, tracker_row, media_file_id=media_file.id)
-        if _is_fresh(attempt, media_file.size_bytes, tmdb_id, interval):
+        if not force and _is_fresh(attempt, media_file.size_bytes, tmdb_id, interval):
             totals["skipped_fresh"] += 1
             progress.advance(skipped=1)
             continue

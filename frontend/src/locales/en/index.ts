@@ -6,6 +6,7 @@ import { disks } from './disks'
 import { errors } from './errors'
 import { exclusions } from './exclusions'
 import { integrations } from './integrations'
+import { itemDetail } from './itemDetail'
 import { layout } from './layout'
 import { library } from './library'
 import { logs } from './logs'
@@ -32,6 +33,7 @@ export const en = {
   ...errors,
   ...exclusions,
   ...integrations,
+  ...itemDetail,
   ...layout,
   ...library,
   ...logs,

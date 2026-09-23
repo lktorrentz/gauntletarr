@@ -17,6 +17,7 @@ export function useApproveReview() {
       queryClient.invalidateQueries({ queryKey: ['reviews'] })
       queryClient.invalidateQueries({ queryKey: ['reviews', 'failed'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['library'] })
     },
   })
 }
@@ -28,6 +29,7 @@ export function useRejectReview() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['library'] })
     },
   })
 }

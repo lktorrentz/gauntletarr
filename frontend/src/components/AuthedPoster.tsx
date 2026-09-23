@@ -1,0 +1,75 @@
+import { ImageOffIcon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+
+import { getToken } from '@/lib/authToken'
+import { cn } from '@/lib/utils'
+
+// Il poster è protetto dal login come ogni altra API, e un <img src> non
+// manda l'header Authorization: lo si scarica con fetch + token e lo si
+// mostra da un object URL — solo quando la card entra nella parte visibile
+// della pagina, mai centinaia di richieste al caricamento.
+function useAuthedImage(url: string, enabled: boolean) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [visible, setVisible] = useState(false)
+  const [src, setSrc] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    const node = ref.current
+    if (!enabled || !node || visible) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setVisible(true)
+    }, { rootMargin: '300px' })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [enabled, visible])
+
+  useEffect(() => {
+    if (!visible) return
+    let objectUrl: string | null = null
+    let cancelled = false
+    const token = getToken()
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(String(response.status)))))
+      .then((blob) => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setSrc(objectUrl)
+      })
+      .catch(() => !cancelled && setFailed(true))
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [url, visible])
+
+  return { ref, src, failed }
+}
+
+export function AuthedPoster({
+  contentType,
+  tmdbId,
+  hasPoster,
+  className,
+}: {
+  contentType: string
+  tmdbId: number
+  hasPoster: boolean
+  className?: string
+}) {
+  const { ref, src, failed } = useAuthedImage(
+    `/api/library/posters/${contentType === 'tv' ? 'tv' : 'movie'}/${tmdbId}.jpg`,
+    hasPoster,
+  )
+  return (
+    <div ref={ref} className={cn('bg-muted', className)}>
+      {src && !failed ? (
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+          <ImageOffIcon className="size-6" />
+        </div>
+      )}
+    </div>
+  )
+}

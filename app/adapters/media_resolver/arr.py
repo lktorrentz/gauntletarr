@@ -56,4 +56,7 @@ class ArrResolver(MediaResolverAdapter):
             source=identity.source,
             title=identity.title,
             year=identity.year,
+            imdb_id=identity.imdb_id,
+            arr_instance_id=identity.instance_id,
+            arr_slug=identity.slug,
         )

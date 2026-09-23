@@ -40,6 +40,18 @@ def _media_file_to_seed_paths(session: Session) -> dict[int, list[str]]:
     return linked
 
 
+def _identity_by_media_file(session: Session) -> dict[int, tuple[str, int]]:
+    """media_file.id -> (content_type, tmdb_id) del suo contenuto: con questo
+    le viste ad albero aprono la stessa scheda di dettaglio della vista
+    poster al clic su un file."""
+    return {
+        mf_id: (content_type, tmdb_id)
+        for mf_id, content_type, tmdb_id in session.query(MediaFile.id, MediaItem.content_type, MediaItem.tmdb_id)
+        .join(MediaItem, MediaItem.id == MediaFile.media_item_id)
+        .all()
+    }
+
+
 def media_file_states(
     session: Session, disk_id: int | None = None, exclusions: CompiledExclusions = _NO_EXCLUSIONS
 ) -> list[dict]:
@@ -60,6 +72,7 @@ def media_file_states(
     } if tracked_seed_file_ids else set()
     linked_paths = _media_file_to_seed_paths(session)
     latest = latest_scan_by_disk(session, MediaFile)
+    identity = _identity_by_media_file(session)
 
     return [
         {
@@ -70,6 +83,8 @@ def media_file_states(
             "state": "seeding" if mf.id in seeding_media_file_ids else "orphan_media",
             "excluded": exclusions.is_excluded(mf.relative_path),
             "linked_paths": linked_paths.get(mf.id, []),
+            "content_type": identity.get(mf.id, (None, None))[0],
+            "tmdb_id": identity.get(mf.id, (None, None))[1],
         }
         for mf in query.order_by(MediaFile.relative_path).all()
         if is_current(mf, latest)  # file spariti dal disco: mai mostrati né contati
@@ -93,6 +108,7 @@ def seed_file_states(
     }
 
     latest_seed = latest_scan_by_disk(session, SeedFile)
+    identity = _identity_by_media_file(session)
 
     def _state(sf: SeedFile) -> str:
         if sf.id not in tracked_seed_file_ids:
@@ -109,6 +125,8 @@ def seed_file_states(
             "state": _state(sf),
             "excluded": exclusions.is_excluded(sf.relative_path),
             "linked_paths": [media_paths_by_id[sf.media_file_id]] if sf.media_file_id in media_paths_by_id else [],
+            "content_type": identity.get(sf.media_file_id, (None, None))[0],
+            "tmdb_id": identity.get(sf.media_file_id, (None, None))[1],
         }
         for sf in query.order_by(SeedFile.relative_path).all()
         if is_current(sf, latest_seed)

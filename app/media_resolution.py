@@ -23,6 +23,13 @@ from app.run_progress import NULL_PROGRESS
 logger = logging.getLogger(__name__)
 
 
+def _apply_arr_link(item: MediaItem, source: str | None, instance_id: int | None, slug: str | None,
+                    imdb_id: str | None) -> None:
+    item.imdb_id = item.imdb_id or imdb_id
+    if source in ("radarr", "sonarr") and instance_id is not None and slug:
+        item.arr_kind, item.arr_instance_id, item.arr_slug = source, instance_id, slug
+
+
 def get_or_create_media_item(session: Session, resolved: ResolvedMedia) -> MediaItem:
     query = session.query(MediaItem).filter_by(content_type=resolved.content_type, tmdb_id=resolved.tmdb_id)
     if resolved.content_type == "tv":
@@ -34,6 +41,7 @@ def get_or_create_media_item(session: Session, resolved: ResolvedMedia) -> Media
         item.title = item.title or resolved.title
         item.year = item.year or resolved.year
         item.tmdb_poster_path = item.tmdb_poster_path or resolved.poster_path
+        _apply_arr_link(item, resolved.source, resolved.arr_instance_id, resolved.arr_slug, resolved.imdb_id)
         return item
 
     item = MediaItem(
@@ -45,6 +53,7 @@ def get_or_create_media_item(session: Session, resolved: ResolvedMedia) -> Media
         title=resolved.title,
         year=resolved.year,
     )
+    _apply_arr_link(item, resolved.source, resolved.arr_instance_id, resolved.arr_slug, resolved.imdb_id)
     session.add(item)
     session.commit()
     return item
@@ -117,7 +126,7 @@ def complete_media_items(
         missing_poster = not item.tmdb_poster_path or not os.path.exists(
             poster_file(posters_dir, item.content_type, item.tmdb_id)
         )
-        if item.title is None or missing_poster:
+        if item.title is None or missing_poster or (arr_index is not None and item.arr_slug is None):
             by_content.setdefault((item.content_type, item.tmdb_id), []).append(item)
     progress.add_total(len(by_content))
     completed = failed = 0
@@ -131,6 +140,8 @@ def complete_media_items(
         if identity is not None:
             title, year = title or identity.title, year or identity.year
             poster_path = poster_path or identity.poster_path
+            for item in items:
+                _apply_arr_link(item, identity.source, identity.instance_id, identity.slug, identity.imdb_id)
         if (title is None or poster_path is None) and tmdb_details is not None:
             try:
                 details = tmdb_details(content_type, tmdb_id)

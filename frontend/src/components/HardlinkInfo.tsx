@@ -13,7 +13,12 @@ export function HardlinkInfo({ linkedPaths }: { linkedPaths: string[] }) {
     <Tooltip>
       <TooltipTrigger
         render={
-          <button type="button" className="text-muted-foreground hover:text-foreground" aria-label={t('library.hardlink')} />
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={t('library.hardlink')}
+            onClick={(e) => e.stopPropagation()}  // la riga apre la scheda: l'icona mostra solo il tooltip
+          />
         }
       >
         <InfoIcon className="size-3.5" />
