@@ -16,3 +16,11 @@ export function useSetSetting(key: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings', key] }),
   })
 }
+
+export function useExclusionPresets() {
+  return useQuery({
+    queryKey: ['settings', 'exclusion-presets'],
+    queryFn: () => unwrap(api.GET('/api/settings/exclusion-presets/available')),
+    staleTime: Infinity,
+  })
+}

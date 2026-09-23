@@ -6,7 +6,7 @@ import { StateBadge } from '@/components/StateBadge'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { t } from '@/lib/i18n'
-import { formatBytes } from '@/lib/library-filters'
+import { fileKey, formatBytes } from '@/lib/library-filters'
 import { cn } from '@/lib/utils'
 
 export interface TreeFileEntry {
@@ -71,7 +71,15 @@ interface FlatRow {
   open: boolean
 }
 
-export function FileTree({ files, expandAll = false }: { files: TreeFileEntry[]; expandAll?: boolean }) {
+export function FileTree({
+  files,
+  expandAll = false,
+  duplicateKeys,
+}: {
+  files: TreeFileEntry[]
+  expandAll?: boolean
+  duplicateKeys?: Set<string>
+}) {
   // Cartelle il cui stato aperto/chiuso differisce dal default (aperte al
   // primo livello, chiuse sotto) — così il default resta quello anche
   // quando i dati cambiano, senza dover pre-popolare un Set di path.
@@ -108,8 +116,8 @@ export function FileTree({ files, expandAll = false }: { files: TreeFileEntry[];
       <TableHeader>
         <TableRow>
           <TableHead>{t('library.columnName')}</TableHead>
+          <TableHead className="w-56">{t('library.columnState')}</TableHead>
           <TableHead className="w-28 text-right">{t('library.columnSize')}</TableHead>
-          <TableHead className="w-48">{t('library.columnState')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -135,10 +143,10 @@ export function FileTree({ files, expandAll = false }: { files: TreeFileEntry[];
                     </span>
                   </div>
                 </TableCell>
+                <TableCell />
                 <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
                   {formatBytes(node.sizeBytes)}
                 </TableCell>
-                <TableCell />
               </TableRow>
             )
           }
@@ -154,17 +162,18 @@ export function FileTree({ files, expandAll = false }: { files: TreeFileEntry[];
                   <HardlinkInfo linkedPaths={file.linked_paths} />
                 </div>
               </TableCell>
-              <TableCell className="text-right text-xs tabular-nums">{formatBytes(file.size_bytes)}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-1.5">
                   <StateBadge state={file.state} />
-                  {file.excluded && (
-                    <Badge variant="outline" className="text-[10px]">
-                      {t('library.excluded')}
+                  {duplicateKeys?.has(fileKey(file)) && (
+                    <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+                      {t('library.duplicate')}
                     </Badge>
                   )}
+                  {file.excluded && <Badge variant="outline">{t('library.excluded')}</Badge>}
                 </div>
               </TableCell>
+              <TableCell className="text-right text-xs tabular-nums">{formatBytes(file.size_bytes)}</TableCell>
             </TableRow>
           )
         })}

@@ -4,6 +4,7 @@ import { common } from './common'
 import { dashboard } from './dashboard'
 import { disks } from './disks'
 import { errors } from './errors'
+import { exclusions } from './exclusions'
 import { integrations } from './integrations'
 import { layout } from './layout'
 import { library } from './library'
@@ -29,6 +30,7 @@ export const en = {
   ...dashboard,
   ...disks,
   ...errors,
+  ...exclusions,
   ...integrations,
   ...layout,
   ...library,

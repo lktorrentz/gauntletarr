@@ -7,7 +7,7 @@ describe('StateBadge', () => {
   it.each([
     ['seeding', 'seeding'],
     ['orphan_media', 'orphan media'],
-    ['orphan_torrent', 'orphan torrent'],
+    ['orphan_torrent', 'orphaned'],
     ['ignored', 'ignored'],
     ['unmatched', 'unmatched'],
   ])('renders the label for state %s', (state, expectedLabel) => {

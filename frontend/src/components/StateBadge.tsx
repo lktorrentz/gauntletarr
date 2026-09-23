@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 const STATE_LABELS: Record<string, string> = {
   seeding: 'seeding',
   orphan_media: 'orphan media',
-  orphan_torrent: 'orphan torrent',
+  orphan_torrent: 'orphaned',
   ignored: 'ignored',
   unmatched: 'unmatched',
 }

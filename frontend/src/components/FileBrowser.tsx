@@ -50,7 +50,7 @@ export function FileBrowser({
       <Card className="py-0">
         {/* Con una ricerca attiva ogni risultato va reso visibile subito,
             non sepolto in una cartella chiusa. */}
-        <FileTree files={filtered} expandAll={hasActiveSearchFilters(filters)} />
+        <FileTree files={filtered} expandAll={hasActiveSearchFilters(filters)} duplicateKeys={duplicateKeys} />
       </Card>
     </div>
   )

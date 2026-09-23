@@ -6,7 +6,7 @@ export const library = {
   'library.stateAll': 'Total',
   'library.stateSeeding': 'Seeding',
   'library.stateOrphanMedia': 'Orphan media',
-  'library.stateOrphanTorrent': 'Orphan torrent',
+  'library.stateOrphanTorrent': 'Orphaned',
   'library.stateIgnored': 'Ignored',
   'library.showExcluded': 'Show excluded',
   'library.duplicatesOnly': 'Duplicates',
@@ -18,4 +18,5 @@ export const library = {
   'library.columnState': 'State',
   'library.filesCount': '{count} files',
   'library.hardlink': 'Hardlink',
+  'library.duplicate': 'duplicate',
 } as const
