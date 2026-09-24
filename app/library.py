@@ -197,6 +197,7 @@ def media_items_overview(
                     "media_file_id": mf.id,
                     "disk_id": mf.disk_id,
                     "relative_path": mf.relative_path,
+                    "size_bytes": mf.size_bytes,
                     "state": states_by_id.get(mf.id, "orphan_media"),
                     "excluded": excluded_by_id.get(mf.id, False),
                     "linked_paths": linked_by_id.get(mf.id, []),

@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { ThemeProvider } from 'next-themes'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -8,14 +9,25 @@ import App from './App.tsx'
 import { AuthGate } from '@/components/auth/AuthGate'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { CACHE_BUSTER, CACHE_MAX_AGE_MS, queryPersister, shouldPersistQuery } from '@/lib/queryPersistence'
 import './index.css'
 
-const queryClient = new QueryClient()
+// gcTime almeno quanto la cache persistita: una query ripristinata da
+// IndexedDB non deve essere scartata dopo i 5 minuti di default.
+const queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: CACHE_MAX_AGE_MS } } })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister: queryPersister,
+          maxAge: CACHE_MAX_AGE_MS,
+          buster: CACHE_BUSTER,
+          dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
+        }}
+      >
         <TooltipProvider>
           <AuthGate>
             <BrowserRouter>
@@ -24,7 +36,7 @@ createRoot(document.getElementById('root')!).render(
           </AuthGate>
           <Toaster />
         </TooltipProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ThemeProvider>
   </StrictMode>,
 )

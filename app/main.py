@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
 from app import auth, db, pipeline, scheduler, startup_checks
@@ -59,6 +60,9 @@ app = FastAPI(title="The Media Gauntlet*rr", lifespan=lifespan)
 
 # /api/auth/* è l'unico router mai protetto da require_auth (altrimenti
 # nessuno potrebbe mai autenticarsi la prima volta) — vedi app/api/auth.py.
+# Le viste della libreria restituiscono JSON da diversi MB (decine di
+# migliaia di file): compressi in gzip pesano una frazione in rete.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.include_router(auth_router)
 
 # API JSON pura sotto /api/* fin dall'inizio (docs/SPEC.md §10). Protette da

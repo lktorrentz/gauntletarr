@@ -1,10 +1,14 @@
+import { SearchIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useLibraryItems } from '@/api/hooks/library'
 import type { Schemas } from '@/api/client'
 import { AuthedPoster } from '@/components/AuthedPoster'
+import { LibrarySummaryCards } from '@/components/LibrarySummaryCards'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { t } from '@/lib/i18n'
+import { DUPLICATES_STATUS, type StateSummary, type StatusOption } from '@/lib/library-filters'
 import { STATUS_STYLES } from '@/lib/status-styles'
 import { cn } from '@/lib/utils'
 import { ItemDetailSheet, type OpenItem } from '@/pages/library/ItemDetailSheet'
@@ -23,6 +27,7 @@ interface PosterCard {
   year: number | null
   has_poster: boolean
   episodes: number
+  sizeBytes: number
   counts: Record<StatusKey, number>
 }
 
@@ -51,26 +56,13 @@ function StatusDots({ counts, showCounts }: { counts: Record<StatusKey, number>;
   )
 }
 
-function StatusLegend() {
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-      {STATUS_DOTS.map((d) => (
-        <span key={d.key} className="flex items-center gap-1.5">
-          <span className={cn('size-2 rounded-full', d.className)} />
-          {t(`library.status.${d.key}`)}
-        </span>
-      ))}
-    </div>
-  )
-}
-
 function toCards(items: MediaItemOverview[]): PosterCard[] {
   const cards = new Map<string, PosterCard>()
   for (const item of items) {
     const key = `${item.content_type}-${item.tmdb_id}`
     const card = cards.get(key) ?? {
       key, content_type: item.content_type, tmdb_id: item.tmdb_id, title: null, year: null,
-      has_poster: false, episodes: 0, counts: { seeding: 0, orphan: 0, review: 0, duplicate: 0 },
+      has_poster: false, episodes: 0, sizeBytes: 0, counts: { seeding: 0, orphan: 0, review: 0, duplicate: 0 },
     }
     card.title ??= item.title ?? null
     card.year ??= item.year ?? null
@@ -78,6 +70,7 @@ function toCards(items: MediaItemOverview[]): PosterCard[] {
     card.episodes += 1
     for (const f of item.files) {
       if (f.excluded) continue
+      card.sizeBytes += f.size_bytes ?? 0
       if (f.state === 'seeding') card.counts.seeding += 1
       else card.counts.orphan += 1
       if (f.in_review) card.counts.review += 1
@@ -88,6 +81,41 @@ function toCards(items: MediaItemOverview[]): PosterCard[] {
   return [...cards.values()].sort((a, b) =>
     (a.title ?? '\uffff').localeCompare(b.title ?? '\uffff') || a.tmdb_id - b.tmdb_id,
   )
+}
+
+// Stessi filtri della vista folder, ma per titolo (film o serie intera).
+const STATUS_OPTIONS: StatusOption[] = [
+  { value: 'all', label: t('library.stateAll') },
+  { value: 'seeding', label: t('library.stateSeeding') },
+  { value: 'orphan_media', label: t('library.stateOrphanMedia') },
+  { value: 'review', label: t('library.stateReview') },
+  { value: DUPLICATES_STATUS, label: t('library.stateDuplicates') },
+]
+
+// "Seeding" = tutto in seed; "Orphaned" = almeno un file orfano (per una
+// serie: almeno un episodio), e così via.
+function matchesStatus(card: PosterCard, status: string): boolean {
+  switch (status) {
+    case 'seeding':
+      return card.counts.seeding > 0 && card.counts.orphan === 0
+    case 'orphan_media':
+      return card.counts.orphan > 0
+    case 'review':
+      return card.counts.review > 0
+    case DUPLICATES_STATUS:
+      return card.counts.duplicate > 0
+    default:
+      return true
+  }
+}
+
+function summarize(cards: PosterCard[]): Record<string, StateSummary> {
+  const summary: Record<string, StateSummary> = {}
+  for (const option of STATUS_OPTIONS) {
+    const matching = cards.filter((c) => matchesStatus(c, option.value))
+    summary[option.value] = { count: matching.length, size: matching.reduce((n, c) => n + c.sizeBytes, 0) }
+  }
+  return summary
 }
 
 function cardLabel(card: PosterCard): string {
@@ -126,11 +154,22 @@ export function PosterView() {
   const { data, isPending } = useLibraryItems()
   const [openItem, setOpenItem] = useState<OpenItem | null>(null)
   const [contentType, setContentType] = useState<'movie' | 'tv'>('movie')
+  const [status, setStatus] = useState('all')
+  const [search, setSearch] = useState('')
 
-  const cards = useMemo(
+  const allCards = useMemo(
     () => toCards((data ?? []).filter((item) => item.content_type === contentType)),
     [data, contentType],
   )
+  const summary = useMemo(() => summarize(allCards), [allCards])
+  const cards = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return allCards.filter(
+      (card) =>
+        matchesStatus(card, status) &&
+        (!query || cardLabel(card).toLowerCase().includes(query)),
+    )
+  }, [allCards, status, search])
   // Solo i primi PAGE_SIZE poster, altri PAGE_SIZE ogni volta che il fondo
   // della griglia si avvicina: renderizzare centinaia di card (e i loro
   // poster) tutte insieme rallentava l'apertura della pagina.
@@ -153,23 +192,60 @@ export function PosterView() {
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <Tabs
+        value={contentType}
+        onValueChange={(v) => {
+          setContentType(v as 'movie' | 'tv')
+          setVisibleCount(PAGE_SIZE)
+        }}
+      >
+        <TabsList>
+          <TabsTrigger value="movie">{t('library.movie')}</TabsTrigger>
+          <TabsTrigger value="tv">TV</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <LibrarySummaryCards
+        statusOptions={STATUS_OPTIONS}
+        summary={summary}
+        activeStatus={status}
+        onSelect={(value) => {
+          setStatus(value)
+          setVisibleCount(PAGE_SIZE)
+        }}
+      />
+      <div className="flex flex-wrap items-center gap-3">
         <Tabs
-          value={contentType}
+          value={status}
           onValueChange={(v) => {
-            setContentType(v as 'movie' | 'tv')
+            setStatus(v as string)
             setVisibleCount(PAGE_SIZE)
           }}
         >
           <TabsList>
-            <TabsTrigger value="movie">{t('library.movie')}</TabsTrigger>
-            <TabsTrigger value="tv">TV</TabsTrigger>
+            {STATUS_OPTIONS.map((option) => (
+              <TabsTrigger key={option.value} value={option.value}>
+                {option.label} ({summary[option.value]?.count ?? 0})
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
-        <StatusLegend />
+        <div className="relative min-w-56 flex-1">
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setVisibleCount(PAGE_SIZE)
+            }}
+            placeholder={t('library.searchTitlePlaceholder')}
+            className="pl-8"
+          />
+        </div>
       </div>
       {cards.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('library.noResolvedContent')}</p>
+        <p className="text-sm text-muted-foreground">
+          {allCards.length === 0 ? t('library.noResolvedContent') : t('library.noFilesMatchFilters')}
+        </p>
       ) : (
         <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
           {cards.slice(0, visibleCount).map((card) => (

@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app import adapter_factory, duplicates, library, library_detail, matching, settings_repo
+from app import adapter_factory, duplicates, library, library_detail, matching, response_cache, settings_repo
 from app.api.reviews import ReviewResponse
 from app.api_errors import coded_detail
 from app.deps import get_session
@@ -58,6 +58,7 @@ class MediaItemFile(BaseModel):
     media_file_id: int
     disk_id: int
     relative_path: str
+    size_bytes: int = 0
     state: str
     excluded: bool
     linked_paths: list[str]
@@ -89,19 +90,32 @@ class MediaItemOverview(BaseModel):
     files: list[MediaItemFile]
 
 
+# Le tre risposte pesanti delle viste (decine di migliaia di righe) passano
+# da app/response_cache.py: ETag sulla versione dei dati, 304 se il browser
+# ha già quella versione, ricalcolo una sola volta quando cambia. Il
+# response_model resta per lo schema OpenAPI (tipi del frontend).
 @router.get("/media-files", response_model=list[MediaFileState])
-def list_media_files(disk_id: int | None = None, session: Session = Depends(get_session)):
-    return library.media_file_states(session, disk_id=disk_id, exclusions=_load_exclusions(session))
+def list_media_files(request: Request, disk_id: int | None = None, session: Session = Depends(get_session)):
+    return response_cache.cached_json(
+        request, session, f"media-files:{disk_id}",
+        lambda: library.media_file_states(session, disk_id=disk_id, exclusions=_load_exclusions(session)),
+    )
 
 
 @router.get("/seed-files", response_model=list[SeedFileState])
-def list_seed_files(disk_id: int | None = None, session: Session = Depends(get_session)):
-    return library.seed_file_states(session, disk_id=disk_id, exclusions=_load_exclusions(session))
+def list_seed_files(request: Request, disk_id: int | None = None, session: Session = Depends(get_session)):
+    return response_cache.cached_json(
+        request, session, f"seed-files:{disk_id}",
+        lambda: library.seed_file_states(session, disk_id=disk_id, exclusions=_load_exclusions(session)),
+    )
 
 
 @router.get("/library/items", response_model=list[MediaItemOverview])
-def list_library_items(disk_id: int | None = None, session: Session = Depends(get_session)):
-    return library.media_items_overview(session, disk_id=disk_id, exclusions=_load_exclusions(session))
+def list_library_items(request: Request, disk_id: int | None = None, session: Session = Depends(get_session)):
+    return response_cache.cached_json(
+        request, session, f"items:{disk_id}",
+        lambda: library.media_items_overview(session, disk_id=disk_id, exclusions=_load_exclusions(session)),
+    )
 
 
 @router.get("/library/unmatched", response_model=list[MediaFileState])
@@ -110,10 +124,13 @@ def list_unmatched(disk_id: int | None = None, session: Session = Depends(get_se
 
 
 @router.get("/library/duplicates", response_model=list[DuplicateGroup])
-def list_duplicates(disk_id: int | None = None, session: Session = Depends(get_session)):
+def list_duplicates(request: Request, disk_id: int | None = None, session: Session = Depends(get_session)):
     """Copie non intenzionali dello stesso contenuto su inode diversi —
     file già hardlinkati fra loro non compaiono qui (app/duplicates.py)."""
-    return duplicates.find_duplicate_media_files(session, disk_id=disk_id)
+    return response_cache.cached_json(
+        request, session, f"duplicates:{disk_id}",
+        lambda: duplicates.find_duplicate_media_files(session, disk_id=disk_id),
+    )
 
 
 @router.get("/library/posters/{content_type}/{tmdb_id}.jpg")

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/api/client'
 import type { Schemas } from '@/api/client'
+import { clearPersistedQueries } from '@/lib/queryPersistence'
 import { clearToken, setToken } from '@/lib/authToken'
 
 export function useAuthStatus() {
@@ -50,5 +51,9 @@ export function useChangePassword() {
 
 export function logout(queryClient: ReturnType<typeof useQueryClient>) {
   clearToken()
+  // I dati della libreria salvati nel browser (IndexedDB) non devono restare
+  // leggibili da chi usa lo stesso browser dopo il logout.
+  queryClient.removeQueries({ queryKey: ['library'] })
+  void clearPersistedQueries()
   queryClient.invalidateQueries({ queryKey: ['auth'] })
 }

@@ -1,15 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { formatBytes, type StateSummary, type StatusOption } from '@/lib/library-filters'
-import { STATUS_STYLES, statusKeyOf } from '@/lib/status-styles'
+import { summaryStyle } from '@/lib/status-styles'
 import { cn } from '@/lib/utils'
-
-// Pallino con i colori globali (lib/status-styles.ts), "all" neutro.
-function dotClass(value: string): string {
-  if (value === 'all') return 'bg-foreground'
-  if (value === 'duplicates') return STATUS_STYLES.duplicate.dot
-  const key = statusKeyOf(value)
-  return key ? STATUS_STYLES[key].dot : 'bg-muted-foreground'
-}
 
 export function LibrarySummaryCards({
   statusOptions,
@@ -23,22 +15,24 @@ export function LibrarySummaryCards({
   onSelect: (status: string) => void
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
       {statusOptions.map((option) => {
         const s = summary[option.value] ?? { count: 0, size: 0 }
+        const style = summaryStyle(option.value)
         return (
           <Card
             key={option.value}
             size="sm"
             className={cn(
-              'cursor-pointer transition-colors hover:bg-muted/50',
+              'cursor-pointer bg-gradient-to-t to-card font-mono shadow-xs transition hover:brightness-110 dark:bg-card',
+              style.gradient,
               activeStatus === option.value && 'ring-2 ring-primary/40',
             )}
             onClick={() => onSelect(option.value)}
           >
             <CardContent className="grid gap-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className={cn('size-2 rounded-full', dotClass(option.value))} />
+                <span className={cn('size-2 rounded-full', style.dot)} />
                 {option.label}
               </div>
               <div className="text-2xl font-semibold tabular-nums">{s.count}</div>

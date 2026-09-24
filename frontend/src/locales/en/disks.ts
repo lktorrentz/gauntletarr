@@ -16,6 +16,8 @@ export const disks = {
   'disks.editDisk': 'Edit disk',
   'disks.rootPathNotEditable': 'root_path cannot be edited — delete and recreate the disk to change it.',
   'disks.newHardlinkFolderLabel': 'Folder for new hardlinks (optional)',
+  'disks.newHardlinkFolderColumn': 'New hardlinks',
+  'disks.sameAsSeedingFolder': '= seeding folder',
   'disks.newHardlinkFolderHelp':
     'Subfolder of root_path where a NEW hardlink is created (and the client\'s save_path) — never restricts the "already seeding" search, which always covers the whole seeding folder. Empty = use the seeding folder itself.',
   'disks.mediaFolder': 'Media folder',

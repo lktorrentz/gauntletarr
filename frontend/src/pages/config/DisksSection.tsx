@@ -133,11 +133,13 @@ function RelPathCell({
   value,
   field,
   title,
+  emptyLabel,
 }: {
   diskId: number
   value: string | null
-  field: 'media_rel_path' | 'torrents_rel_path'
+  field: 'media_rel_path' | 'torrents_rel_path' | 'new_torrent_rel_path'
   title: string
+  emptyLabel?: string
 }) {
   const [browserOpen, setBrowserOpen] = useState(false)
   const updateDisk = useUpdateDisk()
@@ -148,7 +150,7 @@ function RelPathCell({
         className="font-mono text-xs text-muted-foreground hover:underline"
         onClick={() => setBrowserOpen(true)}
       >
-        {value || t('disks.setPath')}
+        {value || emptyLabel || t('disks.setPath')}
       </button>
       <DiskBrowserDialog
         diskId={diskId}
@@ -239,13 +241,14 @@ export function DisksSection() {
               <TableHead>root_path</TableHead>
               <TableHead>{t('disks.mediaFolder')}</TableHead>
               <TableHead>{t('disks.seedingFolder')}</TableHead>
+              <TableHead>{t('disks.newHardlinkFolderColumn')}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isPending && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                   {t('common.loading')}
                 </TableCell>
               </TableRow>
@@ -265,6 +268,17 @@ export function DisksSection() {
                     title={t('disks.seedingFolderDialogTitle')}
                   />
                 </TableCell>
+                <TableCell>
+                  {/* Dove l'executor crea i NUOVI hardlink (season pack e film
+                      ricreati): vuoto = la cartella di seeding stessa. */}
+                  <RelPathCell
+                    diskId={disk.id}
+                    value={disk.new_torrent_rel_path}
+                    field="new_torrent_rel_path"
+                    title={t('disks.newHardlinkFolderLabel')}
+                    emptyLabel={t('disks.sameAsSeedingFolder')}
+                  />
+                </TableCell>
                 <TableCell className="flex justify-end gap-1">
                   <VerifyButton diskId={disk.id} />
                   <EditDiskDialog disk={disk} />
@@ -276,7 +290,7 @@ export function DisksSection() {
             ))}
             {disks?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                   {t('disks.noDisksConfigured')}
                 </TableCell>
               </TableRow>

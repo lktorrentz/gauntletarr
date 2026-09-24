@@ -1620,6 +1620,11 @@ export interface components {
             disk_id: number;
             /** Relative Path */
             relative_path: string;
+            /**
+             * Size Bytes
+             * @default 0
+             */
+            size_bytes: number;
             /** State */
             state: string;
             /** Excluded */

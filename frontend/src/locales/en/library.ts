@@ -12,6 +12,8 @@ export const library = {
   'library.stateSeeding': 'Seeding',
   'library.stateOrphanMedia': 'Orphaned',
   'library.stateDuplicates': 'Duplicates',
+  'library.stateReview': 'Awaiting approval',
+  'library.searchTitlePlaceholder': 'Search by title…',
   'library.stateOrphanTorrent': 'Orphaned',
   'library.stateIgnored': 'Ignored',
   'library.showExcluded': 'Excluded',
