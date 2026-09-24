@@ -41,10 +41,11 @@ def compute_fast_hash(path: str) -> str | None:
 
 
 def find_duplicate_media_files(session: Session, disk_id: int | None = None) -> list[dict]:
-    """Gruppi di media_file con stesso (size_bytes, content_hash) ma
-    (st_dev, inode) diversi tra loro — file già hardlinkati fra loro
-    condividono lo stesso inode e non contano come duplicati (nessuno
-    spazio sprecato), quindi vengono esclusi qui, non solo dal fast-hash."""
+    """Due tipi di gruppi (campo "kind"):
+    - "copy": stesso (size_bytes, content_hash) su inode diversi, copie che
+      sprecano spazio;
+    - "hardlink": stesso inode con più percorsi in libreria, nessuno spazio
+      in più ma lo stesso contenuto due volte."""
     query = session.query(MediaFile).filter(MediaFile.content_hash.isnot(None))
     if disk_id is not None:
         query = query.filter_by(disk_id=disk_id)
@@ -61,17 +62,30 @@ def find_duplicate_media_files(session: Session, disk_id: int | None = None) -> 
             continue  # copie di nfo/immagini: rumore, nessuno spazio rilevante sprecato
         groups.setdefault((mf.size_bytes, mf.content_hash), []).append(mf)
 
+    def entry(files: list[MediaFile]) -> list[dict]:
+        return [
+            {"media_file_id": mf.id, "disk_id": mf.disk_id, "relative_path": mf.relative_path}
+            for mf in sorted(files, key=lambda f: f.relative_path)
+        ]
+
     result = []
     for (size_bytes, content_hash), files in groups.items():
         distinct_inodes = {(mf.st_dev, mf.inode) for mf in files}
         if len(distinct_inodes) < 2:
             continue
-        result.append({
-            "content_hash": content_hash,
-            "size_bytes": size_bytes,
-            "files": [
-                {"media_file_id": mf.id, "disk_id": mf.disk_id, "relative_path": mf.relative_path}
-                for mf in sorted(files, key=lambda f: f.relative_path)
-            ],
-        })
+        result.append({"content_hash": content_hash, "size_bytes": size_bytes, "kind": "copy", "files": entry(files)})
+
+    # Stesso inode con due percorsi in libreria (es. un import doppio): nessuno
+    # spazio sprecato, ma il contenuto compare due volte (media server,
+    # Sonarr/Radarr) e uno dei due si può eliminare senza toccare il seed.
+    by_inode: dict[tuple[int, int, int], list[MediaFile]] = {}
+    for files in groups.values():
+        for mf in files:
+            by_inode.setdefault((mf.disk_id, mf.st_dev, mf.inode), []).append(mf)
+    for files in by_inode.values():
+        if len(files) > 1:
+            result.append({
+                "content_hash": files[0].content_hash, "size_bytes": files[0].size_bytes, "kind": "hardlink",
+                "files": entry(files),
+            })
     return sorted(result, key=lambda g: g["size_bytes"], reverse=True)

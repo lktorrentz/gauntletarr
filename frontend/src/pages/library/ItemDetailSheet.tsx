@@ -151,6 +151,7 @@ function FileRow({ file, showEpisode }: { file: DetailFile; showEpisode: boolean
           <p key={dup.relative_path} className="flex items-start gap-1 break-all">
             <span className="shrink-0">{t('itemDetail.alsoAt')}</span>
             <span className="font-mono">{dup.relative_path}</span>
+            {dup.same_file && <span className="shrink-0 italic">{t('itemDetail.sameFileHint')}</span>}
           </p>
         ))}
       </div>

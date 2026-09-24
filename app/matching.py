@@ -30,6 +30,7 @@ from app.adapters.tracker.base import (
 from app.arr import ArrGrab, ArrIndex, host_of
 from app.exclusions import CompiledExclusions, load_exclusions
 from app.file_types import is_video
+from app.hardlinks import media_links
 from app.mediainfo_util import compute_unique_id
 from app.models import (
     Candidate,
@@ -303,9 +304,7 @@ def orphan_media_files(session: Session, exclusions: CompiledExclusions | None =
     seed_file (orphan_media, docs/SPEC.md sezione 3) — stessa logica di
     app/library.py::media_file_states, qui filtrata a quelli risolvibili e
     non esclusi (Configuration > Exclusions)."""
-    linked_ids = {
-        row[0] for row in session.query(SeedFile.media_file_id).filter(SeedFile.media_file_id.isnot(None)).all()
-    }
+    linked_ids = set(media_links(session))  # per inode, vedi app/hardlinks.py
     latest = latest_scan_by_disk(session, MediaFile)
     return [
         mf

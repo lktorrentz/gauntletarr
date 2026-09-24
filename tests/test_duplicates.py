@@ -66,7 +66,7 @@ def test_find_duplicate_media_files_flags_same_content_different_inode(client):
         session.close()
 
 
-def test_find_duplicate_media_files_excludes_already_hardlinked(client):
+def test_two_library_paths_of_one_inode_are_a_hardlink_group_not_a_copy(client):
     session = _session(client)
     try:
         disk = Disk(label="d", root_path="/mnt/d")
@@ -76,7 +76,8 @@ def test_find_duplicate_media_files_excludes_already_hardlinked(client):
         session.add(run)
         session.commit()
 
-        # Stesso (st_dev, inode): due path per lo stesso file fisico, nessuno spreco.
+        # Stesso (st_dev, inode): due path per lo stesso file fisico, nessuno
+        # spreco di spazio ma lo stesso contenuto due volte in libreria.
         _make_media_file(
             session, disk, run, relative_path="movies/A/Movie.mkv",
             size_bytes=1000, st_dev=1, inode=1, content_hash="deadbeef",
@@ -87,7 +88,10 @@ def test_find_duplicate_media_files_excludes_already_hardlinked(client):
         )
         session.commit()
 
-        assert find_duplicate_media_files(session) == []
+        groups = find_duplicate_media_files(session)
+        assert [(g["kind"], [f["relative_path"] for f in g["files"]]) for g in groups] == [
+            ("hardlink", ["movies/A/Movie.mkv", "movies/B/Movie.mkv"])
+        ]
     finally:
         session.close()
 

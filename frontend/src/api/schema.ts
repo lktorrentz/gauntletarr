@@ -1435,6 +1435,11 @@ export interface components {
             relative_path: string;
             /** Size Bytes */
             size_bytes: number;
+            /**
+             * Same File
+             * @default false
+             */
+            same_file: boolean;
         };
         /** DetailFile */
         DetailFile: {
@@ -1580,9 +1585,14 @@ export interface components {
         /** DuplicateGroup */
         DuplicateGroup: {
             /** Content Hash */
-            content_hash: string;
+            content_hash: string | null;
             /** Size Bytes */
             size_bytes: number;
+            /**
+             * Kind
+             * @default copy
+             */
+            kind: string;
             /** Files */
             files: components["schemas"]["DuplicateFile"][];
         };

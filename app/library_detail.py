@@ -21,6 +21,7 @@ from app.adapters.torrent_client.base import is_stopped_state
 from app.duplicates import find_duplicate_media_files
 from app.exclusions import load_exclusions
 from app.file_types import is_video
+from app.hardlinks import media_links
 from app.matching import _as_utc, get_rematch_interval
 from app.models import (
     Candidate,
@@ -88,9 +89,16 @@ def item_detail(session: Session, content_type: str, tmdb_id: int) -> dict | Non
 
     latest_seed = latest_scan_by_disk(session, SeedFile)
     seeds_by_media: dict[int, list[SeedFile]] = defaultdict(list)
-    for sf in session.query(SeedFile).filter(SeedFile.media_file_id.in_(mf_ids)).all() if mf_ids else []:
-        if is_current(sf, latest_seed):
-            seeds_by_media[sf.media_file_id].append(sf)
+    links = media_links(session, mf_ids) if mf_ids else {}
+    linked_ids = {sf_id for sfs in links.values() for sf_id, _ in sfs}
+    seed_rows = (
+        {sf.id: sf for sf in session.query(SeedFile).filter(SeedFile.id.in_(linked_ids)).all()} if linked_ids else {}
+    )
+    for mf_id, sfs in links.items():
+        for sf_id, _path in sfs:
+            sf = seed_rows.get(sf_id)
+            if sf is not None and is_current(sf, latest_seed):
+                seeds_by_media[mf_id].append(sf)
     seed_ids = [sf.id for seeds in seeds_by_media.values() for sf in seeds]
 
     torrents_by_seed: dict[int, list[dict]] = defaultdict(list)
@@ -113,10 +121,11 @@ def item_detail(session: Session, content_type: str, tmdb_id: int) -> dict | Non
     for group in find_duplicate_media_files(session):
         for f in group["files"]:
             if f["media_file_id"] in wanted:
-                duplicate_peers[f["media_file_id"]] = [
-                    {"relative_path": g["relative_path"], "size_bytes": group["size_bytes"]}
+                duplicate_peers.setdefault(f["media_file_id"], []).extend(
+                    {"relative_path": g["relative_path"], "size_bytes": group["size_bytes"],
+                     "same_file": group["kind"] == "hardlink"}
                     for g in group["files"] if g["media_file_id"] != f["media_file_id"]
-                ]
+                )
 
     reviews = [
         r for r in session.query(MatchReview)

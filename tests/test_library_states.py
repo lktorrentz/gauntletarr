@@ -121,3 +121,45 @@ def test_a_stopped_torrent_is_still_seeding_but_flagged_stopped(db_session, tmp_
     assert seeds["Stopped.mkv"]["stopped"] is True
     # Fermo in un client ma attivo in un altro: condivide, quindi non "stopped".
     assert (media["CrossSeeded.mkv"]["state"], media["CrossSeeded.mkv"]["stopped"]) == ("seeding", False)
+
+
+def test_a_second_library_path_of_the_same_inode_is_seeding_too(db_session, tmp_path):
+    """Import doppio: lo stesso inode in due cartelle della libreria e nella
+    cartella torrent. Entrambi i percorsi in libreria sono in seed (non uno
+    orfano cercato sui tracker) e compaiono come duplicato "hardlink"."""
+    from app.duplicates import find_duplicate_media_files
+    from app.matching import orphan_media_files
+
+    root = tmp_path / "disk1"
+    (root / "media" / "tv" / "Show").mkdir(parents=True)
+    (root / "media" / "tv" / "Show (2020)").mkdir(parents=True)
+    (root / "torrents").mkdir()
+    disk = Disk(label="disk1", root_path=str(root), media_rel_path="media", torrents_rel_path="torrents")
+    tc = TorrentClient(label="qbt", adapter_type="qbittorrent", base_url="http://qbt")
+    db_session.add_all([disk, tc])
+    db_session.commit()
+    first = root / "media" / "tv" / "Show" / "Show.S01E01.mkv"
+    first.write_bytes(b"episode" * 100)
+    os.link(first, root / "media" / "tv" / "Show (2020)" / "Show.S01E01.mkv")
+    os.link(first, root / "torrents" / "Show.S01E01.mkv")
+    run = pipeline.start_run(db_session, run_type="manual")
+    scanner.scan_disk(db_session, disk, run)
+    torrent_indexer.index_torrent_client(db_session, tc, FakeAdapter([ClientTorrentInfo(
+        info_hash="h", name="Show.S01E01.mkv", save_path=str(root / "torrents"), state="uploading",
+        files=[ClientTorrentFileInfo(path_in_torrent="Show.S01E01.mkv", size_bytes=700)],
+    )]), run)
+
+    states = {s["relative_path"]: s for s in library.media_file_states(db_session)}
+    assert {s["state"] for s in states.values()} == {"seeding"}
+    assert all(s["linked_paths"] == [os.path.join("torrents", "Show.S01E01.mkv")] for s in states.values())
+    from app.models import MediaFile, MediaItem
+
+    item = MediaItem(content_type="tv", tmdb_id=1, season_number=1, episode_number=1)
+    db_session.add(item)
+    db_session.commit()
+    for mf in db_session.query(MediaFile).all():
+        mf.media_item_id = item.id  # identità risolta: solo così il matching lo cercherebbe
+    db_session.commit()
+    assert orphan_media_files(db_session) == []
+    groups = find_duplicate_media_files(db_session)
+    assert [(g["kind"], len(g["files"])) for g in groups] == [("hardlink", 2)]

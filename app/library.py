@@ -22,6 +22,7 @@ from app.adapters.torrent_client.base import is_stopped_state
 from app.duplicates import find_duplicate_media_files
 from app.exclusions import CompiledExclusions
 from app.file_types import is_video
+from app.hardlinks import media_links
 from app.models import ClientTorrent, ClientTorrentFile, MatchReview, MediaFile, MediaItem, SeedFile, SeedJob
 from app.scan_state import is_current, latest_scan_by_disk
 
@@ -33,12 +34,7 @@ def _media_file_to_seed_paths(session: Session) -> dict[int, list[str]]:
     (spesso più di uno, cross-seed) — la stessa relazione che il motore di
     matching stabilisce già (seed_file.media_file_id), qui solo riletta al
     contrario per l'hover "hardlink" della UI (Fase 9)."""
-    linked: dict[int, list[str]] = {}
-    for sf in session.query(SeedFile.media_file_id, SeedFile.relative_path).filter(
-        SeedFile.media_file_id.isnot(None)
-    ).all():
-        linked.setdefault(sf.media_file_id, []).append(sf.relative_path)
-    return linked
+    return {mf_id: [path for _sf_id, path in links] for mf_id, links in media_links(session).items()}
 
 
 def _identity_by_media_file(session: Session) -> dict[int, tuple[str, int]]:
@@ -79,16 +75,10 @@ def media_file_states(
         query = query.filter_by(disk_id=disk_id)
 
     tracked_seed_file_ids, active_seed_file_ids = _tracking(session)
-    seeding_media_file_ids: set[int] = set()
-    active_media_file_ids: set[int] = set()
-    for seed_file_id, media_file_id in (
-        session.query(SeedFile.id, SeedFile.media_file_id).filter(SeedFile.media_file_id.isnot(None)).all()
-    ):
-        if seed_file_id in tracked_seed_file_ids:
-            seeding_media_file_ids.add(media_file_id)
-        if seed_file_id in active_seed_file_ids:
-            active_media_file_ids.add(media_file_id)
-    linked_paths = _media_file_to_seed_paths(session)
+    links = media_links(session)  # per inode: anche il secondo percorso di un import doppio
+    seeding_media_file_ids = {mf_id for mf_id, sfs in links.items() if any(i in tracked_seed_file_ids for i, _ in sfs)}
+    active_media_file_ids = {mf_id for mf_id, sfs in links.items() if any(i in active_seed_file_ids for i, _ in sfs)}
+    linked_paths = {mf_id: [path for _i, path in sfs] for mf_id, sfs in links.items()}
     latest = latest_scan_by_disk(session, MediaFile)
     identity = _identity_by_media_file(session)
 

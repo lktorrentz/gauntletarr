@@ -76,8 +76,9 @@ class DuplicateFile(BaseModel):
 
 
 class DuplicateGroup(BaseModel):
-    content_hash: str
+    content_hash: str | None
     size_bytes: int
+    kind: str = "copy"  # copy (inode diversi, spazio sprecato) | hardlink (stesso inode, più percorsi)
     files: list[DuplicateFile]
 
 
@@ -162,6 +163,7 @@ class DetailHardlink(BaseModel):
 class DetailDuplicate(BaseModel):
     relative_path: str
     size_bytes: int
+    same_file: bool = False  # stesso inode (hardlink): eliminarlo non libera spazio e non tocca il seed
 
 
 class DetailFile(BaseModel):

@@ -5,6 +5,7 @@ export const itemDetail = {
   'itemDetail.seasonSummary': '{seeding}/{total} seeding',
   'itemDetail.inReview': 'awaiting approval',
   'itemDetail.duplicate': 'duplicate',
+  'itemDetail.sameFileHint': '(same file, hardlink: removing one frees no space and keeps seeding)',
   'itemDetail.exclude': 'Exclude this file',
   'itemDetail.excluded': 'File excluded (Configuration > Exclusions).',
   'itemDetail.noHardlink': 'No hardlink in the torrent folder',

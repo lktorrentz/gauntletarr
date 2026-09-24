@@ -26,6 +26,7 @@ from app import full_check
 from app.adapter_factory import build_torrent_client_adapter
 from app.exclusions import load_exclusions
 from app.executor import ExecutionError, execute_review, reconcile_seed_job, retry_seed_job
+from app.hardlinks import media_links
 from app.models import (
     Candidate,
     ClientTorrent,
@@ -374,9 +375,7 @@ def close_resolved_reviews(session: Session) -> int:
     ]
     if not active:
         return 0
-    hardlinked = {
-        row[0] for row in session.query(SeedFile.media_file_id).filter(SeedFile.media_file_id.isnot(None)).all()
-    }
+    hardlinked = set(media_links(session))
     tracked = {
         row[0]
         for row in session.query(ClientTorrentFile.seed_file_id)
