@@ -20,6 +20,7 @@ app/pipeline.py, non qui — questo modulo resta scoped al solo filesystem.
 import logging
 import os
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -42,20 +43,40 @@ def _list_files(abs_root: str) -> list[str]:
     return [os.path.join(dirpath, name) for dirpath, _dirs, names in os.walk(abs_root) for name in names]
 
 
-def _stat_files(paths: list[str], on_progress: Callable[[int], None] | None):
-    """(path, stat) per ogni file ancora leggibile. Un errore di stat su un
-    singolo file (permessi, file sparito dopo l'elenco) viene loggato e
-    saltato — non deve mai far fallire l'intero scan."""
-    for full_path in paths:
-        try:
-            st = os.stat(full_path)
-        except OSError as exc:
-            logger.warning("Impossibile leggere %r: %s", full_path, exc)
-            st = None
-        if st is not None:
-            yield full_path, st
-        if on_progress is not None:
-            on_progress(1)
+# stat + hash parziale in parallelo: operazioni di I/O indipendenti, che su
+# un disco di rete o FUSE (file su dischi fisici diversi) si sovrappongono
+# bene. Nessun accesso al DB nei thread.
+STAT_WORKERS = 8
+
+
+def _stat_one(full_path: str, with_hash: bool):
+    try:
+        st = os.stat(full_path)
+    except OSError as exc:
+        logger.warning("Impossibile leggere %r: %s", full_path, exc)
+        return full_path, None, None
+    # Hash parziale (128KB, app/duplicates.py) solo per i video: i duplicati
+    # riguardano solo loro, leggere ogni nfo o immagine sarebbe spreco.
+    content_hash = compute_fast_hash(full_path) if with_hash and is_video(full_path) else None
+    return full_path, st, content_hash
+
+
+def _stat_files(paths: list[str], on_progress: Callable[[int], None] | None, with_hash: bool = False):
+    """(path, stat, content_hash) per ogni file ancora leggibile, nello stesso
+    ordine di `paths`. Un errore di stat su un singolo file (permessi, file
+    sparito dopo l'elenco) viene loggato e saltato — non deve mai far
+    fallire l'intero scan. on_progress è chiamato nel thread chiamante."""
+    pool = ThreadPoolExecutor(max_workers=STAT_WORKERS)
+    try:
+        for full_path, st, content_hash in pool.map(lambda p: _stat_one(p, with_hash), paths):
+            if st is not None:
+                yield full_path, st, content_hash
+            if on_progress is not None:
+                on_progress(1)
+    finally:
+        # Su uno stop (RunCancelled da on_progress) o un errore, i file non
+        # ancora iniziati si annullano: niente attesa fino a fine disco.
+        pool.shutdown(wait=True, cancel_futures=True)
 
 
 @dataclass
@@ -89,7 +110,7 @@ def scan_disk(
     files = files if files is not None else list_disk_files(disk)
     media_rows: list[dict] = []
     if files.media:
-        for full_path, st in _stat_files(files.media, on_progress):
+        for full_path, st, content_hash in _stat_files(files.media, on_progress, with_hash=True):
             media_rows.append({
                 "disk_id": disk.id,
                 "relative_path": os.path.relpath(full_path, disk.root_path),
@@ -98,9 +119,9 @@ def scan_disk(
                 "inode": st.st_ino,
                 "nlink": st.st_nlink,
                 # Costo limitato a 128KB/file indipendentemente dalla dimensione
-                # (app/duplicates.py) — ricalcolato a ogni scan, nessuna cache
-                # incrementale ancora: un'ottimizzazione futura, non bloccante.
-                "content_hash": compute_fast_hash(full_path),
+                # (app/duplicates.py), solo per i video — ricalcolato a ogni
+                # scan, nessuna cache incrementale ancora.
+                "content_hash": content_hash,
                 "last_scan_id": run.id,
                 "last_seen_at": now,
             })
@@ -130,7 +151,7 @@ def scan_disk(
 
     seed_rows: list[dict] = []
     if files.seeds:
-        for full_path, st in _stat_files(files.seeds, on_progress):
+        for full_path, st, _hash in _stat_files(files.seeds, on_progress):
             seed_rows.append({
                 "disk_id": disk.id,
                 "relative_path": os.path.relpath(full_path, disk.root_path),

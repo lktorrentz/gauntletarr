@@ -26,10 +26,11 @@ import {
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
+import { parseApiDate } from '@/lib/time'
 
 function relativeTime(iso: string | null | undefined): string {
   if (!iso) return t('layout.timeNever')
-  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
+  const minutes = Math.round((Date.now() - parseApiDate(iso).getTime()) / 60_000)
   if (minutes < 1) return t('layout.timeNow')
   if (minutes < 60) return t('layout.timeMinutesAgo', { minutes })
   const hours = Math.round(minutes / 60)

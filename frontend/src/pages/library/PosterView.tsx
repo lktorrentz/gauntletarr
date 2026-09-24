@@ -5,6 +5,7 @@ import type { Schemas } from '@/api/client'
 import { AuthedPoster } from '@/components/AuthedPoster'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { t } from '@/lib/i18n'
+import { STATUS_STYLES } from '@/lib/status-styles'
 import { cn } from '@/lib/utils'
 import { ItemDetailSheet, type OpenItem } from '@/pages/library/ItemDetailSheet'
 
@@ -29,12 +30,9 @@ interface PosterCard {
 // file esclusi non contano mai, come nel resto dell'interfaccia.
 type StatusKey = 'seeding' | 'orphan' | 'review' | 'duplicate'
 
-const STATUS_DOTS: { key: StatusKey; className: string }[] = [
-  { key: 'seeding', className: 'bg-emerald-500' },
-  { key: 'orphan', className: 'bg-red-500' },
-  { key: 'review', className: 'bg-amber-500' },
-  { key: 'duplicate', className: 'bg-violet-500' },
-]
+const STATUS_DOTS: { key: StatusKey; className: string }[] = (
+  ['seeding', 'orphan', 'review', 'duplicate'] as const
+).map((key) => ({ key, className: STATUS_STYLES[key].dot }))
 
 function StatusDots({ counts, showCounts }: { counts: Record<StatusKey, number>; showCounts: boolean }) {
   return (

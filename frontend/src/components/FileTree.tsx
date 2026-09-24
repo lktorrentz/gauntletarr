@@ -2,8 +2,7 @@ import { ChevronRightIcon, FileIcon, FileVideoIcon, FolderIcon } from 'lucide-re
 import { useMemo, useState } from 'react'
 
 import { HardlinkInfo } from '@/components/HardlinkInfo'
-import { StateBadge } from '@/components/StateBadge'
-import { Badge } from '@/components/ui/badge'
+import { StateBadge, StatusBadge } from '@/components/StateBadge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { t } from '@/lib/i18n'
 import { fileKey, formatBytes } from '@/lib/library-filters'
@@ -134,7 +133,8 @@ export function FileTree({
           <TableHead className="w-28 text-right">{t('library.columnSize')}</TableHead>
         </TableRow>
       </TableHeader>
-      <TableBody>
+      {/* Mono per tutto il corpo: nomi di cartelle e file allineati, come in un terminale. */}
+      <TableBody className="font-mono">
         {rows.map(({ node, depth, open }) => {
           const indent = { paddingLeft: `${depth * 1.25 + 0.5}rem` }
           if (!node.file) {
@@ -179,21 +179,25 @@ export function FileTree({
                   ) : (
                     <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
                   )}
-                  <span className="truncate font-mono text-xs" title={file.relative_path}>
+                  <span className="truncate text-xs" title={file.relative_path}>
                     {node.name}
                   </span>
                   <HardlinkInfo linkedPaths={file.linked_paths} />
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-1.5">
-                  <StateBadge state={file.state} />
-                  {duplicateKeys?.has(fileKey(file)) && (
-                    <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
-                      {t('library.duplicate')}
-                    </Badge>
+                <div className="flex items-center gap-1.5 font-sans">
+                  {file.excluded ? (
+                    // Escluso = fuori da ogni controllo: nessuno stato, nessun "duplicate".
+                    <StatusBadge status="excluded">{t('library.excluded')}</StatusBadge>
+                  ) : (
+                    <>
+                      <StateBadge state={file.state} />
+                      {duplicateKeys?.has(fileKey(file)) && (
+                        <StatusBadge status="duplicate">{t('library.duplicate')}</StatusBadge>
+                      )}
+                    </>
                   )}
-                  {file.excluded && <Badge variant="outline">{t('library.excluded')}</Badge>}
                 </div>
               </TableCell>
               <TableCell className="text-right text-xs tabular-nums">{formatBytes(file.size_bytes)}</TableCell>

@@ -115,3 +115,25 @@ def test_find_duplicate_media_files_ignores_null_hash(client):
         assert find_duplicate_media_files(session) == []
     finally:
         session.close()
+
+
+def test_an_excluded_copy_is_never_a_duplicate(db_session):
+    from datetime import UTC, datetime
+
+    from app import pipeline, settings_repo
+    from app.duplicates import find_duplicate_media_files
+    from app.models import Disk, MediaFile
+
+    disk = Disk(label="d", root_path="/mnt/d", media_rel_path="media")
+    db_session.add(disk)
+    db_session.commit()
+    run = pipeline.start_run(db_session, "manual")
+    for i, path in enumerate(("media/A/a.mkv", "media/A/sample/a.mkv")):
+        db_session.add(MediaFile(disk_id=disk.id, relative_path=path, size_bytes=10, st_dev=1, inode=i,
+                                 content_hash="same", last_scan_id=run.id, last_seen_at=datetime.now(UTC)))
+    db_session.commit()
+    assert len(find_duplicate_media_files(db_session)) == 1
+
+    settings_repo.set_setting(db_session, "exclusion_patterns", "sample/*")
+
+    assert find_duplicate_media_files(db_session) == []

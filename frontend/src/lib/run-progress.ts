@@ -1,4 +1,5 @@
 import type { Schemas } from '@/api/client'
+import { parseApiDate } from '@/lib/time'
 
 export type RunResponse = Schemas['RunResponse']
 export type PhaseProgress = Schemas['PhaseProgressResponse']
@@ -40,7 +41,7 @@ export function percent(done: number | null | undefined, total: number | null | 
 // Nessuna stima nei primi secondi o con pochi elementi: sarebbe solo rumore.
 export function etaSeconds(progress: PhaseProgress | undefined, now: number = Date.now()): number | null {
   if (!progress?.started_at || progress.total == null || progress.done <= 0) return null
-  const elapsed = (now - new Date(progress.started_at).getTime()) / 1000
+  const elapsed = (now - parseApiDate(progress.started_at).getTime()) / 1000
   if (elapsed < 5 || progress.done < 3) return null
   const remaining = progress.total - progress.done
   if (remaining <= 0) return 0

@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { t } from '@/lib/i18n'
 import { formatBytes } from '@/lib/library-filters'
 import { cn } from '@/lib/utils'
+import { parseApiDate } from '@/lib/time'
 
 type Review = NonNullable<ReturnType<typeof useReviews>['data']>[number]
 type Layout = NonNullable<Review['layout']>
@@ -226,7 +227,7 @@ function RunsCard() {
               <TableRow key={run.id}>
                 <TableCell>{run.run_type}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {new Date(run.started_at).toLocaleString()}
+                  {parseApiDate(run.started_at).toLocaleString()}
                 </TableCell>
                 <TableCell>
                   {run.current_phase ? (

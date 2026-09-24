@@ -25,6 +25,7 @@ import {
   type Step,
 } from '@/lib/run-progress'
 import { cn } from '@/lib/utils'
+import { parseApiDate } from '@/lib/time'
 
 const FLASH_DURATION_MS = 12_000
 const FLASH_DURATION_WITH_ERRORS_MS = 30_000
@@ -170,8 +171,8 @@ export function RunStatusIndicator() {
 
   const stopped = !isActive && run.cancelled
   const hasErrors = !isActive && !stopped && run.errors > 0
-  const elapsedEnd = run.finished_at ? new Date(run.finished_at).getTime() : now
-  const elapsed = (elapsedEnd - new Date(run.started_at).getTime()) / 1000
+  const elapsedEnd = run.finished_at ? parseApiDate(run.finished_at).getTime() : now
+  const elapsed = (elapsedEnd - parseApiDate(run.started_at).getTime()) / 1000
   const toggle = () => {
     setExpanded((value) => {
       writeExpanded(!value)

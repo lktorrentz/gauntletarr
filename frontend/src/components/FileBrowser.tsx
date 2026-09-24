@@ -29,7 +29,7 @@ export function FileBrowser({
   const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS)
   const [openItem, setOpenItem] = useState<OpenItem | null>(null)
 
-  const summary = useMemo(() => summarizeByState(files), [files])
+  const summary = useMemo(() => summarizeByState(files, duplicateKeys), [files, duplicateKeys])
   const excludedCount = useMemo(() => files.filter((f) => f.excluded).length, [files])
   const filtered = useMemo(() => filterFiles(files, filters, duplicateKeys), [files, filters, duplicateKeys])
 
@@ -47,7 +47,6 @@ export function FileBrowser({
         excludedCount={excludedCount}
         filters={filters}
         onFiltersChange={setFilters}
-        duplicateCount={duplicateKeys?.size}
       />
       <Card className="py-0">
         {/* Con una ricerca attiva ogni risultato va reso visibile subito,

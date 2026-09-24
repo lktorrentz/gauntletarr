@@ -402,3 +402,24 @@ def test_pipeline_remembers_the_learned_key_and_the_api_never_returns_it(db_sess
     body = TrackerResponse.from_model(tracker).model_dump()
     assert body["has_rss_key"] is True
     assert "learnedkey" not in str(body)
+
+
+def test_history_pages_are_fetched_in_parallel_and_yielded_in_order():
+    import httpx
+
+    from app.arr import HISTORY_PAGE_SIZE, ArrApi
+
+    total = HISTORY_PAGE_SIZE * 2 + 5
+
+    def handler(request):
+        page = int(request.url.params["page"])
+        start = (page - 1) * HISTORY_PAGE_SIZE
+        records = [{"id": i} for i in range(start, min(start + HISTORY_PAGE_SIZE, total))]
+        return httpx.Response(200, json={"records": records, "totalRecords": total})
+
+    instance = RadarrInstance(id=1, label="r", base_url="http://radarr", api_key="k")
+    api = ArrApi(instance, client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://radarr"))
+
+    ids = [event["id"] for event in api.history(1)]
+
+    assert ids == list(range(total))

@@ -241,3 +241,16 @@ def test_review_of_a_file_gone_from_disk_is_closed(db_session):
 
     assert review.close_resolved_reviews(db_session) == 1
     assert r.status == "rejected"
+
+
+def test_review_of_a_file_excluded_meanwhile_leaves_the_queue(db_session):
+    from app import settings_repo
+
+    tracker = _tracker(db_session)
+    item = _media_item(db_session)
+    mf = _media_file_stub(db_session, item)  # movies/x.mkv
+    r = _review_for(db_session, _candidate(db_session, item, tracker, confidence=0.5), media_file_id=mf.id)
+    settings_repo.set_setting(db_session, "exclusion_patterns", "movies/x.mkv")
+
+    assert review.close_resolved_reviews(db_session) == 1
+    assert (r.status, r.decided_by) == ("rejected", "system")

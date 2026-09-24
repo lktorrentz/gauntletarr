@@ -45,11 +45,11 @@ describe('filterFiles', () => {
 
   it('keeps only duplicates, keyed by disk as well as path', () => {
     const keys = new Set([fileKey({ disk_id: 1, relative_path: 'movies/Arrival/Arrival.mkv' })])
-    expect(paths(filterFiles(FILES, { ...DEFAULT_FILTERS, duplicatesOnly: true }, keys))).toEqual([
+    expect(paths(filterFiles(FILES, { ...DEFAULT_FILTERS, status: 'duplicates' }, keys))).toEqual([
       'movies/Arrival/Arrival.mkv',
     ])
     const otherDisk = new Set([fileKey({ disk_id: 2, relative_path: 'movies/Arrival/Arrival.mkv' })])
-    expect(filterFiles(FILES, { ...DEFAULT_FILTERS, duplicatesOnly: true }, otherDisk)).toHaveLength(0)
+    expect(filterFiles(FILES, { ...DEFAULT_FILTERS, status: 'duplicates' }, otherDisk)).toHaveLength(0)
   })
 })
 
@@ -71,3 +71,15 @@ describe('formatBytes', () => {
     expect(formatBytes(2.4e12)).toBe('2.40 TB')
   })
 })
+
+describe('excluded files are out of every check', () => {
+  it('never appear under a state or duplicates tab, only in All with the toggle on', () => {
+    const excludedDup = [file({ relative_path: 'x/sample.mkv', state: 'orphan_media', excluded: true })]
+    const keys = new Set([fileKey(excludedDup[0])])
+    expect(filterFiles(excludedDup, { ...DEFAULT_FILTERS, showExcluded: true, status: 'orphan_media' })).toHaveLength(0)
+    expect(filterFiles(excludedDup, { ...DEFAULT_FILTERS, showExcluded: true, status: 'duplicates' }, keys)).toHaveLength(0)
+    expect(filterFiles(excludedDup, { ...DEFAULT_FILTERS, showExcluded: true })).toHaveLength(1)
+    expect(summarizeByState(excludedDup, keys).duplicates).toBeUndefined()
+  })
+})
+

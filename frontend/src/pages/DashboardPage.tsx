@@ -11,6 +11,7 @@ import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroupItem, ToggleGroupSingle } from '@/components/ui/toggle-group'
 import { t } from '@/lib/i18n'
+import { parseApiDate } from '@/lib/time'
 
 type HistoryPoint = Schemas['HistoryPoint']
 
@@ -164,7 +165,7 @@ const healthChartConfig = {
 
 function formatChartDate(value: string) {
   if (!value) return ''
-  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return parseApiDate(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function HealthHistoryChart() {

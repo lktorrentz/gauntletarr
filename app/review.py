@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.adapter_factory import build_torrent_client_adapter
+from app.exclusions import load_exclusions
 from app.executor import ExecutionError, execute_review, reconcile_seed_job, retry_seed_job
 from app.models import Candidate, ClientTorrentFile, MatchReview, MediaFile, SeedFile, SeedJob, TorrentClient
 from app.run_progress import NULL_PROGRESS
@@ -217,7 +218,8 @@ def close_resolved_reviews(session: Session) -> int:
     torrent -> client con il file ormai tracciato da un client, o un file
     non più presente sul disco. Senza questo, una review restava in coda
     per sempre: il matching sostituisce solo le review dei file che ricerca,
-    e un file non più orfano non lo ricerca più. Chiamata dalla pipeline
+    e un file non più orfano non lo ricerca più. Anche un file ora escluso
+    esce dalla coda. Chiamata dalla pipeline
     dopo scan e indicizzazione, prima del matching."""
     active = [
         r for r in session.query(MatchReview).filter(MatchReview.status.in_(READY_FOR_DECISION_STATUSES)).all()
@@ -236,14 +238,19 @@ def close_resolved_reviews(session: Session) -> int:
     }
     latest_media = latest_scan_by_disk(session, MediaFile)
     latest_seed = latest_scan_by_disk(session, SeedFile)
+    exclusions = load_exclusions(session)
     closed = 0
     for review in active:
+        # Un file escluso nel frattempo è fuori da ogni controllo: anche la
+        # sua review esce dalla coda.
         if review.media_file_id is not None:
             mf = review.media_file
-            resolved = mf is None or not is_current(mf, latest_media) or mf.id in hardlinked
+            resolved = (mf is None or not is_current(mf, latest_media) or mf.id in hardlinked
+                        or exclusions.is_excluded(mf.relative_path))
         else:
             sf = review.seed_file
-            resolved = sf is None or not is_current(sf, latest_seed) or sf.id in tracked
+            resolved = (sf is None or not is_current(sf, latest_seed) or sf.id in tracked
+                        or exclusions.is_excluded(sf.relative_path))
         if resolved:
             review.status = "rejected"
             review.decided_by = "system"

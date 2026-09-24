@@ -55,3 +55,12 @@ describe('progress maths', () => {
     expect(formatDuration(3725)).toBe('1:02:05')
   })
 })
+
+describe('API dates', () => {
+  it('reads dates without a timezone as UTC, like the backend stores them', async () => {
+    const { parseApiDate } = await import('@/lib/time')
+    expect(parseApiDate('2026-09-24T09:00:00').toISOString()).toBe('2026-09-24T09:00:00.000Z')
+    expect(parseApiDate('2026-09-24T09:00:00+00:00').toISOString()).toBe('2026-09-24T09:00:00.000Z')
+    expect(parseApiDate('2026-09-24T11:00:00+02:00').toISOString()).toBe('2026-09-24T09:00:00.000Z')
+  })
+})

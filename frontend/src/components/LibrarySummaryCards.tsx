@@ -1,15 +1,14 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { formatBytes, type StateSummary, type StatusOption } from '@/lib/library-filters'
+import { STATUS_STYLES, statusKeyOf } from '@/lib/status-styles'
 import { cn } from '@/lib/utils'
 
-// Colore del pallino coerente con le varianti di StateBadge (seeding =
-// primary, orfani = destructive, ignored = secondary).
-const STATE_DOT: Record<string, string> = {
-  all: 'bg-foreground',
-  seeding: 'bg-primary',
-  orphan_media: 'bg-destructive',
-  orphan_torrent: 'bg-destructive',
-  ignored: 'bg-muted-foreground',
+// Pallino con i colori globali (lib/status-styles.ts), "all" neutro.
+function dotClass(value: string): string {
+  if (value === 'all') return 'bg-foreground'
+  if (value === 'duplicates') return STATUS_STYLES.duplicate.dot
+  const key = statusKeyOf(value)
+  return key ? STATUS_STYLES[key].dot : 'bg-muted-foreground'
 }
 
 export function LibrarySummaryCards({
@@ -39,7 +38,7 @@ export function LibrarySummaryCards({
           >
             <CardContent className="grid gap-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className={cn('size-2 rounded-full', STATE_DOT[option.value] ?? 'bg-muted-foreground')} />
+                <span className={cn('size-2 rounded-full', dotClass(option.value))} />
                 {option.label}
               </div>
               <div className="text-2xl font-semibold tabular-nums">{s.count}</div>

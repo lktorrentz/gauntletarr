@@ -10,8 +10,11 @@ export interface LibraryFilters {
   search: string
   minGb: string
   maxGb: string
-  duplicatesOnly: boolean
 }
+
+// Tab speciale "Duplicates" (solo Media files): non è uno stato del file,
+// è l'appartenenza a un gruppo di copie (GET /api/library/duplicates).
+export const DUPLICATES_STATUS = 'duplicates'
 
 export const DEFAULT_FILTERS: LibraryFilters = {
   status: 'all',
@@ -19,7 +22,6 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   search: '',
   minGb: '',
   maxGb: '',
-  duplicatesOnly: false,
 }
 
 export interface StatusOption {
@@ -51,17 +53,20 @@ export function filterFiles(
   const max = parseGb(filters.maxGb)
   return files.filter((f) => {
     if (!filters.showExcluded && f.excluded) return false
-    if (filters.status !== 'all' && f.state !== filters.status) return false
+    if (filters.status === DUPLICATES_STATUS) {
+      if (f.excluded || !duplicateKeys?.has(fileKey(f))) return false
+    } else if (filters.status !== 'all' && (f.excluded || f.state !== filters.status)) {
+      return false  // un file escluso non ha uno stato: compare solo in "All" con il toggle
+    }
     if (search && !f.relative_path.toLowerCase().includes(search)) return false
     if (min !== null && f.size_bytes < min) return false
     if (max !== null && f.size_bytes > max) return false
-    if (filters.duplicatesOnly && !duplicateKeys?.has(fileKey(f))) return false
     return true
   })
 }
 
 export function hasActiveSearchFilters(filters: LibraryFilters): boolean {
-  return filters.search.trim() !== '' || filters.duplicatesOnly
+  return filters.search.trim() !== '' || filters.status === DUPLICATES_STATUS
 }
 
 export interface StateSummary {
@@ -72,11 +77,16 @@ export interface StateSummary {
 // I totali riflettono sempre i soli file non esclusi, indipendentemente da
 // showExcluded — un file escluso non deve mai "contare", anche mentre
 // l'utente lo sta guardando temporaneamente.
-export function summarizeByState(files: TreeFileEntry[]): Record<string, StateSummary> {
+export function summarizeByState(
+  files: TreeFileEntry[],
+  duplicateKeys?: Set<string>,
+): Record<string, StateSummary> {
   const summary: Record<string, StateSummary> = { all: { count: 0, size: 0 } }
   for (const f of files) {
     if (f.excluded) continue
-    for (const key of ['all', f.state]) {
+    const keys = ['all', f.state]
+    if (duplicateKeys?.has(fileKey(f))) keys.push(DUPLICATES_STATUS)
+    for (const key of keys) {
       summary[key] ??= { count: 0, size: 0 }
       summary[key].count += 1
       summary[key].size += f.size_bytes

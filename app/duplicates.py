@@ -18,6 +18,7 @@ import os
 
 from sqlalchemy.orm import Session
 
+from app.exclusions import load_exclusions
 from app.file_types import is_video
 from app.models import MediaFile
 from app.scan_state import is_current, latest_scan_by_disk
@@ -50,9 +51,12 @@ def find_duplicate_media_files(session: Session, disk_id: int | None = None) -> 
 
     groups: dict[tuple[int, str], list[MediaFile]] = {}
     latest = latest_scan_by_disk(session, MediaFile)
+    exclusions = load_exclusions(session)
     for mf in query.all():
         if not is_current(mf, latest):
             continue  # sparito dal disco: non è più una copia di niente
+        if exclusions.is_excluded(mf.relative_path):
+            continue  # escluso = fuori da ogni controllo, anche da questo
         if not is_video(mf.relative_path):
             continue  # copie di nfo/immagini: rumore, nessuno spazio rilevante sprecato
         groups.setdefault((mf.size_bytes, mf.content_hash), []).append(mf)

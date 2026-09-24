@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { parseApiDate } from '@/lib/time'
 
 function formatUptime(startedAt: string): string {
-  const totalMinutes = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 60_000))
+  const totalMinutes = Math.max(0, Math.floor((Date.now() - parseApiDate(startedAt).getTime()) / 60_000))
   const days = Math.floor(totalMinutes / 1440)
   const hours = Math.floor((totalMinutes % 1440) / 60)
   const minutes = totalMinutes % 60

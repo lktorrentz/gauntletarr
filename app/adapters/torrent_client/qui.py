@@ -38,6 +38,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.adapters.torrent_client.base import (
     CHECKING_STATES,
@@ -51,6 +52,9 @@ from app.adapters.torrent_client.base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Richieste di dettaglio in parallelo durante l'indicizzazione (rete locale).
+DETAIL_WORKERS = 8
 
 
 class QuiTorrentClientAdapter(TorrentClientAdapter):
@@ -171,39 +175,44 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
             "qui[%s]: %d torrent nella lista, ora recupero file/tracker per ciascuno",
             self.instance_id, len(torrents),
         )
-        result = []
-        for i, torrent in enumerate(torrents):
-            info_hash = torrent.get("hash")
-            if not info_hash:
-                continue
-            logger.debug(
-                "qui[%s]: torrent %d/%d (%s) — GET .../files", self.instance_id, i + 1, len(torrents), info_hash[:8]
-            )
-            files_resp = self._client.get(f"/api/instances/{self.instance_id}/torrents/{info_hash}/files")
-            files_resp.raise_for_status()
-            files = [
-                ClientTorrentFileInfo(path_in_torrent=f.get("name", ""), size_bytes=f.get("size") or 0)
-                for f in files_resp.json()
-            ]
-            result.append(
-                ClientTorrentInfo(
-                    info_hash=info_hash,
-                    name=torrent.get("name", ""),
-                    # La lista torrent di qui usa i nomi di campo di qBittorrent
-                    # (save_path), verificato sull'istanza reale e come fa
-                    # Auditorr: con il solo "savePath" il path restava vuoto
-                    # per ogni torrent e nessun file veniva mai collegato.
-                    save_path=(torrent.get("save_path") or torrent.get("savePath") or "").rstrip("/"),
-                    state=torrent.get("state") or "",
-                    category=torrent.get("category") or None,
-                    tracker_url=self._first_tracker_url(info_hash),
-                    files=files,
-                )
-            )
-            if on_progress is not None:
-                on_progress(i + 1, len(torrents))
+        # File e tracker di ogni torrent: due GET indipendenti per torrent,
+        # fatte DETAIL_WORKERS alla volta invece che una dopo l'altra (migliaia
+        # di richieste in rete locale). httpx.Client è thread-safe; ordine del
+        # risultato e callback di avanzamento restano nel thread chiamante.
+        with_hash = [t for t in torrents if t.get("hash")]
+        result: list[ClientTorrentInfo | None] = [None] * len(with_hash)
+        pool = ThreadPoolExecutor(max_workers=DETAIL_WORKERS)
+        try:
+            futures = {pool.submit(self._torrent_info, t): i for i, t in enumerate(with_hash)}
+            for done, future in enumerate(as_completed(futures), start=1):
+                result[futures[future]] = future.result()
+                if on_progress is not None:
+                    on_progress(done, len(with_hash))
+        finally:
+            pool.shutdown(wait=True, cancel_futures=True)  # stop o errore: niente richieste rimaste in coda
         logger.debug("qui[%s]: list_torrents() completato — %d torrent risolti", self.instance_id, len(result))
-        return result
+        return [r for r in result if r is not None]
+
+    def _torrent_info(self, torrent: dict) -> ClientTorrentInfo:
+        info_hash = torrent["hash"]
+        files_resp = self._client.get(f"/api/instances/{self.instance_id}/torrents/{info_hash}/files")
+        files_resp.raise_for_status()
+        files = [
+            ClientTorrentFileInfo(path_in_torrent=f.get("name", ""), size_bytes=f.get("size") or 0)
+            for f in files_resp.json()
+        ]
+        return ClientTorrentInfo(
+            info_hash=info_hash,
+            name=torrent.get("name", ""),
+            # La lista torrent di qui usa i nomi di campo di qBittorrent
+            # (save_path), verificato sull'istanza reale e come fa Auditorr:
+            # con il solo "savePath" il path restava vuoto per ogni torrent.
+            save_path=(torrent.get("save_path") or torrent.get("savePath") or "").rstrip("/"),
+            state=torrent.get("state") or "",
+            category=torrent.get("category") or None,
+            tracker_url=self._first_tracker_url(info_hash),
+            files=files,
+        )
 
     def _first_tracker_url(self, info_hash: str) -> str | None:
         response = self._client.get(f"/api/instances/{self.instance_id}/torrents/{info_hash}/trackers")

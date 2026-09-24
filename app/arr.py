@@ -29,6 +29,7 @@ non ancora sulla corrispondenza con i dischi di un'istanza vera.
 import logging
 import re
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
@@ -44,6 +45,8 @@ EVENT_GRABBED = 1
 EVENT_DOWNLOAD_FOLDER_IMPORTED = 3
 
 HISTORY_PAGE_SIZE = 1000
+SERIES_WORKERS = 8
+HISTORY_WORKERS = 4
 DEFAULT_TIMEOUT_SECONDS = 15
 
 # Ultima parte del path di un URL di download UNIT3D: "<id>.<passkey>".
@@ -161,19 +164,24 @@ class ArrApi:
         response.raise_for_status()
         return response.json()
 
+    def _history_page(self, event_type: int, page: int) -> dict:
+        return self.get(
+            "/api/v3/history", page=page, pageSize=HISTORY_PAGE_SIZE, eventType=event_type,
+            sortKey="date", sortDirection="descending",
+        )
+
     def history(self, event_type: int) -> Iterator[dict]:
-        """Ogni evento di quel tipo, dal più recente."""
-        page = 1
-        while True:
-            body = self.get(
-                "/api/v3/history", page=page, pageSize=HISTORY_PAGE_SIZE, eventType=event_type,
-                sortKey="date", sortDirection="descending",
-            )
-            records = body.get("records") or []
-            yield from records
-            if not records or page * HISTORY_PAGE_SIZE >= (body.get("totalRecords") or 0):
-                return
-            page += 1
+        """Ogni evento di quel tipo, dal più recente. La prima pagina dà il
+        totale, le altre si scaricano HISTORY_WORKERS alla volta (era la parte
+        più lenta dell'indice: decine di pagine in fila), in ordine."""
+        first = self._history_page(event_type, 1)
+        yield from first.get("records") or []
+        pages = -(-(first.get("totalRecords") or 0) // HISTORY_PAGE_SIZE)  # arrotondato per eccesso
+        if pages <= 1:
+            return
+        with ThreadPoolExecutor(max_workers=HISTORY_WORKERS) as pool:
+            for body in pool.map(lambda page: self._history_page(event_type, page), range(2, pages + 1)):
+                yield from body.get("records") or []
 
 
 def _grab_from_event(event: dict) -> ArrGrab | None:
@@ -242,18 +250,30 @@ def _index_radarr(api: ArrApi, index: ArrIndex) -> None:
     _index_history(api, index)
 
 
+def _series_files(api: ArrApi, series: dict) -> tuple[dict, list[dict], list[dict]]:
+    return (
+        series,
+        api.get("/api/v3/episode", seriesId=series["id"]),
+        api.get("/api/v3/episodefile", seriesId=series["id"]),
+    )
+
+
 def _index_sonarr(api: ArrApi, index: ArrIndex) -> None:
-    for series in api.get("/api/v3/series"):
-        if not series.get("tmdbId"):
-            continue  # identità TMDB assente in Sonarr: questi file restano al resolver di default
+    # Episodi e file di ogni serie: due GET per serie, fatte SERIES_WORKERS
+    # alla volta (rete locale) — sequenziali costavano ~18s su ~110 serie.
+    # L'indice si aggiorna solo qui, nel thread chiamante.
+    series_list = [s for s in api.get("/api/v3/series") if s.get("tmdbId")]  # senza tmdbId: resolver di default
+    with ThreadPoolExecutor(max_workers=SERIES_WORKERS) as pool:
+        fetched = list(pool.map(lambda s: _series_files(api, s), series_list))
+    for series, episodes, episode_files in fetched:
         episode_by_file: dict[int, tuple[int, int]] = {}
-        for episode in api.get("/api/v3/episode", seriesId=series["id"]):
+        for episode in episodes:
             file_id = episode.get("episodeFileId")
             if file_id:
                 # File multi-episodio: vale il primo, come fa FilenameParserResolver.
                 key = (episode["seasonNumber"], episode["episodeNumber"])
                 episode_by_file[file_id] = min(episode_by_file.get(file_id, key), key)
-        for episode_file in api.get("/api/v3/episodefile", seriesId=series["id"]):
+        for episode_file in episode_files:
             numbers = episode_by_file.get(episode_file.get("id"))
             if numbers is None or not episode_file.get("path") or not episode_file.get("size"):
                 continue

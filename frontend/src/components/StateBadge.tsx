@@ -1,23 +1,29 @@
 import { Badge } from '@/components/ui/badge'
+import { STATUS_STYLES, statusKeyOf, type StatusKey } from '@/lib/status-styles'
+import { cn } from '@/lib/utils'
 
-// Stati unificati per file, docs/SPEC.md §3 — stessa terminologia esatta
-// usata da app/library.py, mai reinventata lato frontend.
+// Stati unificati per file, docs/SPEC.md §3 — stessa terminologia di
+// app/library.py; orphan_media e orphan_torrent sono entrambi "orphaned"
+// per l'utente (il lato è già chiaro dalla vista). Colori da status-styles.
 const STATE_LABELS: Record<string, string> = {
   seeding: 'seeding',
-  orphan_media: 'orphan media',
+  orphan_media: 'orphaned',
   orphan_torrent: 'orphaned',
   ignored: 'ignored',
   unmatched: 'unmatched',
 }
 
-const STATE_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  seeding: 'default',
-  orphan_media: 'destructive',
-  orphan_torrent: 'destructive',
-  ignored: 'secondary',
-  unmatched: 'outline',
+export function StatusBadge({ status, children }: { status: StatusKey; children: React.ReactNode }) {
+  return (
+    <Badge variant="outline" className={cn(STATUS_STYLES[status].badge)}>
+      {children}
+    </Badge>
+  )
 }
 
 export function StateBadge({ state }: { state: string }) {
-  return <Badge variant={STATE_VARIANTS[state] ?? 'outline'}>{STATE_LABELS[state] ?? state}</Badge>
+  const key = statusKeyOf(state)
+  const label = STATE_LABELS[state] ?? state.replace(/_/g, ' ')
+  if (key == null) return <Badge variant="outline">{label}</Badge>
+  return <StatusBadge status={key}>{label}</StatusBadge>
 }

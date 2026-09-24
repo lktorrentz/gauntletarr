@@ -223,3 +223,18 @@ def test_add_torrent_already_in_the_client_is_a_clear_error():
     with pytest.raises(TorrentAlreadyInClientError, match="already in the client"):
         adapter.add_torrent("magnet:?xt=...", save_path="/t", expected_info_hash="ABCDEF")
     assert mock.added_calls == []  # nessuna aggiunta tentata
+
+
+def test_list_torrents_fetches_details_in_parallel_but_keeps_the_order():
+    torrents = [{"hash": f"h{i:02d}", "name": f"t{i}", "save_path": "/data/torrents", "state": "uploading"}
+                for i in range(30)]
+    mock = _QuiMock(pages=[torrents], files_by_hash={t["hash"]: [{"name": f"{t['name']}.mkv", "size": 1}]
+                                                     for t in torrents})
+    adapter = _adapter(mock)
+    progress = []
+
+    result = adapter.list_torrents(on_progress=lambda done, total: progress.append((done, total)))
+
+    assert [t.info_hash for t in result] == [t["hash"] for t in torrents]
+    assert result[7].files[0].path_in_torrent == "t7.mkv"
+    assert progress[-1] == (30, 30) and len(progress) == 30

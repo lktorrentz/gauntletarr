@@ -1,9 +1,8 @@
-import { SearchIcon } from 'lucide-react'
+import { EyeOffIcon, SearchIcon } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Toggle } from '@/components/ui/toggle'
 import { t } from '@/lib/i18n'
 import type { LibraryFilters, StateSummary, StatusOption } from '@/lib/library-filters'
 
@@ -13,31 +12,41 @@ export function FileFilterBar({
   excludedCount,
   filters,
   onFiltersChange,
-  duplicateCount,
 }: {
   statusOptions: StatusOption[]
   summary: Record<string, StateSummary>
   excludedCount: number
   filters: LibraryFilters
   onFiltersChange: (filters: LibraryFilters) => void
-  // Presente solo dove il backend sa calcolare i duplicati (Media files):
-  // senza, lo switch Duplicates non viene proprio renderizzato.
-  duplicateCount?: number
 }) {
   const set = <K extends keyof LibraryFilters>(key: K, value: LibraryFilters[K]) =>
     onFiltersChange({ ...filters, [key]: value })
 
   return (
     <div className="grid gap-3">
-      <Tabs value={filters.status} onValueChange={(v) => set('status', v as string)}>
-        <TabsList>
-          {statusOptions.map((option) => (
-            <TabsTrigger key={option.value} value={option.value}>
-              {option.label} ({summary[option.value]?.count ?? 0})
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Tabs value={filters.status} onValueChange={(v) => set('status', v as string)}>
+          <TabsList>
+            {statusOptions.map((option) => (
+              <TabsTrigger key={option.value} value={option.value}>
+                {option.label} ({summary[option.value]?.count ?? 0})
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        {/* Gli esclusi sono fuori da ogni controllo: si vedono solo in "All",
+            e solo a toggle premuto. */}
+        <Toggle
+          variant="outline"
+          size="sm"
+          pressed={filters.showExcluded}
+          onPressedChange={(pressed) => set('showExcluded', pressed)}
+          aria-label={t('library.showExcluded')}
+        >
+          <EyeOffIcon />
+          {t('library.showExcluded')} {excludedCount > 0 && `(${excludedCount})`}
+        </Toggle>
+      </div>
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-56 flex-1">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -66,28 +75,6 @@ export function FileFilterBar({
             aria-label={t('library.maxSize')}
             className="w-24"
           />
-        </div>
-        {duplicateCount !== undefined && (
-          <div className="flex items-center gap-2">
-            <Switch
-              id="duplicates-only"
-              checked={filters.duplicatesOnly}
-              onCheckedChange={(v) => set('duplicatesOnly', v)}
-            />
-            <Label htmlFor="duplicates-only" className="text-xs text-muted-foreground">
-              {t('library.duplicatesOnly')} {duplicateCount > 0 && `(${duplicateCount})`}
-            </Label>
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <Switch
-            id="show-excluded"
-            checked={filters.showExcluded}
-            onCheckedChange={(v) => set('showExcluded', v)}
-          />
-          <Label htmlFor="show-excluded" className="text-xs text-muted-foreground">
-            {t('library.showExcluded')} {excludedCount > 0 && `(${excludedCount})`}
-          </Label>
         </div>
       </div>
     </div>

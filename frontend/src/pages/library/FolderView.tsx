@@ -3,12 +3,13 @@ import { useMemo } from 'react'
 import { useLibraryDuplicates, useMediaFiles } from '@/api/hooks/library'
 import { FileBrowser } from '@/components/FileBrowser'
 import { t } from '@/lib/i18n'
-import { fileKey, type StatusOption } from '@/lib/library-filters'
+import { DUPLICATES_STATUS, fileKey, type StatusOption } from '@/lib/library-filters'
 
 const STATUS_OPTIONS: StatusOption[] = [
   { value: 'all', label: t('library.stateAll') },
   { value: 'seeding', label: t('library.stateSeeding') },
   { value: 'orphan_media', label: t('library.stateOrphanMedia') },
+  { value: DUPLICATES_STATUS, label: t('library.stateDuplicates') },
 ]
 
 export function FolderView() {

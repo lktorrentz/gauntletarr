@@ -15,13 +15,14 @@ import type { Schemas } from '@/api/client'
 import { useExcludeFile, useItemDetail, useSearchNow } from '@/api/hooks/library'
 import { useApproveReview, useRejectReview } from '@/api/hooks/reviews'
 import { AuthedPoster } from '@/components/AuthedPoster'
-import { StateBadge } from '@/components/StateBadge'
+import { StateBadge, StatusBadge } from '@/components/StateBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { t } from '@/lib/i18n'
 import { formatBytes } from '@/lib/library-filters'
+import { STATUS_STYLES } from '@/lib/status-styles'
 import { relativeFromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -88,10 +89,18 @@ function FileRow({ file, showEpisode }: { file: DetailFile; showEpisode: boolean
             {file.relative_path}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <StateBadge state={file.state} />
-            {file.in_review && <Badge variant="outline">{t('itemDetail.inReview')}</Badge>}
-            {file.duplicates.length > 0 && <Badge variant="outline">{t('itemDetail.duplicate')}</Badge>}
-            {file.excluded && <Badge variant="outline">{t('library.excluded')}</Badge>}
+            {file.excluded ? (
+              // Escluso = fuori da ogni controllo: nessuno stato, solo "excluded".
+              <StatusBadge status="excluded">{t('library.excluded')}</StatusBadge>
+            ) : (
+              <>
+                <StateBadge state={file.state} />
+                {file.in_review && <StatusBadge status="review">{t('itemDetail.inReview')}</StatusBadge>}
+                {file.duplicates.length > 0 && (
+                  <StatusBadge status="duplicate">{t('itemDetail.duplicate')}</StatusBadge>
+                )}
+              </>
+            )}
             <span className="text-xs text-muted-foreground tabular-nums">{formatBytes(file.size_bytes)}</span>
           </div>
         </div>
@@ -369,13 +378,13 @@ export function ItemDetailSheet({ item, onClose }: { item: OpenItem | null; onCl
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   {counts.seeding > 0 && (
                     <span className="flex items-center gap-1">
-                      <span className="size-2 rounded-full bg-emerald-500" />
+                      <span className={cn('size-2 rounded-full', STATUS_STYLES.seeding.dot)} />
                       {t('library.status.seeding')} {detail.content_type === 'tv' && counts.seeding}
                     </span>
                   )}
                   {counts.orphan > 0 && (
                     <span className="flex items-center gap-1">
-                      <span className="size-2 rounded-full bg-red-500" />
+                      <span className={cn('size-2 rounded-full', STATUS_STYLES.orphan.dot)} />
                       {t('library.status.orphan')} {detail.content_type === 'tv' && counts.orphan}
                     </span>
                   )}
