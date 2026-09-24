@@ -1,4 +1,4 @@
-import { ChevronRightIcon, FileIcon, FileVideoIcon, FolderIcon } from 'lucide-react'
+import { ChevronRightIcon, FileIcon, FileVideoIcon, FolderIcon, FolderOpenIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { HardlinkInfo } from '@/components/HardlinkInfo'
@@ -141,7 +141,9 @@ export function FileTree({
             return (
               <TableRow
                 key={node.path}
-                className="cursor-pointer"
+                // Cartelle aperte con uno sfondo tendente al primary: a colpo
+                // d'occhio si vede cosa è esploso e cosa no.
+                className={cn('cursor-pointer', open && 'bg-primary/5 hover:bg-primary/10')}
                 aria-expanded={open}
                 onClick={() => toggle(node.path)}
               >
@@ -150,7 +152,11 @@ export function FileTree({
                     <ChevronRightIcon
                       className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
                     />
-                    <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                    {open ? (
+                      <FolderOpenIcon className="size-3.5 shrink-0 text-primary" />
+                    ) : (
+                      <FolderIcon className="size-3.5 shrink-0 text-primary" />
+                    )}
                     <span className="truncate font-medium">{node.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {t('library.filesCount', { count: node.fileCount })}
@@ -186,15 +192,15 @@ export function FileTree({
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-1.5 font-sans">
+                <div className="flex items-center gap-1.5">
                   {file.excluded ? (
                     // Escluso = fuori da ogni controllo: nessuno stato, nessun "duplicate".
-                    <StatusBadge status="excluded">{t('library.excluded')}</StatusBadge>
+                    <StatusBadge status="excluded" compact>{t('library.excluded')}</StatusBadge>
                   ) : (
                     <>
-                      <StateBadge state={file.state} />
+                      <StateBadge state={file.state} compact />
                       {duplicateKeys?.has(fileKey(file)) && (
-                        <StatusBadge status="duplicate">{t('library.duplicate')}</StatusBadge>
+                        <StatusBadge status="duplicate" compact>{t('library.duplicate')}</StatusBadge>
                       )}
                     </>
                   )}

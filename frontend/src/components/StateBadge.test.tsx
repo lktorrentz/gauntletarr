@@ -25,3 +25,14 @@ describe('StateBadge', () => {
     expect(within(container).getByText('seeding').className).toContain('emerald')
   })
 })
+
+describe('compact StateBadge (tree rows)', () => {
+  it('keeps the state colour and uses the xxs mono size', () => {
+    const { container } = render(<StateBadge state="seeding" compact />)
+    const cls = within(container).getByText('seeding').className
+    expect(cls).toContain('text-emerald-700')
+    expect(cls).toContain('text-[length:var(--text-xxs)]')
+    expect(cls).toContain('font-mono')
+    expect(cls).not.toMatch(/(^|\s)text-xs(\s|$)/)
+  })
+})
