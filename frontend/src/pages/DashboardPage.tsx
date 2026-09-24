@@ -4,7 +4,6 @@ import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
 
 import { useDashboard, useDashboardHistory } from '@/api/hooks/dashboard'
 import type { Schemas } from '@/api/client'
-import { useUploads } from '@/api/hooks/uploads'
 import { ChangesCard } from '@/components/ChangesCard'
 import { ScanHistoryCard } from '@/components/ScanHistoryCard'
 import { Badge } from '@/components/ui/badge'
@@ -239,19 +238,11 @@ function HealthHistoryChart() {
 export function DashboardPage() {
   const { data, isPending } = useDashboard()
   const { data: history } = useDashboardHistory(2)
-  const { data: uploads } = useUploads()
 
   if (isPending || !data) {
     return <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
   }
 
-  const uploadCounts = {
-    draft: uploads?.filter((u) => u.status === 'draft').length ?? 0,
-    ready: uploads?.filter((u) => u.status === 'ready').length ?? 0,
-    uploading: uploads?.filter((u) => u.status === 'uploading').length ?? 0,
-    uploaded: uploads?.filter((u) => u.status === 'uploaded').length ?? 0,
-    failed: uploads?.filter((u) => u.status === 'failed').length ?? 0,
-  }
 
   return (
     <div className="grid gap-6">
@@ -259,7 +250,7 @@ export function DashboardPage() {
 
       <HealthHistoryChart />
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Library</CardTitle>
@@ -283,17 +274,6 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Upload</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <Stat label={t('dashboard.drafts')} value={uploadCounts.draft} />
-            <Stat label={t('dashboard.ready')} value={uploadCounts.ready} />
-            <Stat label={t('dashboard.uploaded')} value={uploadCounts.uploaded} />
-            <Stat label={t('dashboard.failed')} value={uploadCounts.failed} />
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-5">

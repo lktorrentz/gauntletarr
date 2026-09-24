@@ -1,4 +1,6 @@
 export const upload = {
+  'upload.workInProgress':
+    'Publishing new uploads to your trackers is being built: .torrent creation, mediainfo, screenshots and descriptions will arrive in a future version.',
   'upload.newUpload': 'New upload',
   'upload.newUploadDescription': 'Choose the tracker and the local file already present on the disk.',
   'upload.chooseTracker': 'Choose a tracker…',

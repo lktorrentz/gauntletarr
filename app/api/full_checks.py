@@ -58,6 +58,13 @@ class FullCheckResponse(BaseModel):
     result: CheckResultResponse | None
     created_at: datetime
     finished_at: datetime | None
+    purpose: str
+    review_id: int | None
+    stage: str
+    verdict: str | None
+    verdict_reason: str | None
+    execution: str | None
+    execution_error: str | None
 
 
 def _response(state: full_check.CheckState) -> FullCheckResponse:
@@ -65,7 +72,9 @@ def _response(state: full_check.CheckState) -> FullCheckResponse:
         id=state.id, candidate_id=state.candidate_id, seed_job_id=state.seed_job_id, label=state.label,
         status=state.status, bytes_total=state.bytes_total, bytes_done=state.bytes_done, error=state.error,
         result=CheckResultResponse(**state.result) if state.result else None,
-        created_at=state.created_at, finished_at=state.finished_at,
+        created_at=state.created_at, finished_at=state.finished_at, purpose=state.purpose,
+        review_id=state.review_id, stage=state.stage, verdict=state.verdict, verdict_reason=state.verdict_reason,
+        execution=state.execution, execution_error=state.execution_error,
     )
 
 

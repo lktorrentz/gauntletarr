@@ -9,12 +9,17 @@ sul repo. Qui resta solo la base major.minor: per passare a 0.3.x basta
 alzare BASE_VERSION a "0.3.0", la CI parte da lì al push successivo.
 1.0.0 è riservata a un rilascio pubblico vero, testato end-to-end.
 
+Canali: ogni push su main è una build di test (GitHub prerelease, immagine
+:latest). Una versione già pubblicata diventa stable solo a mano, col
+workflow "Promote to stable" (.github/workflows/promote-stable.yml):
+immagine :stable, tag git "stable", release non più prerelease.
+
 Fuori da un'immagine pubblicata (sviluppo locale) la versione è
 BASE_VERSION + "-dev": a colpo d'occhio non si confonde con una release."""
 
 import os
 
-BASE_VERSION = "0.2.0"
+BASE_VERSION = "0.3.0"
 
 __version__ = os.environ.get("GAUNTLETARR_VERSION") or f"{BASE_VERSION}-dev"
 # Commit breve da cui è stata costruita l'immagine, None in sviluppo locale.

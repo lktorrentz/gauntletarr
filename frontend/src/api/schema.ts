@@ -795,7 +795,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve Review */
+        /**
+         * Approve Review
+         * @description Con la verifica attiva (default) risponde subito con verify_status
+         *     "verifying": approvazione ed esecuzione arrivano a controllo superato,
+         *     l'avanzamento è in /api/full-checks/{verify_check_id}.
+         */
         post: operations["approve_review_api_reviews__review_id__approve_post"];
         delete?: never;
         options?: never;
@@ -1163,8 +1168,9 @@ export interface paths {
         /**
          * Update Check
          * @description Chiamata solo su richiesta esplicita dell'utente (bottone "Check for
-         *     updates" in UI), mai in automatico. Confronta con l'ultima GitHub
-         *     Release, che la CI crea a ogni push su main (app/version.py).
+         *     updates" in UI), mai in automatico. Confronta con le GitHub Release: la
+         *     CI ne crea una (prerelease) a ogni push su main, il canale stable si
+         *     aggiorna a mano (app/version.py).
          */
         get: operations["update_check_api_system_update_check_get"];
         put?: never;
@@ -1678,6 +1684,20 @@ export interface components {
             created_at: string;
             /** Finished At */
             finished_at: string | null;
+            /** Purpose */
+            purpose: string;
+            /** Review Id */
+            review_id: number | null;
+            /** Stage */
+            stage: string;
+            /** Verdict */
+            verdict: string | null;
+            /** Verdict Reason */
+            verdict_reason: string | null;
+            /** Execution */
+            execution: string | null;
+            /** Execution Error */
+            execution_error: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2060,6 +2080,12 @@ export interface components {
             ambiguity_reason: string | null;
             layout?: components["schemas"]["LayoutSummary"] | null;
             seed_job?: components["schemas"]["SeedJobResponse"] | null;
+            /** Verify Status */
+            verify_status?: string | null;
+            /** Verify Detail */
+            verify_detail?: string | null;
+            /** Verify Check Id */
+            verify_check_id?: string | null;
         };
         /** RunResponse */
         RunResponse: {
@@ -2458,6 +2484,8 @@ export interface components {
             checked_at: string;
             /** Note */
             note?: string | null;
+            /** Channel */
+            channel?: string | null;
         };
         /** UploadConfirmRequest */
         UploadConfirmRequest: {

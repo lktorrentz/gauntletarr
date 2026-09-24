@@ -270,6 +270,26 @@ def run_full_check(
     )
 
 
+def verdict(result: CheckResult) -> tuple[bool, str | None]:
+    """Il torrent passerà il recheck del client? Sì se nessun piece è diverso
+    e ogni file ha la sua copia locale della dimensione giusta, tranne gli
+    extra che mancano in locale (nfo, sample): quelli li scarica il client
+    dopo il recheck, lo stesso margine di seed_job.expected_missing_bytes.
+    Un video mancante o di dimensione diversa non passa mai."""
+    if result.mismatched:
+        return False, f"{result.mismatched} of {result.pieces} pieces differ from the torrent"
+    for f in result.files:
+        if f.local_path is None:
+            if is_video(f.torrent_path):
+                return False, f"'{f.torrent_path}' has no local file"
+            continue
+        if f.local_size_bytes != f.size_bytes:
+            return False, (
+                f"'{f.torrent_path}' is {f.local_size_bytes} bytes locally, the torrent expects {f.size_bytes}"
+            )
+    return True, None
+
+
 def _unreadable_pieces(parsed: TorrentInfo, files: list[FileCheck]) -> set[int]:
     """Piece che toccano un file senza copia locale leggibile per intero."""
     result: set[int] = set()
@@ -311,6 +331,15 @@ class CheckState:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     finished_at: datetime | None = None
     cancel_requested: bool = False
+    # "manual" (pulsante Full hash check) | "verify" (prima di eseguire una
+    # review approvata, app/review.py::request_approval).
+    purpose: str = "manual"
+    review_id: int | None = None
+    stage: str = "verifying"  # verifying | executing (solo purpose="verify", dopo un controllo superato)
+    verdict: str | None = None  # passed | failed
+    verdict_reason: str | None = None
+    execution: str | None = None  # added | failed | no_client | skipped
+    execution_error: str | None = None
 
 
 _lock = threading.Lock()
@@ -326,9 +355,20 @@ def _result_dict(result: CheckResult) -> dict:
     return data
 
 
-def _run(session_factory: sessionmaker, state: CheckState, fetch_torrent=None) -> None:
+# Chiamato nel worker, con la sua sessione, a controllo finito: result è
+# None se il controllo non è arrivato in fondo (errore o annullato).
+AfterCheck = Callable[[Session, "CheckState", CheckResult | None], None]
+
+
+def _run(session_factory: sessionmaker, state: CheckState, fetch_torrent=None, after: AfterCheck | None = None) -> None:
     if state.cancel_requested:
         state.status, state.finished_at = "cancelled", datetime.now(UTC)
+        if after is not None:
+            session = session_factory()
+            try:
+                after(session, state, None)
+            finally:
+                session.close()
         return
     state.status = "running"
     session = session_factory()
@@ -349,23 +389,37 @@ def _run(session_factory: sessionmaker, state: CheckState, fetch_torrent=None) -
             on_start=on_start, on_progress=on_progress, cancelled=lambda: state.cancel_requested,
         )
         state.result = _result_dict(result)
-        state.status = "done"
+        passed, reason = verdict(result)
+        state.verdict, state.verdict_reason = ("passed" if passed else "failed"), reason
         logger.info(
             "Controllo completo di %r: %d/%d piece validi (%d diversi, %d non leggibili)",
             state.label, result.ok, result.pieces, result.mismatched, result.unreadable,
         )
+        if after is not None:
+            after(session, state, result)
+        state.status = "done"
     except CheckCancelled:
         state.status = "cancelled"
+        if after is not None:
+            session.rollback()
+            after(session, state, None)
     except Exception as exc:
         logger.warning("Controllo completo di %r fallito", state.label, exc_info=True)
         state.status, state.error = "failed", str(exc)
+        if after is not None:
+            try:
+                session.rollback()
+                after(session, state, None)
+            except Exception:
+                logger.exception("Aggiornamento dopo il controllo fallito di %r non riuscito", state.label)
     finally:
         state.finished_at = datetime.now(UTC)
         session.close()
 
 
 def start_check(session_factory: sessionmaker, session: Session, candidate_id: int, seed_job_id: int | None = None,
-                media_file_id: int | None = None, fetch_torrent=None) -> CheckState:
+                media_file_id: int | None = None, fetch_torrent=None, *, purpose: str = "manual",
+                review_id: int | None = None, after: AfterCheck | None = None) -> CheckState:
     candidate = session.get(Candidate, candidate_id)
     if candidate is None:
         raise FullCheckError("Candidate not found")
@@ -375,14 +429,14 @@ def start_check(session_factory: sessionmaker, session: Session, candidate_id: i
             raise FullCheckError("This execution doesn't belong to the candidate")
     state = CheckState(
         id=uuid.uuid4().hex[:12], candidate_id=candidate_id, seed_job_id=seed_job_id,
-        media_file_id=media_file_id, label=candidate.name,
+        media_file_id=media_file_id, label=candidate.name, purpose=purpose, review_id=review_id,
     )
     with _lock:
         _checks[state.id] = state
         finished = sorted((c for c in _checks.values() if c.finished_at), key=lambda c: c.finished_at)
         for old in finished[: max(len(_checks) - MAX_KEPT_CHECKS, 0)]:
             _checks.pop(old.id, None)
-    _executor.submit(_run, session_factory, state, fetch_torrent)
+    _executor.submit(_run, session_factory, state, fetch_torrent, after)
     return state
 
 

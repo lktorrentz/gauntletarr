@@ -6,11 +6,11 @@ import { ComingSoon } from '@/pages/ComingSoon'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ConfigurationPage } from '@/pages/config/ConfigurationPage'
 import { ReseedingPage } from '@/pages/reseeding/ReseedingPage'
-import { NewUploadPage } from '@/pages/upload/NewUploadPage'
-import { UploadQueuePage } from '@/pages/upload/UploadQueuePage'
+import { WorkInProgress } from '@/pages/WorkInProgress'
 import { FolderView } from '@/pages/library/FolderView'
 import { PosterView } from '@/pages/library/PosterView'
 import { TorrentFolderView } from '@/pages/torrent/TorrentFolderView'
+import { t } from '@/lib/i18n'
 import { NAV_DASHBOARD, NAV_GROUPS } from '@/lib/nav'
 
 // Ogni voce di navigazione (NAV_DASHBOARD + NAV_GROUPS) diventa una route:
@@ -24,7 +24,10 @@ const overrides: Record<string, ReactNode> = {
   '/library/folder': <FolderView />,
   '/torrent/folder': <TorrentFolderView />,
   '/reseeding': <ReseedingPage />,
-  '/upload': <UploadQueuePage />,
+  // Upload in lavorazione: le pagine (pages/upload) restano nel codice ma non
+  // sono raggiungibili, per chi prova l'app. Ripristinare con UploadQueuePage
+  // qui e NewUploadPage sulle due route sotto.
+  '/upload': <WorkInProgress title="Upload" description={t('upload.workInProgress')} />,
   '/config': <ConfigurationPage />,
 }
 
@@ -38,8 +41,7 @@ function App() {
         {ALL_ITEMS.map((item) => (
           <Route key={item.to} path={item.to} element={overrides[item.to] ?? <ComingSoon title={item.title} />} />
         ))}
-        <Route path="/upload/new" element={<NewUploadPage />} />
-        <Route path="/upload/:jobId" element={<NewUploadPage />} />
+        <Route path="/upload/*" element={<Navigate to="/upload" replace />} />
       </Route>
     </Routes>
   )

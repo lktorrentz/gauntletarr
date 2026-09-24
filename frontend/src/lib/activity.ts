@@ -11,6 +11,9 @@ export interface Activity {
   status: ActivityStatus
   title: string
   detail?: string
+  // 0-100: barra di avanzamento sotto il testo (es. il controllo completo
+  // degli hash prima di eseguire un'approvazione).
+  progress?: number | null
   createdAt: number
 }
 

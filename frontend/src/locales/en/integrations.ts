@@ -9,6 +9,9 @@ export const integrations = {
   'integrations.rematchHelp': 'Default: 7. Use 0 to search every orphan on every scan.',
   'integrations.autoApproveThresholdsDescription':
     'A match at or above its threshold is marked as recommended in the review queue. Nothing is ever executed without your approval unless you turn on automatic execution below.',
+  'integrations.verifyLabel': 'Verify every piece before executing',
+  'integrations.verifyHelp':
+    "On by default. When you approve a match, all of the torrent's pieces are checked against your files first, exactly like the client's recheck, and hardlinks and the torrent are added only if it will pass. Nothing is touched when the check fails. It reads the whole content, so large files take a few minutes. Turn it off to execute right away and rely on the sampled pieces checked during matching.",
   'integrations.autoExecuteLabel': 'Execute recommended matches automatically',
   'integrations.autoExecuteHelp':
     'Off by default. When on, every scan executes the recommended matches on its own: it creates hardlinks and adds torrents to your client (always with a full recheck) without asking. Leave it off to approve each one yourself.',

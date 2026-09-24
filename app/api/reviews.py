@@ -4,7 +4,7 @@ rifiuto manuale dei match sotto soglia, retry delle esecuzioni fallite.
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, object_session
 
@@ -117,6 +117,10 @@ class ReviewResponse(BaseModel):
     # L'esecuzione partita da questa review (dopo un'approvazione): per il
     # feedback in interfaccia (aggiunto al client, recheck in corso, fallito).
     seed_job: SeedJobResponse | None = None
+    # Controllo completo prima dell'esecuzione (verify_before_execute).
+    verify_status: str | None = None  # verifying | passed | failed
+    verify_detail: str | None = None
+    verify_check_id: str | None = None
 
     @classmethod
     def from_model(cls, r: MatchReview) -> "ReviewResponse":
@@ -132,6 +136,7 @@ class ReviewResponse(BaseModel):
             candidate_name=r.candidate.name, ambiguity_reason=r.candidate.ambiguity_reason,
             layout=_layout_summary(r.candidate),
             seed_job=SeedJobResponse.from_model(seed_job) if seed_job is not None else None,
+            verify_status=r.verify_status, verify_detail=r.verify_detail, verify_check_id=r.verify_check_id,
         )
 
 
@@ -148,9 +153,15 @@ def list_reviews(session: Session = Depends(get_session)):
 
 
 @router.post("/{review_id}/approve", response_model=ReviewResponse)
-def approve_review(review_id: int, session: Session = Depends(get_session)):
+def approve_review(review_id: int, request: Request, session: Session = Depends(get_session)):
+    """Con la verifica attiva (default) risponde subito con verify_status
+    "verifying": approvazione ed esecuzione arrivano a controllo superato,
+    l'avanzamento è in /api/full-checks/{verify_check_id}."""
     row = _get_review_or_404(session, review_id)
-    review.approve(session, row)
+    try:
+        review.request_approval(session, row, request.app.state.session_factory)
+    except review.AlreadyVerifyingError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return ReviewResponse.from_model(row)
 
 

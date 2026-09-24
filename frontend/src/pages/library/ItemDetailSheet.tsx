@@ -17,6 +17,7 @@ import { useApproveReview, useReconcileNow, useRejectReview } from '@/api/hooks/
 import { AuthedPoster } from '@/components/AuthedPoster'
 import { FullCheckButton } from '@/components/FullCheckButton'
 import { StateBadge, StatusBadge, StoppedBadge } from '@/components/StateBadge'
+import { VerifyStatus } from '@/components/VerifyStatus'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -207,15 +208,16 @@ function Reviews({ detail }: { detail: Detail }) {
             {r.status === 'auto_approved' && <Badge>{t('reseeding.autoApproved')}</Badge>}
             {r.ambiguity_reason && <span>{r.ambiguity_reason}</span>}
           </div>
+          <VerifyStatus review={r} />
           <div className="flex gap-2">
             <Button
               size="sm"
-              disabled={approve.isPending}
-              onClick={() =>
-                approve.mutate(r.id)
-              }
+              disabled={approve.isPending || r.verify_status === 'verifying'}
+              title={r.verify_status === 'verifying' ? t('reseeding.verifyingHint') : undefined}
+              onClick={() => approve.mutate(r.id)}
             >
-              {t('reseeding.approve')}
+              {r.verify_status === 'verifying' && <Loader2Icon className="size-3.5 animate-spin" />}
+              {r.verify_status === 'verifying' ? t('reseeding.verifying') : t('reseeding.approve')}
             </Button>
             <Button
               size="sm"

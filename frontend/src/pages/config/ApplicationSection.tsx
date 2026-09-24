@@ -71,6 +71,11 @@ export function ApplicationSection() {
             ) : (
               <p className="text-muted-foreground">{t('application.upToDate')}</p>
             )}
+            {updateCheck.channel && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {updateCheck.channel === 'stable' ? t('application.channelStable') : t('application.channelTest')}
+              </p>
+            )}
           </CardContent>
         )}
       </Card>

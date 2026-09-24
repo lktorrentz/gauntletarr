@@ -46,6 +46,7 @@ class UpdateCheckResponse(BaseModel):
     update_available: bool
     checked_at: datetime
     note: str | None = None
+    channel: str | None = None  # "stable" | "test": con quali release si è confrontato
 
 
 def _parse_version(version: str) -> tuple[int, ...]:
@@ -58,15 +59,31 @@ def _parse_version(version: str) -> tuple[int, ...]:
     return tuple(parts) or (0,)
 
 
+def _channel_and_latest(releases: list[dict], current: str) -> tuple[str, str | None]:
+    """Canale dedotto dalla versione in uso: se è una release stable (non
+    prerelease) si confronta solo con le stable, così chi prova l'app su
+    :stable non viene avvisato di ogni build di test; altrimenti (build di
+    test, :latest) con la più recente in assoluto."""
+    published = [r for r in releases if not r.get("draft") and r.get("tag_name")]
+    stable = [r for r in published if not r.get("prerelease")]
+    # Uguaglianza esatta del tag: "0.3.0-dev" (sviluppo locale) non è la stable 0.3.0.
+    on_stable = any(r["tag_name"].lstrip("vV") == current.lstrip("vV") for r in stable)
+    pool = stable if on_stable else published
+    newest = max(pool, key=lambda r: _parse_version(r["tag_name"]), default=None)
+    return ("stable" if on_stable else "test"), (newest["tag_name"] if newest else None)
+
+
 @router.get("/update-check", response_model=UpdateCheckResponse)
 def update_check():
     """Chiamata solo su richiesta esplicita dell'utente (bottone "Check for
-    updates" in UI), mai in automatico. Confronta con l'ultima GitHub
-    Release, che la CI crea a ogni push su main (app/version.py)."""
+    updates" in UI), mai in automatico. Confronta con le GitHub Release: la
+    CI ne crea una (prerelease) a ogni push su main, il canale stable si
+    aggiorna a mano (app/version.py)."""
     now = datetime.now(UTC)
     try:
         response = httpx.get(
-            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases",
+            params={"per_page": 50},
             headers={"Accept": "application/vnd.github+json", "User-Agent": "gauntletarr"},
             timeout=5,
         )
@@ -76,22 +93,22 @@ def update_check():
             checked_at=now, note=f"Could not reach GitHub: {exc}",
         )
 
-    if response.status_code == 404:
-        return UpdateCheckResponse(
-            current_version=__version__, latest_version=None, update_available=False,
-            checked_at=now, note="No releases published yet.",
-        )
     if response.status_code != 200:
         return UpdateCheckResponse(
             current_version=__version__, latest_version=None, update_available=False,
             checked_at=now, note=f"GitHub returned HTTP {response.status_code}.",
         )
 
-    latest = response.json().get("tag_name", "")
+    channel, latest = _channel_and_latest(response.json(), __version__)
+    if latest is None:
+        return UpdateCheckResponse(
+            current_version=__version__, latest_version=None, update_available=False,
+            checked_at=now, note="No releases published yet.", channel=channel,
+        )
     update_available = _parse_version(latest) > _parse_version(__version__)
     return UpdateCheckResponse(
-        current_version=__version__, latest_version=latest or None,
-        update_available=update_available, checked_at=now,
+        current_version=__version__, latest_version=latest,
+        update_available=update_available, checked_at=now, channel=channel,
     )
 
 

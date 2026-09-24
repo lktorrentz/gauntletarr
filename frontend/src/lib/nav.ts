@@ -24,6 +24,9 @@ import {
 export interface NavItem {
   title: string
   to: string
+  // Etichetta accanto alla voce nella sidebar, es. "WIP" per una sezione
+  // non ancora pronta.
+  badge?: string
 }
 
 export interface NavGroup {
@@ -62,7 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Upload',
     icon: UploadCloud,
-    items: [{ title: 'Upload', to: '/upload' }],
+    items: [{ title: 'Upload', to: '/upload', badge: 'WIP' }],
   },
   {
     title: 'Configuration',

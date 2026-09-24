@@ -15,32 +15,46 @@ def test_app_info(client):
     assert body["started_at"]
 
 
-def test_update_check_no_releases_yet(client, monkeypatch):
-    def fake_get(url, headers=None, timeout=None):
-        return httpx.Response(404, request=httpx.Request("GET", url))
+def _fake_releases(monkeypatch, releases, status=200):
+    def fake_get(url, params=None, headers=None, timeout=None):
+        return httpx.Response(status, json=releases, request=httpx.Request("GET", url))
 
     monkeypatch.setattr(system_module.httpx, "get", fake_get)
 
-    response = client.get("/api/system/update-check")
-    assert response.status_code == 200
-    body = response.json()
+
+def test_update_check_no_releases_yet(client, monkeypatch):
+    _fake_releases(monkeypatch, [])
+
+    body = client.get("/api/system/update-check").json()
     assert body["update_available"] is False
     assert body["latest_version"] is None
     assert "No releases" in body["note"]
 
 
 def test_update_check_available(client, monkeypatch):
-    def fake_get(url, headers=None, timeout=None):
-        request = httpx.Request("GET", url)
-        return httpx.Response(200, json={"tag_name": "v99.0.0"}, request=request)
+    _fake_releases(monkeypatch, [{"tag_name": "v99.0.0", "prerelease": False}])
 
-    monkeypatch.setattr(system_module.httpx, "get", fake_get)
-
-    response = client.get("/api/system/update-check")
-    assert response.status_code == 200
-    body = response.json()
+    body = client.get("/api/system/update-check").json()
     assert body["update_available"] is True
     assert body["latest_version"] == "v99.0.0"
+
+
+RELEASES = [
+    {"tag_name": "v0.3.4", "prerelease": True},
+    {"tag_name": "v0.3.3", "prerelease": True},
+    {"tag_name": "v0.3.0", "prerelease": False},
+    {"tag_name": "v0.2.16", "prerelease": False},
+]
+
+
+def test_on_a_stable_version_only_newer_stable_releases_count():
+    assert system_module._channel_and_latest(RELEASES, "0.3.0") == ("stable", "v0.3.0")
+    assert system_module._channel_and_latest(RELEASES, "0.2.16") == ("stable", "v0.3.0")
+
+
+def test_on_a_test_build_every_newer_build_counts():
+    assert system_module._channel_and_latest(RELEASES, "0.3.3") == ("test", "v0.3.4")
+    assert system_module._channel_and_latest(RELEASES, "0.3.0-dev") == ("test", "v0.3.4")
 
 
 def test_logs_filters_by_level(client):

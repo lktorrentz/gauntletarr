@@ -131,3 +131,74 @@ def test_background_check_runs_and_reports_progress(db_session, tmp_path):
     assert state.status == "done", state.error
     assert state.bytes_done == state.bytes_total == 55
     assert state.result["percent"] == 100.0
+
+
+def _review(db_session, candidate):
+    from app.models import MatchReview
+
+    video = next(f for f in candidate.files if f.is_video)
+    r = MatchReview(candidate_id=candidate.id, media_file_id=video.media_file_id, status="pending")
+    db_session.add(r)
+    db_session.commit()
+    return r
+
+
+def _approve_and_wait(db_session, candidate, monkeypatch, executed):
+    from app import review
+
+    monkeypatch.setattr(review, "_try_execute", lambda session, r: executed.append(r.id))
+    r = _review(db_session, candidate)
+    content = _torrent("Movie", FILES)
+    from sqlalchemy.orm import sessionmaker
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    review.request_approval(db_session, r, factory, fetch_torrent=lambda _: content)
+    assert r.verify_status == "verifying" and r.status == "pending"  # ancora in coda, niente eseguito
+    full_check._executor.submit(lambda: None).result()
+    db_session.expire_all()
+    return r, full_check.get_check(r.verify_check_id)
+
+
+def test_approve_executes_only_after_the_full_check_passes(db_session, tmp_path, monkeypatch):
+    _, candidate = _setup(db_session, tmp_path, FILES)
+    executed = []
+
+    r, state = _approve_and_wait(db_session, candidate, monkeypatch, executed)
+
+    assert (r.verify_status, r.status, executed) == ("passed", "approved", [r.id])
+    assert (state.verdict, state.stage) == ("passed", "executing")
+
+
+def test_a_failed_check_leaves_the_review_in_the_queue_and_touches_nothing(db_session, tmp_path, monkeypatch):
+    changed = dict(FILES)
+    changed["Movie.2001.mkv"] = b"Z" * 40
+    _, candidate = _setup(db_session, tmp_path, changed)
+    executed = []
+
+    r, state = _approve_and_wait(db_session, candidate, monkeypatch, executed)
+
+    assert (r.verify_status, r.status, executed) == ("failed", "pending", [])
+    assert "pieces differ" in r.verify_detail and state.execution == "skipped"
+
+
+def test_a_missing_extra_passes_because_the_client_downloads_it(db_session, tmp_path, monkeypatch):
+    _, candidate = _setup(db_session, tmp_path, {"Movie.2001.mkv": FILES["Movie.2001.mkv"]})
+    executed = []
+
+    r, _ = _approve_and_wait(db_session, candidate, monkeypatch, executed)
+
+    assert (r.verify_status, executed) == ("passed", [r.id])
+
+
+def test_with_the_setting_off_approve_executes_right_away(db_session, tmp_path, monkeypatch):
+    from app import review, settings_repo
+
+    _, candidate = _setup(db_session, tmp_path, FILES)
+    settings_repo.set_setting(db_session, review.VERIFY_SETTING, "false")
+    executed = []
+    monkeypatch.setattr(review, "_try_execute", lambda session, r: executed.append(r.id))
+    r = _review(db_session, candidate)
+
+    review.request_approval(db_session, r, lambda: db_session)
+
+    assert (r.status, r.verify_status, executed) == ("approved", None, [r.id])

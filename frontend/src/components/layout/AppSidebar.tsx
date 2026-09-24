@@ -17,6 +17,7 @@ import {
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -155,6 +156,11 @@ export function AppSidebar() {
                         <group.icon className="size-4" />
                         {group.title}
                       </SidebarMenuButton>
+                      {item.badge && (
+                        <SidebarMenuBadge className="font-mono text-[length:var(--text-xxs)] text-muted-foreground">
+                          {item.badge}
+                        </SidebarMenuBadge>
+                      )}
                     </SidebarMenuItem>
                   </SidebarMenu>
                 </SidebarGroupContent>

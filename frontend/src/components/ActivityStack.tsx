@@ -1,9 +1,25 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircleIcon, CheckCircle2Icon, InfoIcon, Loader2Icon, XIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 
+import { api, type Schemas, unwrap } from '@/api/client'
 import { useRecentSeedJobs } from '@/api/hooks/reviews'
-import { dismissActivity, pushActivity, useActivities, type ActivityStatus } from '@/lib/activity'
+import { Progress } from '@/components/ui/progress'
+import {
+  dismissActivity,
+  pushActivity,
+  updateActivity,
+  useActivities,
+  type Activity,
+  type ActivityStatus,
+} from '@/lib/activity'
+import { formatBytes } from '@/lib/library-filters'
+import {
+  activityForCheck,
+  hasTrackedVerifications,
+  trackVerification,
+  untrackVerification,
+} from '@/lib/verification'
 import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
@@ -47,9 +63,82 @@ function useSeedJobWatcher() {
   }, [jobs, queryClient])
 }
 
+type FullCheck = Schemas['FullCheckResponse']
+
+const isActive = (check: FullCheck) => check.status === 'queued' || check.status === 'running'
+
+function runningPatch(check: FullCheck): Partial<Activity> {
+  if (check.status === 'queued') return { title: t('activity.verifyQueued'), progress: 0 }
+  if (check.stage === 'executing') return { title: t('activity.verifyPassedAdding'), progress: 100 }
+  if (!check.bytes_total) return { title: t('activity.verifyDownloading'), progress: 0 }
+  const pct = (100 * check.bytes_done) / check.bytes_total
+  return {
+    title: t('activity.verifying', { percent: pct.toFixed(0) }),
+    detail: `${formatBytes(check.bytes_done)} / ${formatBytes(check.bytes_total)} · ${check.label}`,
+    progress: pct,
+  }
+}
+
+function finalPatch(check: FullCheck): Partial<Activity> {
+  const done = { progress: null, detail: check.label }
+  if (check.status === 'cancelled') return { ...done, status: 'info', title: t('activity.verifyCancelled') }
+  if (check.status === 'failed') {
+    return { ...done, status: 'error', title: t('activity.verifyCouldNotRun'), detail: check.error ?? check.label }
+  }
+  if (check.verdict !== 'passed') {
+    return { ...done, status: 'error', title: t('activity.verifyFailed'), detail: check.verdict_reason ?? check.label }
+  }
+  if (check.execution === 'added') return { ...done, status: 'success', title: t('activity.verifyPassedAdded') }
+  if (check.execution === 'no_client') return { ...done, status: 'info', title: t('activity.approvedNoClient') }
+  if (check.execution === 'failed') {
+    return { ...done, status: 'error', title: t('activity.executionFailed'), detail: check.execution_error ?? check.label }
+  }
+  return { ...done, status: 'info', title: t('activity.verifyPassedSkipped') }
+}
+
+// Segue i controlli completi partiti da un'approvazione (verify_before_execute):
+// avanzamento nella notifica, poi l'esito e l'eventuale aggiunta al client.
+// Anche quelli già in corso quando si apre la pagina (ricarica, altra scheda).
+function useVerificationWatcher() {
+  const queryClient = useQueryClient()
+  const { data: checks } = useQuery({
+    queryKey: ['full-checks', 'all'],
+    queryFn: () => unwrap(api.GET('/api/full-checks')),
+    refetchInterval: (query) =>
+      hasTrackedVerifications() || query.state.data?.some((c) => c.purpose === 'verify' && isActive(c)) ? 1000 : 15_000,
+  })
+
+  useEffect(() => {
+    if (!checks) return
+    let finished = false
+    for (const check of checks) {
+      if (check.purpose !== 'verify') continue
+      let activityId = activityForCheck(check.id)
+      if (activityId == null) {
+        if (!isActive(check)) continue // finito prima che la pagina lo seguisse: niente da annunciare
+        activityId = pushActivity({ status: 'running', title: t('activity.verifyQueued'), detail: check.label })
+        trackVerification(check.id, activityId)
+      }
+      if (isActive(check)) {
+        updateActivity(activityId, runningPatch(check))
+      } else {
+        updateActivity(activityId, finalPatch(check))
+        untrackVerification(check.id)
+        finished = true
+      }
+    }
+    if (finished) {
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['library'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    }
+  }, [checks, queryClient])
+}
+
 export function ActivityStack() {
   const activities = useActivities()
   useSeedJobWatcher()
+  useVerificationWatcher()
   if (activities.length === 0) return null
   return (
     <div className="grid w-80 max-w-[calc(100vw-2rem)] gap-2">
@@ -68,6 +157,7 @@ export function ActivityStack() {
                 {activity.detail}
               </p>
             )}
+            {activity.progress != null && <Progress value={activity.progress} className="mt-2" />}
           </div>
           {activity.status !== 'running' && (
             <button

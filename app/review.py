@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from app import full_check
 from app.adapter_factory import build_torrent_client_adapter
 from app.exclusions import load_exclusions
 from app.executor import ExecutionError, execute_review, reconcile_seed_job, retry_seed_job
@@ -240,6 +241,93 @@ def _try_execute(session: Session, review: MatchReview) -> None:
         logger.exception("Errore inatteso nell'esecuzione immediata per review %s", review.id)
 
 
+VERIFY_SETTING = "verify_before_execute"
+
+
+def verify_before_execute_enabled(session: Session) -> bool:
+    """Attiva di default (decisione dell'utente): prima di creare hardlink o
+    aggiungere un torrent, il controllo completo dei piece (app/full_check.py)
+    deve dire che il recheck del client riuscirà. Si spegne da
+    Configuration > Mapping per chi preferisce la velocità."""
+    return (get_setting(session, VERIFY_SETTING) or "true").lower() != "false"
+
+
+class AlreadyVerifyingError(Exception):
+    pass
+
+
+def request_approval(session: Session, review: MatchReview, session_factory, decided_by: str = "user",
+                     fetch_torrent=None) -> MatchReview:
+    """Approve dall'interfaccia. Con la verifica attiva la review resta in
+    coda come "verifying" e parte il controllo completo in background:
+    l'approvazione e l'esecuzione arrivano solo se passa (_after_verification).
+    Senza verifica, come sempre: approva ed esegue subito."""
+    if not verify_before_execute_enabled(session):
+        return approve(session, review, decided_by=decided_by)
+    if review.verify_status == "verifying":
+        raise AlreadyVerifyingError(f"Review {review.id} is already being verified")
+
+    def after(worker_session: Session, state, result) -> None:
+        _after_verification(worker_session, state, result, decided_by)
+
+    state = full_check.start_check(
+        session_factory, session, review.candidate_id, media_file_id=review.media_file_id,
+        fetch_torrent=fetch_torrent, purpose="verify", review_id=review.id, after=after,
+    )
+    review.verify_status, review.verify_detail, review.verify_check_id = "verifying", None, state.id
+    session.commit()
+    return review
+
+
+def _after_verification(session: Session, state, result, decided_by: str) -> None:
+    review = session.get(MatchReview, state.review_id)
+    if review is None:
+        state.execution = "skipped"
+        return
+    if result is None:  # controllo non arrivato in fondo: torna in coda com'era
+        cancelled = state.status == "cancelled"
+        review.verify_status = None if cancelled else "failed"
+        review.verify_detail = None if cancelled else f"The check could not run: {state.error}"
+        state.execution = "skipped"
+        session.commit()
+        return
+    if state.verdict != "passed":
+        review.verify_status, review.verify_detail = "failed", state.verdict_reason
+        state.execution = "skipped"
+        session.commit()
+        logger.info("Review %s: controllo completo non superato (%s), niente eseguito", review.id, state.verdict_reason)
+        return
+    review.verify_status = "passed"
+    review.verify_detail = f"{result.ok} of {result.pieces} pieces verified"
+    session.commit()
+    if review.status not in READY_FOR_DECISION_STATUSES:
+        # Nel frattempo una run l'ha superata o chiusa: niente esecuzione.
+        state.execution = "skipped"
+        return
+    state.stage = "executing"
+    approve(session, review, decided_by=decided_by)
+    seed_job = (
+        session.query(SeedJob).filter_by(candidate_id=review.candidate_id).order_by(SeedJob.id.desc()).first()
+    )
+    if seed_job is None:
+        state.execution = "no_client"
+    elif seed_job.final_status == "failed":
+        state.execution, state.execution_error = "failed", seed_job.error_message
+    else:
+        state.execution = "added"
+
+
+def reset_interrupted_verifications(session: Session) -> int:
+    """All'avvio: un controllo "verifying" era in memoria in un processo che
+    non c'è più. La review torna in coda com'era, da approvare di nuovo."""
+    rows = session.query(MatchReview).filter(MatchReview.verify_status == "verifying").all()
+    for row in rows:
+        row.verify_status, row.verify_detail, row.verify_check_id = None, None, None
+    if rows:
+        session.commit()
+    return len(rows)
+
+
 def approve(session: Session, review: MatchReview, decided_by: str = "user") -> MatchReview:
     """Approva e prova subito l'esecuzione (hardlink+seed, o solo add al
     client) se un client torrent è configurato. Un fallimento
@@ -347,11 +435,34 @@ def execute_auto_approved(session: Session, progress=NULL_PROGRESS) -> dict[str,
         progress.detail(f"Automatic execution is off: {len(reviews)} recommended, waiting for your approval")
         return {"executed": 0, "waiting": len(reviews)}
     progress.add_total(len(reviews))
+    verify = verify_before_execute_enabled(session)
+    executed = 0
     for review in reviews:
+        if verify and not _verify_now(session, review, progress):
+            progress.advance()
+            continue
         approve(session, review, decided_by="system")
+        executed += 1
         progress.advance()
         progress.result(executed=1)
-    return {"executed": len(reviews), "waiting": 0}
+    return {"executed": executed, "waiting": 0}
+
+
+def _verify_now(session: Session, review: MatchReview, progress) -> bool:
+    """Esecuzione automatica con la verifica attiva: lo stesso controllo
+    completo, qui nella run (già in background) invece che nel worker."""
+    progress.detail(f"Verifying {review.candidate.name}")
+    try:
+        result = full_check.run_full_check(session, review.candidate, None, review.media_file_id)
+    except Exception as exc:
+        review.verify_status, review.verify_detail = "failed", f"The check could not run: {exc}"
+        session.commit()
+        return False
+    passed, reason = full_check.verdict(result)
+    review.verify_status = "passed" if passed else "failed"
+    review.verify_detail = f"{result.ok} of {result.pieces} pieces verified" if passed else reason
+    session.commit()
+    return passed
 
 
 def list_ready_for_review(session: Session) -> list[MatchReview]:

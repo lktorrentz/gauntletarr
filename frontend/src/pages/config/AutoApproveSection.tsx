@@ -11,6 +11,30 @@ import { autosaveFeedback } from '@/lib/autosave'
 // dell'utente, niente che modifichi file o client parte senza la sua
 // approvazione. Accesa solo con una scelta esplicita qui.
 const AUTO_EXECUTE_KEY = 'auto_execute_above_threshold'
+// Attiva di default (app/review.py verify_before_execute_enabled): mai
+// salvata = attiva.
+const VERIFY_KEY = 'verify_before_execute'
+
+function VerifySwitch() {
+  const { data } = useSetting(VERIFY_KEY)
+  const setSetting = useSetSetting(VERIFY_KEY)
+  const enabled = (data?.value ?? 'true').toLowerCase() !== 'false'
+  return (
+    <div className="flex items-start gap-3 border-t pt-4">
+      <Switch
+        id="verify-before-execute"
+        checked={enabled}
+        disabled={setSetting.isPending}
+        onCheckedChange={(on) => setSetting.mutate(on ? 'true' : 'false', autosaveFeedback(t('integrations.verifyLabel')))}
+        className="mt-0.5"
+      />
+      <div className="grid gap-1">
+        <Label htmlFor="verify-before-execute">{t('integrations.verifyLabel')}</Label>
+        <p className="text-xs text-muted-foreground">{t('integrations.verifyHelp')}</p>
+      </div>
+    </div>
+  )
+}
 
 function AutoExecuteSwitch() {
   const { data } = useSetting(AUTO_EXECUTE_KEY)
@@ -58,6 +82,7 @@ export function AutoApproveSection() {
             type="number"
             placeholder="0.98"
           />
+          <VerifySwitch />
           <AutoExecuteSwitch />
         </CardContent>
       </Card>

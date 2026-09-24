@@ -9,5 +9,7 @@ export const application = {
   'application.updatesTitle': 'Updates',
   'application.checkForUpdates': 'Check for updates',
   'application.upToDate': "You're up to date.",
+  'application.channelStable': 'Stable channel (:stable image): only stable releases are offered.',
+  'application.channelTest': 'Test channel (:latest image): every new build is offered.',
   'application.updateAvailable': 'Update available: {version}',
 } as const

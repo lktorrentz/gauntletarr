@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/api/client'
 import { pushActivity, updateActivity } from '@/lib/activity'
+import { trackVerification } from '@/lib/verification'
 import { t } from '@/lib/i18n'
 
 export function useReviews() {
@@ -23,7 +24,12 @@ export function useApproveReview() {
       if (context) updateActivity(context.activityId, { status: 'error', title: t('activity.approveFailed'), detail: error.message })
     },
     onSuccess: (review, _id, context) => {
-      if (context) {
+      if (context && review.verify_status === 'verifying' && review.verify_check_id) {
+        // Prima il controllo completo: la notifica la aggiorna il watcher in
+        // ActivityStack fino all'esito (ed eventuale aggiunta al client).
+        updateActivity(context.activityId, { title: t('activity.verifyQueued'), detail: review.candidate_name, progress: 0 })
+        trackVerification(review.verify_check_id, context.activityId)
+      } else if (context) {
         const job = review.seed_job
         updateActivity(context.activityId, job?.final_status === 'failed'
           ? { status: 'error', title: t('activity.executionFailed'), detail: job.error_message ?? review.candidate_name }

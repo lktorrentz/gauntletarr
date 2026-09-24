@@ -478,6 +478,12 @@ class MatchReview(Base):
     status: Mapped[str] = mapped_column(nullable=False, server_default=text("'pending'"))
     decided_by: Mapped[str | None]
     decided_at: Mapped[datetime | None]
+    # Controllo completo dei piece prima di eseguire (app/review.py::request_approval):
+    # verifying | passed | failed, NULL se mai chiesto. La review resta in coda
+    # (status invariato) finché il controllo non passa.
+    verify_status: Mapped[str | None]
+    verify_detail: Mapped[str | None]
+    verify_check_id: Mapped[str | None]  # id del controllo in memoria (app/full_check.py), per l'avanzamento
 
     candidate: Mapped["Candidate"] = relationship()
     media_file: Mapped["MediaFile | None"] = relationship()

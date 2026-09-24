@@ -385,7 +385,11 @@ CREATE TABLE IF NOT EXISTS match_review (
     status          TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending','approved','rejected','auto_approved')),
     decided_by      TEXT,                   -- "system" | username
-    decided_at      TIMESTAMP
+    decided_at      TIMESTAMP,
+    verify_status   TEXT,                   -- full piece check before executing: verifying|passed|failed
+                                            -- (app/review.py::request_approval). Additive, nullable.
+    verify_detail   TEXT,                   -- outcome of that check, shown in the queue
+    verify_check_id TEXT                    -- in-memory check id (app/full_check.py), for progress
 );
 
 -- One row per (tracker, orphan file) already searched on that tracker, so a

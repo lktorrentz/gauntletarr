@@ -355,6 +355,7 @@ def test_automatic_execution_only_when_the_user_turns_it_on(db_session, tmp_path
     _disk, tracker, _ = _library(db_session, tmp_path)
     matching.run_media_to_torrent_matching(db_session, tracker, PackTracker([_pack_candidate()]))
     settings_repo.set_setting(db_session, review.AUTO_EXECUTE_SETTING, "true")
+    settings_repo.set_setting(db_session, review.VERIFY_SETTING, "false")  # verifica: tests/test_full_check.py
     monkeypatch.setattr(review, "_build_torrent_client_adapter_or_none", lambda session: (FakeClient(), None))
 
     counts = review.execute_auto_approved(db_session)

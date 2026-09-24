@@ -1,4 +1,4 @@
-import { ChevronRightIcon, RotateCcwIcon } from 'lucide-react'
+import { ChevronRightIcon, Loader2Icon, RotateCcwIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -14,6 +14,7 @@ import { useSchedule, useSetSchedule } from '@/api/hooks/schedule'
 import { ErrorsPopover } from '@/components/ErrorsPopover'
 import { FullCheckButton } from '@/components/FullCheckButton'
 import { StateBadge } from '@/components/StateBadge'
+import { VerifyStatus } from '@/components/VerifyStatus'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -120,6 +121,7 @@ function ReviewRow({ review }: { review: Review }) {
   const [open, setOpen] = useState(false)
   const approve = useApproveReview()
   const reject = useRejectReview()
+  const verifying = review.verify_status === 'verifying'
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-b last:border-b-0">
@@ -136,15 +138,17 @@ function ReviewRow({ review }: { review: Review }) {
             {review.status === 'auto_approved' && <Badge>{t('reseeding.autoApproved')}</Badge>}
           </div>
           {review.layout && <p className="text-xs text-muted-foreground">{layoutSummary(review.layout)}</p>}
+          <VerifyStatus review={review} />
         </div>
         <Button
           size="sm"
           variant="outline"
-          onClick={() =>
-            approve.mutate(review.id)
-          }
+          disabled={verifying || approve.isPending}
+          title={verifying ? t('reseeding.verifyingHint') : undefined}
+          onClick={() => approve.mutate(review.id)}
         >
-          {t('reseeding.approve')}
+          {verifying && <Loader2Icon className="size-4 animate-spin" />}
+          {verifying ? t('reseeding.verifying') : t('reseeding.approve')}
         </Button>
         <Button
           size="sm"

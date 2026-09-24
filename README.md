@@ -53,6 +53,15 @@ curl http://localhost:8080/api/health
 
 A Community-Applications-style template is published at [`unraid/gauntletarr-template.xml`](unraid/gauntletarr-template.xml) — add it as a custom template pointing at that raw GitHub URL, or download it and add it manually via "Add Container" → "Template" in the Unraid Docker UI. It follows the same TrashGuide layout as the compose file above (one combined `/data` mount).
 
+### Release channels
+
+Two image tags, pick one:
+
+- **`ghcr.io/lktorrentz/gauntletarr:stable`**: releases promoted by hand once they've been tested. This is the tag to use if you just want to run it, and the Unraid template uses it.
+- **`ghcr.io/lktorrentz/gauntletarr:latest`**: a test build for every push to `main` (published as a GitHub *prerelease*). It moves fast and may break.
+
+Every version is also published as `:X.Y.Z`. **Configuration → Application → Check for updates** follows the channel you're on. On a stable version it only offers newer stable releases; on a test build it offers every newer build.
+
 ## First run: registering a disk and scanning your library
 
 There's no setup wizard yet — this is the sequence a future UI would drive, done by hand against the API.
