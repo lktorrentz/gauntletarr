@@ -1,6 +1,6 @@
 export const dashboard = {
   'dashboard.libraryHealth': 'Library health',
-  'dashboard.seedingOfTotal': '{seeding} GB seeding of {total} GB total',
+  'dashboard.seedingOfTotal': '{seeding} seeding of {total} total',
   'dashboard.healthHistory': 'Health history',
   'dashboard.healthHistoryDescription': 'Health snapshot at the end of each run',
   'dashboard.notEnoughHistory': 'Not enough history yet.',

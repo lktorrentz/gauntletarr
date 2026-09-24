@@ -23,4 +23,7 @@ export const itemDetail = {
   'itemDetail.candidatesEvaluated': '{count} candidates evaluated',
   'itemDetail.history': 'Executions',
   'itemDetail.recheck': 'recheck {status}',
+  'itemDetail.checkNow': 'Check now',
+  'itemDetail.checkNowHint': 'Ask the client now whether the recheck finished (it is also checked automatically every 2 minutes).',
+  'itemDetail.checkNowFailed': 'Could not check: {message}',
 } as const

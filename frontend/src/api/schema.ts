@@ -820,6 +820,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews/seed-jobs/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent Seed Jobs
+         * @description Ultime esecuzioni, dalla più recente: l'interfaccia le osserva per
+         *     avvisare quando un recheck in background finisce (seeding o fallito).
+         */
+        get: operations["recent_seed_jobs_api_reviews_seed_jobs_recent_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/seed-jobs/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile Now
+         * @description Controlla subito l'esito dei recheck in attesa (lo scheduler lo fa
+         *     comunque ogni 2 minuti). Sola lettura sul client: nessun torrent
+         *     aggiunto né file modificato.
+         */
+        post: operations["reconcile_now_api_reviews_seed_jobs_reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews/failed": {
         parameters: {
             query?: never;
@@ -1785,6 +1828,13 @@ export interface components {
             /** Basic Auth Password */
             basic_auth_password?: string | null;
         };
+        /** ReconcileResponse */
+        ReconcileResponse: {
+            /** Reconciled */
+            reconciled: number;
+            /** Errors */
+            errors: number;
+        };
         /** ReviewResponse */
         ReviewResponse: {
             /** Id */
@@ -1808,6 +1858,7 @@ export interface components {
             /** Ambiguity Reason */
             ambiguity_reason: string | null;
             layout?: components["schemas"]["LayoutSummary"] | null;
+            seed_job?: components["schemas"]["SeedJobResponse"] | null;
         };
         /** RunResponse */
         RunResponse: {
@@ -1919,6 +1970,8 @@ export interface components {
             id: number;
             /** Candidate Id */
             candidate_id: number;
+            /** Candidate Name */
+            candidate_name?: string | null;
             /** Final Status */
             final_status: string;
             /** Recheck Status */
@@ -2118,6 +2171,8 @@ export interface components {
             rate_limit_per_min?: number | null;
             /** Rss Key */
             rss_key?: string | null;
+            /** Torrent Client Id */
+            torrent_client_id?: number | null;
         };
         /** TrackerResponse */
         TrackerResponse: {
@@ -2140,6 +2195,8 @@ export interface components {
              * @default false
              */
             has_rss_key: boolean;
+            /** Torrent Client Id */
+            torrent_client_id?: number | null;
         };
         /** TrackerUpdateRequest */
         TrackerUpdateRequest: {
@@ -2157,6 +2214,8 @@ export interface components {
             enabled?: boolean | null;
             /** Rss Key */
             rss_key?: string | null;
+            /** Torrent Client Id */
+            torrent_client_id?: number | null;
         };
         /** UpdateCheckResponse */
         UpdateCheckResponse: {
@@ -4101,6 +4160,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recent_seed_jobs_api_reviews_seed_jobs_recent_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeedJobResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_now_api_reviews_seed_jobs_reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileResponse"];
                 };
             };
         };

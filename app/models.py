@@ -90,6 +90,9 @@ class Tracker(Base):
     history_session_cookie: Mapped[str | None]
     rate_limit_per_min: Mapped[int | None] = mapped_column(server_default=text("30"))
     enabled: Mapped[bool] = mapped_column(nullable=False, server_default=text("1"))
+    # Client in cui aggiungere i torrent di questo tracker (es. l'istanza per
+    # i tracker privati); None = il primo client abilitato.
+    torrent_client_id: Mapped[int | None]
 
 
 class TorrentClient(Base):
@@ -524,5 +527,6 @@ class SeedJob(Base):
     final_status: Mapped[str] = mapped_column(nullable=False, server_default=text("'in_progress'"))
     error_message: Mapped[str | None]
     expected_missing_bytes: Mapped[int | None]
+    torrent_client_id: Mapped[int | None]  # dove è stato aggiunto il torrent (e dove se ne controlla il recheck)
 
     candidate: Mapped["Candidate"] = relationship()

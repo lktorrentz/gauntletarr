@@ -18,9 +18,11 @@ import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import sessionmaker
 
-from app import pipeline, settings_repo
+from app import pipeline, review, settings_repo
+from app.models import RunLog
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +54,37 @@ def _add_job(scheduler: BackgroundScheduler, cron_expr: str, session_factory: se
     )
 
 
+RECONCILE_JOB_ID = "reconcile_seed_jobs"
+RECONCILE_INTERVAL_SECONDS = 120
+
+
+def _reconcile_between_runs(session_factory: sessionmaker) -> None:
+    """Esito dei recheck fra una run e l'altra: senza, un seed approvato a
+    mano restava "pending" fino alla run successiva, anche col torrent già
+    in seed. Solo se c'è qualcosa in attesa e nessuna run in corso (la run
+    fa già il suo reconcile alla fine, e non si scrive in due sul DB)."""
+    session = session_factory()
+    try:
+        if session.query(RunLog.id).filter(RunLog.finished_at.is_(None)).first() is not None:
+            return
+        if review.has_pending_seed_jobs(session):
+            review.reconcile_pending_seed_jobs(session)
+    except Exception:
+        logger.exception("Reconcile periodico dei seed_job fallito")
+    finally:
+        session.close()
+
+
 def build_scheduler(session_factory: sessionmaker, data_dir: str) -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     with session_factory() as session:
         cron_expr = settings_repo.get_setting(session, SETTING_KEY)
     if cron_expr:
         _add_job(scheduler, cron_expr, session_factory, data_dir)
+    scheduler.add_job(
+        _reconcile_between_runs, IntervalTrigger(seconds=RECONCILE_INTERVAL_SECONDS),
+        args=[session_factory], id=RECONCILE_JOB_ID, replace_existing=True, max_instances=1, coalesce=True,
+    )
     return scheduler
 
 

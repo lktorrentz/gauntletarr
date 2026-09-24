@@ -25,3 +25,16 @@ def test_rejects_unsupported_adapter_type(client):
         json={"label": "x", "adapter_type": "gazelle", "base_url": "https://x.example", "api_token": "t"},
     )
     assert response.status_code == 400
+
+
+def test_tracker_client_can_be_set_and_cleared(client):
+    created = client.post("/api/trackers", json={
+        "label": "ITT", "adapter_type": "unit3d", "base_url": "https://t.example", "api_token": "x",
+        "torrent_client_id": 3,
+    }).json()
+    assert created["torrent_client_id"] == 3
+
+    kept = client.patch(f"/api/trackers/{created['id']}", json={"label": "ITT 2"}).json()
+    assert kept["torrent_client_id"] == 3
+    cleared = client.patch(f"/api/trackers/{created['id']}", json={"torrent_client_id": None}).json()
+    assert cleared["torrent_client_id"] is None

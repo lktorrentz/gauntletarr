@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useTorrentClients } from '@/api/hooks/torrentClients'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -54,6 +55,36 @@ function RssKeyField({
       />
       <p className="text-xs text-muted-foreground">{t('trackers.rssKeyHelp')}</p>
     </div>
+  )
+}
+
+const FIRST_ENABLED = 'first'
+
+// In quale client aggiungere i torrent di questo tracker quando si ricrea
+// un seed (es. l'istanza dei tracker privati). "First enabled" = il primo
+// client abilitato, il comportamento di sempre.
+function TrackerClientSelect({ value, onChange }: { value: number | null; onChange: (id: number | null) => void }) {
+  const { data: clients } = useTorrentClients()
+  const options = [
+    { value: FIRST_ENABLED, label: t('trackers.firstEnabledClient') },
+    ...(clients ?? []).map((c) => ({ value: String(c.id), label: c.label })),
+  ]
+  const current = value == null ? FIRST_ENABLED : String(value)
+  return (
+    <Select value={current} onValueChange={(v) => onChange(v === FIRST_ENABLED || v == null ? null : Number(v))}>
+      <SelectTrigger size="sm" className="w-44">
+        <SelectValue>
+          {(v: string | null) => selectLabel(options, v, (o) => o.value, (o) => o.label, t('trackers.firstEnabledClient'))}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -284,6 +315,7 @@ export function TrackersSection() {
               <TableHead>{t('trackers.label')}</TableHead>
               <TableHead>{t('trackers.apiUrl')}</TableHead>
               <TableHead>{t('trackers.announceUrlColumn')}</TableHead>
+              <TableHead>{t('trackers.clientColumn')}</TableHead>
               <TableHead>{t('trackers.enabled')}</TableHead>
               <TableHead />
             </TableRow>
@@ -291,7 +323,7 @@ export function TrackersSection() {
           <TableBody>
             {isPending && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                   {t('common.loading')}
                 </TableCell>
               </TableRow>
@@ -302,6 +334,14 @@ export function TrackersSection() {
                 <TableCell className="font-mono text-xs">{tracker.base_url}</TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   {tracker.announce_url ?? '—'}
+                </TableCell>
+                <TableCell>
+                  <TrackerClientSelect
+                    value={tracker.torrent_client_id ?? null}
+                    onChange={(torrentClientId) =>
+                      updateTracker.mutate({ id: tracker.id, body: { torrent_client_id: torrentClientId } })
+                    }
+                  />
                 </TableCell>
                 <TableCell>
                   <Switch
@@ -327,7 +367,7 @@ export function TrackersSection() {
             ))}
             {trackers?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                   {t('trackers.noTrackers')}
                 </TableCell>
               </TableRow>

@@ -66,13 +66,23 @@ def index_torrent_client(
     QUESTO client, collegandoli ai seed_file dei dischi ad esso associati
     (disk_torrent_client), o di tutti i dischi se non ne ha nessuno
     associato (stessi percorsi fra client e Gauntletarr)."""
-    now = datetime.now(UTC)
     logger.debug("Client %r: chiamata adapter.list_torrents()...", torrent_client.label)
     torrents: list[ClientTorrentInfo] = (
         adapter.list_torrents(on_progress=on_progress) if on_progress is not None else adapter.list_torrents()
     )
     logger.debug("Client %r: adapter.list_torrents() ha restituito %d torrent", torrent_client.label, len(torrents))
 
+    return store_client_torrents(session, torrent_client, torrents, run.id)
+
+
+def store_client_torrents(
+    session: Session, torrent_client: TorrentClient, torrents: list[ClientTorrentInfo], run_id: int
+) -> dict[str, int]:
+    """Scrive client_torrent/client_torrent_file per questi torrent di QUESTO
+    client e collega ogni file a un seed_file per path. Usata sia
+    dall'indicizzazione completa sia dall'aggiornamento mirato di un solo
+    torrent appena messo in seed (refresh_seeded_torrent)."""
+    now = datetime.now(UTC)
     torrent_rows = [
         {
             "torrent_client_id": torrent_client.id,
@@ -124,7 +134,7 @@ def index_torrent_client(
                 "path_in_torrent": f.path_in_torrent,
                 "size_bytes": f.size_bytes,
                 "seed_file_id": seed_file_id,
-                "last_scan_id": run.id,
+                "last_scan_id": run_id,
             })
 
     bulk_upsert(

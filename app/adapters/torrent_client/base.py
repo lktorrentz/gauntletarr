@@ -86,6 +86,12 @@ class TorrentClientAdapter(ABC):
     def get_torrent_status(self, info_hash: str) -> TorrentStatus:
         raise NotImplementedError
 
+    def get_torrent_info(self, info_hash: str) -> "ClientTorrentInfo | None":
+        """Un solo torrent coi suoi file (None se il client non lo conosce):
+        per aggiornare subito un torrent appena messo in seed senza
+        reindicizzare l'intero client. Default: non supportato."""
+        return None
+
     @abstractmethod
     def list_torrents(self, on_progress: Callable[[int, int], None] | None = None) -> list[ClientTorrentInfo]:
         """Ogni torrent noto al client, coi suoi file. Usata per popolare

@@ -28,6 +28,7 @@ from app.executor import ExecutionError, execute_review, reconcile_seed_job, ret
 from app.models import Candidate, ClientTorrentFile, MatchReview, MediaFile, SeedFile, SeedJob, TorrentClient
 from app.run_progress import NULL_PROGRESS
 from app.scan_state import is_current, latest_scan_by_disk
+from app.seed_refresh import refresh_seeded_torrent
 from app.settings_repo import get_setting
 
 logger = logging.getLogger(__name__)
@@ -175,8 +176,26 @@ def _build_torrent_client_adapter_or_none(session: Session):
     return build_torrent_client_adapter(torrent_client_row), torrent_client_row.id
 
 
+def _client_for(session: Session, preferred_id: int | None):
+    """(adapter, torrent_client_id) del client indicato se esiste ed è
+    abilitato, altrimenti del primo client abilitato (comportamento di
+    sempre). (None, None) se nessun client è abilitato."""
+    if preferred_id is not None:
+        row = session.get(TorrentClient, preferred_id)
+        if row is not None and row.enabled:
+            return build_torrent_client_adapter(row), row.id
+    return _build_torrent_client_adapter_or_none(session)
+
+
+def _client_for_candidate(session: Session, candidate: Candidate):
+    """Il client scelto per il tracker del candidato (Configuration >
+    Integrations > tracker), o il primo client abilitato."""
+    tracker = candidate.tracker
+    return _client_for(session, tracker.torrent_client_id if tracker is not None else None)
+
+
 def _try_execute(session: Session, review: MatchReview) -> None:
-    adapter, torrent_client_id = _build_torrent_client_adapter_or_none(session)
+    adapter, torrent_client_id = _client_for_candidate(session, review.candidate)
     if adapter is None:
         return
     try:
@@ -319,7 +338,12 @@ def list_failed_seed_jobs(session: Session) -> list[SeedJob]:
 
 
 def retry_failed(session: Session, seed_job: SeedJob) -> SeedJob:
-    adapter, torrent_client_id = _build_torrent_client_adapter_or_none(session)
+    # Col client dove era stato aggiunto, se si sa; altrimenti quello del tracker.
+    adapter, torrent_client_id = (
+        _client_for(session, seed_job.torrent_client_id)
+        if seed_job.torrent_client_id is not None
+        else _client_for_candidate(session, seed_job.candidate)
+    )
     if adapter is None:
         raise ExecutionError("Nessun client torrent configurato")
     return retry_seed_job(session, seed_job, adapter, torrent_client_id)
@@ -347,11 +371,10 @@ def reconcile_pending_seed_jobs(session: Session, progress=NULL_PROGRESS) -> dic
     """Ricontrolla lo stato reale nel client per ogni seed_job ancora
     'in_progress' con un info_hash già noto — una sola interrogazione di
     stato per client (mai un hardlink o un add_torrent), quindi non viola
-    la regola "nessuna esecuzione senza conferma umana"."""
-    adapter, _torrent_client_id = _build_torrent_client_adapter_or_none(session)
-    if adapter is None:
-        return {"reconciled": 0, "errors": 0}
-
+    la regola "nessuna esecuzione senza conferma umana". Un seed appena
+    passato a "seeding" viene reso subito visibile nelle viste
+    (app/seed_refresh.py) invece di aspettare la run successiva. Chiamata a
+    fine run e, fra una run e l'altra, dallo scheduler ogni pochi minuti."""
     pending = (
         session.query(SeedJob)
         .filter(SeedJob.final_status == "in_progress")
@@ -361,12 +384,43 @@ def reconcile_pending_seed_jobs(session: Session, progress=NULL_PROGRESS) -> dic
     reconciled = 0
     errors = 0
     progress.add_total(len(pending))
+    # Ogni seed job nel client in cui è stato aggiunto (seed job vecchi senza
+    # client registrato: quello del tracker, o il primo abilitato). Un adapter
+    # per client, non uno per job.
+    adapters: dict[int | None, tuple] = {}
     for seed_job in pending:
         progress.advance()
+        key = seed_job.torrent_client_id if seed_job.torrent_client_id is not None else -seed_job.candidate.tracker_id
+        if key not in adapters:
+            adapters[key] = (
+                _client_for(session, seed_job.torrent_client_id)
+                if seed_job.torrent_client_id is not None
+                else _client_for_candidate(session, seed_job.candidate)
+            )
+        adapter, torrent_client_id = adapters[key]
+        if adapter is None:
+            continue
         try:
             reconcile_seed_job(session, seed_job, adapter)
             reconciled += 1
         except Exception:
             logger.exception("Reconcile fallito per seed_job %s", seed_job.id)
             errors += 1
+            continue
+        if seed_job.final_status == "seeding":
+            try:
+                refresh_seeded_torrent(session, seed_job, adapter, torrent_client_id)
+            except Exception:
+                # Solo la visibilità immediata: la run successiva registra comunque tutto.
+                logger.exception("Aggiornamento mirato fallito per seed_job %s", seed_job.id)
+                session.rollback()
     return {"reconciled": reconciled, "errors": errors}
+
+
+def has_pending_seed_jobs(session: Session) -> bool:
+    return (
+        session.query(SeedJob.id)
+        .filter(SeedJob.final_status == "in_progress", SeedJob.info_hash.isnot(None))
+        .first()
+        is not None
+    )

@@ -29,7 +29,25 @@ export interface StatusOption {
   label: string
 }
 
-const GB = 1e9
+// Unità delle dimensioni (Configuration > Language & Formats): decimali
+// (MB, GB, TB — base 1000, il default) o binarie (MiB, GiB, TiB — base
+// 1024). Impostata una volta da SizeUnitsSync in AppLayout, letta da
+// formatBytes e dai filtri di dimensione: nessun componente deve passarla.
+export type SizeUnits = 'decimal' | 'binary'
+let sizeUnits: SizeUnits = 'decimal'
+
+export function setSizeUnits(units: SizeUnits) {
+  sizeUnits = units
+}
+
+export function getSizeUnits(): SizeUnits {
+  return sizeUnits
+}
+
+// "GB" o "GiB": l'unità dei filtri min/max dimensione.
+export function gigabyteLabel(units: SizeUnits = sizeUnits): string {
+  return units === 'binary' ? 'GiB' : 'GB'
+}
 
 // Chiave di un file fra dischi diversi: lo stesso relative_path può
 // esistere su due dischi, mai confonderli.
@@ -40,7 +58,8 @@ export function fileKey(file: { disk_id?: number; relative_path: string }): stri
 function parseGb(value: string): number | null {
   if (value.trim() === '') return null
   const n = Number(value.replace(',', '.'))
-  return Number.isFinite(n) && n >= 0 ? n * GB : null
+  const gigabyte = sizeUnits === 'binary' ? 1024 ** 3 : 1e9
+  return Number.isFinite(n) && n >= 0 ? n * gigabyte : null
 }
 
 export function filterFiles(
@@ -95,14 +114,15 @@ export function summarizeByState(
   return summary
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1e3) return `${bytes} B`
-  const units = ['KB', 'MB', 'GB', 'TB', 'PB']
+export function formatBytes(bytes: number, units: SizeUnits = sizeUnits): string {
+  const base = units === 'binary' ? 1024 : 1000
+  const names = units === 'binary' ? ['KiB', 'MiB', 'GiB', 'TiB', 'PiB'] : ['KB', 'MB', 'GB', 'TB', 'PB']
+  if (bytes < base) return `${bytes} B`
   let value = bytes
   let unit = -1
   do {
-    value /= 1e3
+    value /= base
     unit += 1
-  } while (value >= 1e3 && unit < units.length - 1)
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[unit]}`
+  } while (value >= base && unit < names.length - 1)
+  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${names[unit]}`
 }

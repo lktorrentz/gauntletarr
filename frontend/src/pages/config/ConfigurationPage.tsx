@@ -59,7 +59,7 @@ export function ConfigurationPage() {
         </TabsTrigger>
         <TabsTrigger value="time-language" className="justify-start gap-2 px-3 py-2">
           <LanguagesIcon />
-          Time & Language
+          Language & Formats
         </TabsTrigger>
         <TabsTrigger value="logs" className="justify-start gap-2 px-3 py-2">
           <ScrollTextIcon />

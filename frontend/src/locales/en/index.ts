@@ -1,3 +1,4 @@
+import { activity } from './activity'
 import { application } from './application'
 import { auth } from './auth'
 import { common } from './common'
@@ -25,6 +26,7 @@ import { uploadSettings } from './uploadSettings'
 // "disks.title") — qui solo un merge piatto, mai nesting: t() resta un
 // semplice lookup O(1) su un oggetto, senza dover camminare un albero.
 export const en = {
+  ...activity,
   ...application,
   ...auth,
   ...common,

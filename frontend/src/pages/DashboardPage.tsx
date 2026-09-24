@@ -11,6 +11,7 @@ import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroupItem, ToggleGroupSingle } from '@/components/ui/toggle-group'
 import { t } from '@/lib/i18n'
+import { formatBytes } from '@/lib/library-filters'
 import { parseApiDate } from '@/lib/time'
 
 type HistoryPoint = Schemas['HistoryPoint']
@@ -101,8 +102,8 @@ function HeroCards({ data, history }: { data: NonNullable<ReturnType<typeof useD
                 : t('dashboard.healthStable')
         }
         subline={t('dashboard.seedingOfTotal', {
-          seeding: (data.seeding_media_size / 1e9).toFixed(1),
-          total: (data.total_media_size / 1e9).toFixed(1),
+          seeding: formatBytes(data.seeding_media_size),
+          total: formatBytes(data.total_media_size),
         })}
       />
       <KpiCard

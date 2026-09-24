@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toggle } from '@/components/ui/toggle'
 import { t } from '@/lib/i18n'
-import type { LibraryFilters, StateSummary, StatusOption } from '@/lib/library-filters'
+import { gigabyteLabel, type LibraryFilters, type StateSummary, type StatusOption } from '@/lib/library-filters'
 
 export function FileFilterBar({
   statusOptions,
@@ -62,8 +62,8 @@ export function FileFilterBar({
             inputMode="decimal"
             value={filters.minGb}
             onChange={(e) => set('minGb', e.target.value)}
-            placeholder={t('library.minSize')}
-            aria-label={t('library.minSize')}
+            placeholder={t('library.minSize', { unit: gigabyteLabel() })}
+            aria-label={t('library.minSize', { unit: gigabyteLabel() })}
             className="w-24"
           />
           <span className="text-xs text-muted-foreground">–</span>
@@ -71,8 +71,8 @@ export function FileFilterBar({
             inputMode="decimal"
             value={filters.maxGb}
             onChange={(e) => set('maxGb', e.target.value)}
-            placeholder={t('library.maxSize')}
-            aria-label={t('library.maxSize')}
+            placeholder={t('library.maxSize', { unit: gigabyteLabel() })}
+            aria-label={t('library.maxSize', { unit: gigabyteLabel() })}
             className="w-24"
           />
         </div>

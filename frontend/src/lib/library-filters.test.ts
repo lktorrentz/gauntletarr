@@ -83,3 +83,22 @@ describe('excluded files are out of every check', () => {
   })
 })
 
+
+describe('size units', () => {
+  it('formats with binary units when chosen, and filters in GiB', async () => {
+    const { setSizeUnits, formatBytes: fmt, filterFiles: filter, DEFAULT_FILTERS: defaults, gigabyteLabel } =
+      await import('@/lib/library-filters')
+    try {
+      setSizeUnits('binary')
+      expect(fmt(1536)).toBe('1.50 KiB')
+      expect(fmt(20 * 1024 ** 3)).toBe('20.0 GiB')
+      expect(gigabyteLabel()).toBe('GiB')
+      const f = [file({ relative_path: 'a.mkv', size_bytes: 1.5 * 1024 ** 3 })]
+      expect(filter(f, { ...defaults, minGb: '1.5' })).toHaveLength(1)
+      expect(filter(f, { ...defaults, minGb: '1.6' })).toHaveLength(0)
+    } finally {
+      setSizeUnits('decimal')
+    }
+    expect(fmt(1500)).toBe('1.50 KB')
+  })
+})

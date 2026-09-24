@@ -1,10 +1,14 @@
 import { Outlet, useLocation } from 'react-router-dom'
 
+import { useSetting } from '@/api/hooks/settings'
+
+import { ActivityStack } from '@/components/ActivityStack'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { RunNowButton } from '@/components/RunNowButton'
 import { RunStatusIndicator } from '@/components/RunStatusIndicator'
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { setSizeUnits } from '@/lib/library-filters'
 import { NAV_DASHBOARD, resolveSectionTitle } from '@/lib/nav'
 
 function TopHeader() {
@@ -25,7 +29,16 @@ function TopHeader() {
   )
 }
 
+// Unità delle dimensioni scelte in Configuration > Language & Formats:
+// impostate prima che i figli vengano renderizzati, così ogni formatBytes le
+// usa; al cambio dell'impostazione il layout si ridisegna e con lui le viste.
+function useSizeUnitsSync() {
+  const { data } = useSetting('size_units')
+  setSizeUnits(data?.value === 'binary' ? 'binary' : 'decimal')
+}
+
 export function AppLayout() {
+  useSizeUnitsSync()
   return (
     <SidebarProvider className="h-svh">
       <AppSidebar />
@@ -35,7 +48,11 @@ export function AppLayout() {
           <Outlet />
         </div>
       </SidebarInset>
-      <RunStatusIndicator />
+      {/* In basso a destra, impilati: feedback delle azioni sopra, run sotto. */}
+      <div className="fixed right-4 bottom-4 z-50 flex flex-col items-end gap-2">
+        <ActivityStack />
+        <RunStatusIndicator />
+      </div>
     </SidebarProvider>
   )
 }

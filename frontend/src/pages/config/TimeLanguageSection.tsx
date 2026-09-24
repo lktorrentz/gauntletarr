@@ -107,6 +107,23 @@ export function TimeLanguageSection() {
           <p className="text-xs text-muted-foreground">{t('timeLanguage.notYetAppliedNote')}</p>
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('timeLanguage.sizeUnitsTitle')}</CardTitle>
+          <CardDescription>{t('timeLanguage.sizeUnitsDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SettingSelectField
+            settingKey="size_units"
+            label={t('timeLanguage.sizeUnitsTitle')}
+            options={[
+              { value: 'decimal', label: t('timeLanguage.sizeUnitsDecimal') },
+              { value: 'binary', label: t('timeLanguage.sizeUnitsBinary') },
+            ]}
+            defaultValue="decimal"
+          />
+        </CardContent>
+      </Card>
     </div>
   )
 }

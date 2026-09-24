@@ -138,9 +138,7 @@ function ReviewRow({ review }: { review: Review }) {
           size="sm"
           variant="outline"
           onClick={() =>
-            approve.mutate(review.id, {
-              onError: (error) => toast.error(t('reseeding.approveFailed', { message: error.message })),
-            })
+            approve.mutate(review.id)
           }
         >
           {t('reseeding.approve')}
@@ -149,9 +147,7 @@ function ReviewRow({ review }: { review: Review }) {
           size="sm"
           variant="ghost"
           onClick={() =>
-            reject.mutate(review.id, {
-              onError: (error) => toast.error(t('reseeding.rejectFailed', { message: error.message })),
-            })
+            reject.mutate(review.id)
           }
         >
           {t('reseeding.reject')}

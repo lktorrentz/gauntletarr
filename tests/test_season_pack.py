@@ -395,3 +395,60 @@ def test_executor_refuses_a_multi_file_candidate_with_unknown_folder(db_session,
     with pytest.raises(executor.ExecutionError, match="folder is unknown"):
         executor.execute_review(db_session, db_session.query(MatchReview).one(), FakeClient())
     assert not any((tmp_path / "torrents").iterdir())
+
+
+def test_after_a_successful_recheck_episodes_are_seeding_without_waiting_for_a_run(db_session, tmp_path, monkeypatch):
+    """Il caso reale: pack in seed nel client ma episodi ancora "orphaned" e
+    seed job "pending" fino alla run successiva."""
+    from app import library, review
+    from app.adapters.torrent_client.base import ClientTorrentFileInfo, ClientTorrentInfo
+
+    _no_mediainfo(monkeypatch)
+    _disk, tracker, (e01, e02) = _library(db_session, tmp_path)
+    matching.run_media_to_torrent_matching(db_session, tracker, PackTracker([_pack_candidate()]))
+    run = db_session.query(pipeline.RunLog).order_by(pipeline.RunLog.id.desc()).first()
+    run.finished_at = datetime.now(UTC)
+    client_row = TorrentClient(label="qbit private", adapter_type="qui", base_url="http://qui")
+    db_session.add(client_row)
+    db_session.commit()
+
+    class SeedingClient(FakeClient):
+        def get_torrent_info(self, info_hash):
+            return ClientTorrentInfo(
+                info_hash="packhash", name=FOLDER, save_path=str(tmp_path / "torrents"), state="uploading",
+                files=[ClientTorrentFileInfo(path_in_torrent=f"{FOLDER}/{n}", size_bytes=len(c))
+                       for n, c in PACK_FILES.items()],
+            )
+
+    client = SeedingClient(status=TorrentStatus("packhash", "uploading", "ok", 1.0))
+    monkeypatch.setattr(review, "build_torrent_client_adapter", lambda row: client)
+    seed_job = executor.execute_review(db_session, db_session.query(MatchReview).one(), client, client_row.id)
+    assert {s["state"] for s in library.media_file_states(db_session) if s["relative_path"].endswith(".mkv")} == {
+        "orphan_media"
+    }
+
+    assert review.reconcile_pending_seed_jobs(db_session) == {"reconciled": 1, "errors": 0}
+
+    assert seed_job.final_status == "seeding"
+    states = {s["id"]: s["state"] for s in library.media_file_states(db_session)}
+    assert states[e01.id] == "seeding" and states[e02.id] == "seeding"
+
+
+def test_reconcile_between_runs_is_scheduled_and_skipped_during_a_run(db_session, monkeypatch):
+    from app import review, scheduler
+
+    calls = []
+    monkeypatch.setattr(review, "has_pending_seed_jobs", lambda session: True)
+    monkeypatch.setattr(review, "reconcile_pending_seed_jobs", lambda session: calls.append(1))
+    factory = lambda: db_session  # noqa: E731
+    db_session.close = lambda: None  # la sessione del test resta aperta
+
+    run = pipeline.start_run(db_session, "manual")  # run in corso: niente reconcile
+    scheduler._reconcile_between_runs(factory)
+    run.finished_at = datetime.now(UTC)
+    db_session.commit()
+    scheduler._reconcile_between_runs(factory)
+
+    assert calls == [1]
+    sched = scheduler.build_scheduler(lambda: db_session, "/tmp")
+    assert sched.get_job(scheduler.RECONCILE_JOB_ID) is not None

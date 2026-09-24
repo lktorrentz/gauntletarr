@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/api/client'
+import { pushActivity, updateActivity } from '@/lib/activity'
+import { t } from '@/lib/i18n'
 
 export function useLibraryItems(diskId?: number) {
   return useQuery({
@@ -53,13 +55,29 @@ export function useItemDetail(contentType: string | null, tmdbId: number | null)
 export function useSearchNow() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ contentType, tmdbId }: { contentType: string; tmdbId: number }) =>
+    mutationFn: ({ contentType, tmdbId }: { contentType: string; tmdbId: number; label?: string }) =>
       unwrap(
         api.POST('/api/library/items/{content_type}/{tmdb_id}/search', {
           params: { path: { content_type: contentType, tmdb_id: tmdbId } },
         }),
       ),
-    onSuccess: () => {
+    onMutate: ({ label }) => ({
+      activityId: pushActivity({ status: 'running', title: t('activity.searching'), detail: label }),
+    }),
+    onError: (error, _v, context) => {
+      if (context) updateActivity(context.activityId, { status: 'error', title: t('activity.searchFailed'), detail: error.message })
+    },
+    onSuccess: (result, { label }, context) => {
+      if (context) {
+        updateActivity(context.activityId, {
+          status: result.rate_limited ? 'error' : result.candidates > 0 ? 'success' : 'info',
+          title: t(result.rate_limited ? 'itemDetail.searchRateLimited' : 'itemDetail.searchDone', {
+            files: result.files_searched,
+            candidates: result.candidates,
+          }),
+          detail: label,
+        })
+      }
       queryClient.invalidateQueries({ queryKey: ['library'] })
       queryClient.invalidateQueries({ queryKey: ['reviews'] })
     },
@@ -71,7 +89,11 @@ export function useExcludeFile() {
   return useMutation({
     mutationFn: (relativePath: string) =>
       unwrap(api.POST('/api/library/exclude', { body: { relative_path: relativePath } })),
-    onSuccess: () => {
+    onError: (error) => {
+      pushActivity({ status: 'error', title: t('activity.excludeFailed'), detail: error.message })
+    },
+    onSuccess: (_result, relativePath) => {
+      pushActivity({ status: 'success', title: t('itemDetail.excluded'), detail: relativePath })
       queryClient.invalidateQueries({ queryKey: ['library'] })
       queryClient.invalidateQueries({ queryKey: ['settings', 'exclusion_patterns'] })
     },

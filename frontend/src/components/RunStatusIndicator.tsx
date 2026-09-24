@@ -181,7 +181,7 @@ export function RunStatusIndicator() {
   }
 
   return (
-    <div className="fixed right-4 bottom-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-lg border bg-card text-sm shadow-lg">
+    <div className="w-80 max-w-[calc(100vw-2rem)] rounded-lg border bg-card text-sm shadow-lg">
       <div className="flex items-start gap-3 px-4 py-3">
         {isActive ? (
           <Loader2Icon className="mt-0.5 size-4 shrink-0 animate-spin text-primary" />

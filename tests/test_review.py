@@ -254,3 +254,27 @@ def test_review_of_a_file_excluded_meanwhile_leaves_the_queue(db_session):
 
     assert review.close_resolved_reviews(db_session) == 1
     assert (r.status, r.decided_by) == ("rejected", "system")
+
+
+def test_approval_adds_the_torrent_to_the_client_chosen_for_its_tracker(db_session, monkeypatch):
+    from app.models import TorrentClient
+
+    public = TorrentClient(label="qbit public", adapter_type="qui", base_url="http://q", enabled=True)
+    private = TorrentClient(label="qbit private", adapter_type="qui", base_url="http://q", enabled=True)
+    db_session.add_all([public, private])
+    db_session.commit()
+    tracker = _tracker(db_session)
+    item = _media_item(db_session)
+    candidate = _candidate(db_session, item, tracker, confidence=0.5)
+
+    tracker.torrent_client_id = private.id
+    db_session.commit()
+    built = []
+    monkeypatch.setattr(review, "build_torrent_client_adapter", lambda row: built.append(row.label) or object())
+    adapter, client_id = review._client_for_candidate(db_session, candidate)
+    assert (built, client_id) == (["qbit private"], private.id)
+
+    private.enabled = False  # client disabilitato: si torna al primo abilitato
+    db_session.commit()
+    _adapter, client_id = review._client_for_candidate(db_session, candidate)
+    assert client_id == public.id

@@ -47,7 +47,11 @@ CREATE TABLE IF NOT EXISTS tracker (
                             CHECK (history_mode IN ('api','scrape','unsupported')),
     history_session_cookie  TEXT,                   -- if history_mode='scrape'
     rate_limit_per_min      INTEGER DEFAULT 30,
-    enabled                 BOOLEAN NOT NULL DEFAULT 1
+    enabled                 BOOLEAN NOT NULL DEFAULT 1,
+    torrent_client_id       INTEGER
+        -- client where torrents of this tracker are added when reseeding (e.g. a private-trackers
+        -- instance); null or a disabled/deleted client = the first enabled client. No FK: a deleted
+        -- client must just fall back, never block deleting it.
 );
 
 CREATE TABLE IF NOT EXISTS torrent_client (
@@ -425,7 +429,7 @@ CREATE TABLE IF NOT EXISTS seed_job (
     final_status                 TEXT NOT NULL DEFAULT 'in_progress'
                                  CHECK (final_status IN ('in_progress','seeding','failed','rolled_back')),
     error_message                TEXT,
-    expected_missing_bytes       INTEGER
+    expected_missing_bytes       INTEGER,
         -- bytes the client may legitimately still download after the recheck: extras of the
         -- torrent (nfo, subtitles, sample) with no local file, plus the pieces they share with
         -- neighbouring files (app/torrent_layout.py::expected_missing_bytes). Null/0 = the
@@ -433,6 +437,8 @@ CREATE TABLE IF NOT EXISTS seed_job (
     -- Indicative layout — execution details to be refined in Phase 4 (docs/ROADMAP.md), in
     -- particular how/when result_seed_file_id and result_client_torrent_id get reconciled
     -- with the next scan instead of being written directly by the executor.
+    torrent_client_id            INTEGER
+        -- the client the torrent was added to: its recheck is checked there, not on "the first client"
 );
 
 -- ============ UPLOAD (SPEC.md §9) ============

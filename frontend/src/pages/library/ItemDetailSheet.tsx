@@ -6,14 +6,14 @@ import {
   FileIcon,
   FileVideoIcon,
   Loader2Icon,
+  RefreshCwIcon,
   SearchIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { toast } from 'sonner'
 
 import type { Schemas } from '@/api/client'
 import { useExcludeFile, useItemDetail, useSearchNow } from '@/api/hooks/library'
-import { useApproveReview, useRejectReview } from '@/api/hooks/reviews'
+import { useApproveReview, useReconcileNow, useRejectReview } from '@/api/hooks/reviews'
 import { AuthedPoster } from '@/components/AuthedPoster'
 import { StateBadge, StatusBadge } from '@/components/StateBadge'
 import { Badge } from '@/components/ui/badge'
@@ -111,10 +111,7 @@ function FileRow({ file, showEpisode }: { file: DetailFile; showEpisode: boolean
             title={t('itemDetail.exclude')}
             disabled={exclude.isPending}
             onClick={() =>
-              exclude.mutate(file.relative_path, {
-                onSuccess: () => toast.success(t('itemDetail.excluded')),
-                onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
-              })
+              exclude.mutate(file.relative_path)
             }
           >
             <EyeOffIcon className="size-3.5" />
@@ -213,9 +210,7 @@ function Reviews({ detail }: { detail: Detail }) {
               size="sm"
               disabled={approve.isPending}
               onClick={() =>
-                approve.mutate(r.id, {
-                  onError: (error) => toast.error(t('reseeding.approveFailed', { message: error.message })),
-                })
+                approve.mutate(r.id)
               }
             >
               {t('reseeding.approve')}
@@ -225,9 +220,7 @@ function Reviews({ detail }: { detail: Detail }) {
               variant="ghost"
               disabled={reject.isPending}
               onClick={() =>
-                reject.mutate(r.id, {
-                  onError: (error) => toast.error(t('reseeding.rejectFailed', { message: error.message })),
-                })
+                reject.mutate(r.id)
               }
             >
               {t('reseeding.reject')}
@@ -253,19 +246,11 @@ function Matching({ detail }: { detail: Detail }) {
             variant="outline"
             disabled={search.isPending}
             onClick={() =>
-              search.mutate(
-                { contentType: detail.content_type, tmdbId: detail.tmdb_id },
-                {
-                  onSuccess: (result) =>
-                    toast.success(
-                      t(result.rate_limited ? 'itemDetail.searchRateLimited' : 'itemDetail.searchDone', {
-                        files: result.files_searched,
-                        candidates: result.candidates,
-                      }),
-                    ),
-                  onError: (error) => toast.error(t('itemDetail.searchFailed', { message: error.message })),
-                },
-              )
+              search.mutate({
+                contentType: detail.content_type,
+                tmdbId: detail.tmdb_id,
+                label: detail.title ?? undefined,
+              })
             }
           >
             {search.isPending ? <Loader2Icon className="size-3 animate-spin" /> : <SearchIcon className="size-3" />}
@@ -315,9 +300,29 @@ function Matching({ detail }: { detail: Detail }) {
 }
 
 function History({ detail }: { detail: Detail }) {
+  const reconcile = useReconcileNow()
   if (detail.seed_jobs.length === 0) return null
+  const waiting = detail.seed_jobs.some((job) => job.final_status === 'in_progress')
   return (
-    <Section title={t('itemDetail.history')}>
+    <Section
+      title={t('itemDetail.history')}
+      action={
+        waiting && (
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={reconcile.isPending}
+            title={t('itemDetail.checkNowHint')}
+            onClick={() =>
+              reconcile.mutate()
+            }
+          >
+            {reconcile.isPending ? <Loader2Icon className="size-3 animate-spin" /> : <RefreshCwIcon className="size-3" />}
+            {t('itemDetail.checkNow')}
+          </Button>
+        )
+      }
+    >
       {detail.seed_jobs.map((job) => (
         <div key={job.id} className="grid gap-0.5 text-xs">
           <p className="font-mono break-all">{job.candidate_name}</p>

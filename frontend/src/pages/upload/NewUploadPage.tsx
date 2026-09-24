@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { DiskBrowserDialog } from '@/pages/config/DiskBrowserDialog'
 import { t } from '@/lib/i18n'
+import { formatBytes } from '@/lib/library-filters'
 import { selectLabel } from '@/lib/utils'
 
 export function CreateUploadForm({ onCreated }: { onCreated: (id: number) => void }) {
@@ -340,7 +341,7 @@ function ReadyStep({ jobId }: { jobId: number }) {
           )}
           {dupeCheck.data?.map((c) => (
             <div key={c.torrent_id_remote} className="text-sm">
-              {c.name} — {(c.size_bytes / 1e9).toFixed(2)} GB
+              {c.name} — {formatBytes(c.size_bytes)}
             </div>
           ))}
         </CardContent>

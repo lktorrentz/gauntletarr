@@ -168,6 +168,13 @@ class QuiTorrentClientAdapter(TorrentClientAdapter):
             amount_left=int(amount_left) if amount_left is not None else None,
         )
 
+    def get_torrent_info(self, info_hash: str) -> ClientTorrentInfo | None:
+        # Nessun endpoint per un solo torrent (vedi get_torrent_status): lista
+        # completa, poi file e tracker del solo torrent cercato.
+        torrent = next((t for t in self._fetch_all_torrents() if (t.get("hash") or "").lower() == info_hash.lower()),
+                       None)
+        return self._torrent_info(torrent) if torrent is not None else None
+
     def list_torrents(self, on_progress: Callable[[int, int], None] | None = None) -> list[ClientTorrentInfo]:
         logger.debug("qui[%s]: list_torrents() — recupero la lista paginata...", self.instance_id)
         torrents = self._fetch_all_torrents()

@@ -1,0 +1,17 @@
+export const activity = {
+  'activity.approving': 'Approving and executing…',
+  'activity.approveFailed': 'Approval failed',
+  'activity.executionFailed': 'Execution failed',
+  'activity.addedRecheckPending': 'Added to the client, recheck in progress',
+  'activity.approvedNoClient': 'Approved: no torrent client configured, nothing executed',
+  'activity.rejected': 'Match rejected',
+  'activity.rejectFailed': 'Reject failed',
+  'activity.checkingRechecks': 'Checking pending rechecks…',
+  'activity.checkFailed': 'Check failed',
+  'activity.checked': '{count} rechecks checked',
+  'activity.searching': 'Searching the trackers…',
+  'activity.searchFailed': 'Search failed',
+  'activity.excludeFailed': 'Could not exclude the file',
+  'activity.nowSeeding': 'Recheck ok: now seeding',
+  'activity.recheckFailed': 'Recheck failed',
+} as const

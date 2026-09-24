@@ -4,13 +4,13 @@ rifiuto manuale dei match sotto soglia, retry delle esecuzioni fallite.
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app import review
 from app.api_errors import coded_detail
 from app.deps import get_session
 from app.executor import ExecutionError
-from app.models import Candidate, MatchReview, SeedJob
+from app.models import Candidate, MatchReview, RunLog, SeedJob
 
 router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 
@@ -65,6 +65,22 @@ def _layout_summary(c: Candidate) -> LayoutSummary | None:
     )
 
 
+class SeedJobResponse(BaseModel):
+    id: int
+    candidate_id: int
+    candidate_name: str | None = None
+    final_status: str
+    recheck_status: str | None
+    error_message: str | None
+
+    @classmethod
+    def from_model(cls, sj: SeedJob) -> "SeedJobResponse":
+        return cls(
+            id=sj.id, candidate_id=sj.candidate_id, candidate_name=sj.candidate.name if sj.candidate else None,
+            final_status=sj.final_status, recheck_status=sj.recheck_status, error_message=sj.error_message,
+        )
+
+
 class ReviewResponse(BaseModel):
     id: int
     candidate_id: int
@@ -77,30 +93,24 @@ class ReviewResponse(BaseModel):
     candidate_name: str
     ambiguity_reason: str | None
     layout: LayoutSummary | None = None  # solo per torrent con più di un file
+    # L'esecuzione partita da questa review (dopo un'approvazione): per il
+    # feedback in interfaccia (aggiunto al client, recheck in corso, fallito).
+    seed_job: SeedJobResponse | None = None
 
     @classmethod
     def from_model(cls, r: MatchReview) -> "ReviewResponse":
+        session = object_session(r)
+        seed_job = (
+            session.query(SeedJob).filter_by(candidate_id=r.candidate_id).order_by(SeedJob.id.desc()).first()
+            if session is not None else None
+        )
         return cls(
             id=r.id, candidate_id=r.candidate_id, media_item_id=r.candidate.media_item_id,
             media_file_id=r.media_file_id, seed_file_id=r.seed_file_id,
             status=r.status, direction=r.candidate.direction, confidence=r.candidate.confidence,
             candidate_name=r.candidate.name, ambiguity_reason=r.candidate.ambiguity_reason,
             layout=_layout_summary(r.candidate),
-        )
-
-
-class SeedJobResponse(BaseModel):
-    id: int
-    candidate_id: int
-    final_status: str
-    recheck_status: str | None
-    error_message: str | None
-
-    @classmethod
-    def from_model(cls, sj: SeedJob) -> "SeedJobResponse":
-        return cls(
-            id=sj.id, candidate_id=sj.candidate_id, final_status=sj.final_status,
-            recheck_status=sj.recheck_status, error_message=sj.error_message,
+            seed_job=SeedJobResponse.from_model(seed_job) if seed_job is not None else None,
         )
 
 
@@ -128,6 +138,29 @@ def reject_review(review_id: int, session: Session = Depends(get_session)):
     row = _get_review_or_404(session, review_id)
     review.reject(session, row)
     return ReviewResponse.from_model(row)
+
+
+class ReconcileResponse(BaseModel):
+    reconciled: int
+    errors: int
+
+
+@router.get("/seed-jobs/recent", response_model=list[SeedJobResponse])
+def recent_seed_jobs(limit: int = 50, session: Session = Depends(get_session)):
+    """Ultime esecuzioni, dalla più recente: l'interfaccia le osserva per
+    avvisare quando un recheck in background finisce (seeding o fallito)."""
+    rows = session.query(SeedJob).order_by(SeedJob.id.desc()).limit(max(1, min(limit, 200))).all()
+    return [SeedJobResponse.from_model(sj) for sj in rows]
+
+
+@router.post("/seed-jobs/reconcile", response_model=ReconcileResponse)
+def reconcile_now(session: Session = Depends(get_session)):
+    """Controlla subito l'esito dei recheck in attesa (lo scheduler lo fa
+    comunque ogni 2 minuti). Sola lettura sul client: nessun torrent
+    aggiunto né file modificato."""
+    if session.query(RunLog.id).filter(RunLog.finished_at.is_(None)).first() is not None:
+        raise HTTPException(status_code=409, detail=coded_detail("run_in_progress"))
+    return review.reconcile_pending_seed_jobs(session)
 
 
 @router.get("/failed", response_model=list[SeedJobResponse])

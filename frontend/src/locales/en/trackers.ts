@@ -12,6 +12,8 @@ export const trackers = {
   'trackers.apiToken': 'API token',
   'trackers.announceUrl': 'Announce URL (upload only)',
   'trackers.rssKey': 'RSS key (optional)',
+  'trackers.clientColumn': 'Reseed client',
+  'trackers.firstEnabledClient': 'First enabled client',
   'trackers.rssKeyPlaceholder': 'Detected automatically',
   'trackers.rssKeyKnown': 'Already detected — leave blank',
   'trackers.rssKeyHelp':

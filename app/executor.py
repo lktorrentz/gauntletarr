@@ -159,7 +159,7 @@ def _execute_layout_media_to_torrent(
 
     seed_job = SeedJob(
         candidate_id=candidate.id, source_media_file_id=anchor.id, final_status="in_progress",
-        expected_missing_bytes=_missing_bytes_for(candidate),
+        torrent_client_id=torrent_client_id, expected_missing_bytes=_missing_bytes_for(candidate),
     )
     session.add(seed_job)
     session.commit()
@@ -240,7 +240,7 @@ def _execute_layout_torrent_to_client(
 
     seed_job = SeedJob(
         candidate_id=candidate.id, source_seed_file_id=anchor.id, final_status="in_progress",
-        expected_missing_bytes=_missing_bytes_for(candidate),
+        torrent_client_id=torrent_client_id, expected_missing_bytes=_missing_bytes_for(candidate),
     )
     session.add(seed_job)
     session.commit()
@@ -308,7 +308,10 @@ def _execute_media_to_torrent(
         raise ExecutionError(f"Destination path already exists: {target_path}")
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
-    seed_job = SeedJob(candidate_id=candidate.id, source_media_file_id=media_file.id, final_status="in_progress")
+    seed_job = SeedJob(
+        candidate_id=candidate.id, source_media_file_id=media_file.id, final_status="in_progress",
+        torrent_client_id=torrent_client_id,
+    )
     session.add(seed_job)
     session.commit()
 
@@ -378,7 +381,10 @@ def _execute_torrent_to_client(
     if not os.path.isfile(source_path):
         raise ExecutionError(f"Local file not found: {source_path}")
 
-    seed_job = SeedJob(candidate_id=candidate.id, source_seed_file_id=seed_file.id, final_status="in_progress")
+    seed_job = SeedJob(
+        candidate_id=candidate.id, source_seed_file_id=seed_file.id, final_status="in_progress",
+        torrent_client_id=torrent_client_id,
+    )
     session.add(seed_job)
     session.commit()
 

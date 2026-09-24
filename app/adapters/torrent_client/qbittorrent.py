@@ -135,6 +135,24 @@ class QBittorrentAdapter(TorrentClientAdapter):
             amount_left=getattr(torrent, "amount_left", None),
         )
 
+    def get_torrent_info(self, info_hash: str) -> ClientTorrentInfo | None:
+        results = self._client.torrents_info(torrent_hashes=info_hash)
+        if not results:
+            return None
+        torrent = results[0]
+        return ClientTorrentInfo(
+            info_hash=torrent.hash,
+            name=torrent.name,
+            save_path=torrent.save_path,
+            state=torrent.state,
+            category=getattr(torrent, "category", "") or None,
+            tracker_url=getattr(torrent, "tracker", "") or None,
+            files=[
+                ClientTorrentFileInfo(path_in_torrent=f.name, size_bytes=f.size)
+                for f in self._client.torrents_files(torrent_hash=torrent.hash)
+            ],
+        )
+
     def list_torrents(self, on_progress: Callable[[int, int], None] | None = None) -> list[ClientTorrentInfo]:
         result = []
         torrents = list(self._client.torrents_info())

@@ -25,6 +25,7 @@ class TrackerCreateRequest(BaseModel):
     announce_url: str | None = None  # necessario solo per creare un nuovo .torrent da caricare (Fase 6, §9)
     rate_limit_per_min: int | None = None
     rss_key: str | None = None  # facoltativa: appresa in automatico dall'API
+    torrent_client_id: int | None = None  # client per i reseed di questo tracker, None = il primo abilitato
 
 
 class TrackerUpdateRequest(BaseModel):
@@ -35,6 +36,7 @@ class TrackerUpdateRequest(BaseModel):
     rate_limit_per_min: int | None = None
     enabled: bool | None = None
     rss_key: str | None = None  # "" la cancella (torna al solo recupero automatico)
+    torrent_client_id: int | None = None  # esplicitamente null = torna al primo client abilitato
 
 
 class TrackerResponse(BaseModel):
@@ -46,13 +48,14 @@ class TrackerResponse(BaseModel):
     rate_limit_per_min: int | None
     enabled: bool
     has_rss_key: bool = False  # mai la chiave stessa, solo se ce n'è una (manuale o appresa)
+    torrent_client_id: int | None = None
 
     @classmethod
     def from_model(cls, t: Tracker) -> "TrackerResponse":
         return cls(
             id=t.id, label=t.label, adapter_type=t.adapter_type, base_url=t.base_url,
             announce_url=t.announce_url, rate_limit_per_min=t.rate_limit_per_min, enabled=t.enabled,
-            has_rss_key=bool(t.rss_key),
+            has_rss_key=bool(t.rss_key), torrent_client_id=t.torrent_client_id,
         )
 
 
@@ -83,6 +86,7 @@ def create_tracker(body: TrackerCreateRequest, session: Session = Depends(get_se
         api_token=body.api_token, announce_url=body.announce_url,
         rate_limit_per_min=body.rate_limit_per_min or 30,
         rss_key=body.rss_key.strip() if body.rss_key and body.rss_key.strip() else None,
+        torrent_client_id=body.torrent_client_id,
     )
     session.add(tracker)
     session.commit()
@@ -106,6 +110,8 @@ def update_tracker(tracker_id: int, body: TrackerUpdateRequest, session: Session
         tracker.enabled = body.enabled
     if body.rss_key is not None:
         tracker.rss_key = body.rss_key.strip() or None
+    if "torrent_client_id" in body.model_fields_set:
+        tracker.torrent_client_id = body.torrent_client_id
     session.commit()
     return TrackerResponse.from_model(tracker)
 
