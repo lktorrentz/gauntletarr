@@ -93,6 +93,18 @@ def _missing_bytes_for(candidate) -> int:
     return expected_missing_bytes(sum(f.size_bytes or 0 for f in missing), len(missing), candidate.piece_length)
 
 
+def _require_known_structure(candidate) -> None:
+    """Un torrent con più file ha sempre una cartella radice (info.name):
+    senza, i file finirebbero sciolti nella cartella dei torrent e il
+    recheck non potrebbe mai riuscire. Candidati salvati prima che la
+    struttura venisse letta dal .torrent: vanno ricercati ("Cerca ora")."""
+    if len(candidate.files) > 1 and not candidate.folder:
+        raise ExecutionError(
+            "The torrent's folder is unknown for this multi-file candidate: search it again (Search now) "
+            "to read its real structure from the .torrent"
+        )
+
+
 def _require_every_video(candidate) -> None:
     for f in candidate.files:
         if f.is_video and f.media_file_id is None and f.seed_file_id is None:
@@ -112,6 +124,7 @@ def _execute_layout_media_to_torrent(
     anchor = review.media_file
     if anchor is None:
         raise ExecutionError(f"MatchReview {review.id} (media_to_torrent) has no linked media_file")
+    _require_known_structure(candidate)
     _require_every_video(candidate)
     disk = anchor.disk
     if not disk.torrents_rel_path:
@@ -197,6 +210,7 @@ def _execute_layout_torrent_to_client(
     anchor = review.seed_file
     if anchor is None:
         raise ExecutionError(f"MatchReview {review.id} (torrent_to_client) has no linked seed_file")
+    _require_known_structure(candidate)
     _require_every_video(candidate)
     if not candidate.download_link:
         raise ExecutionError("Candidate has no download_link: cannot add the torrent to the client")

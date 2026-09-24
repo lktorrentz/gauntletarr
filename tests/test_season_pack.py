@@ -361,3 +361,37 @@ def test_automatic_execution_only_when_the_user_turns_it_on(db_session, tmp_path
 
     assert counts == {"executed": 1, "waiting": 0}
     assert db_session.query(SeedJob).count() == 1
+
+
+def test_pack_without_folder_in_the_catalog_is_recreated_inside_the_torrent_folder(db_session, tmp_path, monkeypatch):
+    """Il caso reale: il catalogo UNIT3D non riportava la cartella del pack e
+    gli hardlink finivano sciolti nella cartella dei torrent (recheck fallito).
+    La struttura ora viene dal .torrent, con i nomi del torrent."""
+    _no_mediainfo(monkeypatch)
+    _library(db_session, tmp_path)
+    tracker = db_session.query(Tracker).one()
+    candidate = _pack_candidate()
+    candidate.folder = None  # come lo restituisce il catalogo
+    matching.run_media_to_torrent_matching(db_session, tracker, PackTracker([candidate]))
+
+    (c,) = db_session.query(Candidate).all()
+    assert c.folder == FOLDER
+    executor.execute_review(db_session, db_session.query(MatchReview).one(), FakeClient())
+
+    target = tmp_path / "torrents" / FOLDER
+    assert (target / "Show.S01E01.1080p-GRP.mkv").read_bytes() == E01  # nome del torrent, non della libreria
+    assert not (tmp_path / "torrents" / "Show.S01E01.1080p-GRP.mkv").exists()
+
+
+def test_executor_refuses_a_multi_file_candidate_with_unknown_folder(db_session, tmp_path, monkeypatch):
+    import pytest
+
+    _no_mediainfo(monkeypatch)
+    _disk, tracker, _ = _library(db_session, tmp_path)
+    matching.run_media_to_torrent_matching(db_session, tracker, PackTracker([_pack_candidate()]))
+    db_session.query(Candidate).one().folder = None  # candidato salvato da una versione precedente
+    db_session.commit()
+
+    with pytest.raises(executor.ExecutionError, match="folder is unknown"):
+        executor.execute_review(db_session, db_session.query(MatchReview).one(), FakeClient())
+    assert not any((tmp_path / "torrents").iterdir())

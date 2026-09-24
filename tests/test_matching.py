@@ -76,18 +76,45 @@ def test_mediainfo_mismatch_zeroes_confidence(db_session, monkeypatch):
     assert c.ambiguity_reason == "mediainfo_mismatch"
 
 
-def test_movie_with_an_nfo_is_matched_on_the_video_size(db_session, monkeypatch):
-    # Prima: qualunque torrent con più di un file finiva a 0 come "season pack".
+def _torrent_bytes(folder: str, files: dict[str, int]) -> bytes:
+    from tests.test_season_pack import _bencode
+
+    return _bencode({"info": {
+        "name": folder, "piece length": 16, "pieces": b"\x00" * 20 * (sum(files.values()) // 16 + 1),
+        "files": [{"length": size, "path": [name]} for name, size in files.items()],
+    }})
+
+
+def test_movie_with_an_nfo_takes_its_folder_and_names_from_the_torrent(db_session, monkeypatch):
+    # Prima: qualunque torrent con più file finiva a 0 come "season pack".
+    # E il catalogo UNIT3D spesso non riporta la cartella: la struttura vera
+    # (cartella + nomi) si legge dal .torrent, o il seed finirebbe nel posto
+    # sbagliato.
     monkeypatch.setattr(matching, "compute_unique_id", lambda path: None)
-    c = _match_one(db_session, _tc(
-        size_bytes=1050, folder="Movie.2024.1080p-GRP",
+    torrent = _torrent_bytes("Movie.2024.1080p-GRP", {"Movie.2024.1080p-GRP.mkv": 1000, "Movie.2024.1080p-GRP.nfo": 50})
+    ctx, anchor = _anchor_ctx(db_session, [_tc(
+        size_bytes=1050, folder=None, download_link="https://t.example/torrent/download/1.k",
         file_list=["Movie.2024.1080p-GRP.mkv", "Movie.2024.1080p-GRP.nfo"],
         file_sizes={"Movie.2024.1080p-GRP.mkv": 1000, "Movie.2024.1080p-GRP.nfo": 50},
-    ))
-    assert c.confidence == matching.CONFIDENCE_SIZE_ONLY
+    )])
+    ctx.tracker_adapter.download_torrent = lambda url: torrent
+
+    (c,) = matching.match_file(ctx, anchor, anchor.media_item_id, 157336)
+
+    assert c.folder == "Movie.2024.1080p-GRP"
     by_path = {f.torrent_path: f for f in c.files}
     assert by_path["Movie.2024.1080p-GRP.mkv"].media_file_id is not None
     assert by_path["Movie.2024.1080p-GRP.nfo"].media_file_id is None  # lo scaricherà il client
+
+
+def test_multi_file_candidate_without_a_readable_torrent_is_not_executable(db_session, monkeypatch):
+    monkeypatch.setattr(matching, "compute_unique_id", lambda path: None)
+    c = _match_one(db_session, _tc(
+        size_bytes=1050, folder=None, download_link=None,
+        file_list=["Movie.2024.1080p-GRP.mkv", "Movie.2024.1080p-GRP.nfo"],
+        file_sizes={"Movie.2024.1080p-GRP.mkv": 1000, "Movie.2024.1080p-GRP.nfo": 50},
+    ))
+    assert (c.confidence, c.ambiguity_reason) == (matching.CONFIDENCE_NO_MATCH, "torrent_structure_unknown")
 
 
 def test_season_pack_without_local_episodes_is_partial(db_session):
