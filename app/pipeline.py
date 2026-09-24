@@ -44,6 +44,7 @@ from sqlalchemy.orm import Session
 from app import (
     adapter_factory,
     arr,
+    file_changes,
     health,
     matching,
     media_resolution,
@@ -158,6 +159,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
         logger.info("Run #%s: %d %s da scansionare", run.id, len(disks), _plural(len(disks), "disco", "dischi"))
         # Prima l'elenco dei file di tutti i dischi (veloce, solo nomi), così
         # il totale è noto prima della parte lenta (stat + hash).
+        scan_failed = False
         listed: list[tuple[Disk, scanner.DiskFiles]] = []
         for disk in disks:
             progress.detail(f"Listing files on {disk.label}…")
@@ -165,6 +167,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                 files = scanner.list_disk_files(disk)
             except Exception as exc:
                 errors = _record_failure(session, run, errors, f"scan of disk {disk.label!r}", exc)
+                scan_failed = True
                 continue
             listed.append((disk, files))
             progress.add_total(len(files))
@@ -175,6 +178,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                 counts = scanner.scan_disk(session, disk, run, files=files, on_progress=progress.advance)
             except Exception as exc:
                 errors = _record_failure(session, run, errors, f"scan of disk {disk.label!r}", exc)
+                scan_failed = True
                 continue
             logger.info(
                 "Run #%s: disco %r scansionato — %d media file, %d seed file",
@@ -391,6 +395,16 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             logger.info("Run #%s: reconcile dei seed_job in corso completato", run.id)
         except Exception as exc:
             errors = _record_failure(session, run, errors, "checking pending rechecks", exc)
+
+        # Cambiamenti per file rispetto alla scansione precedente: solo con
+        # dati affidabili (vedi app/file_changes.py).
+        if scan_failed or indexing_failed:
+            logger.info("Run #%s: scansione o indicizzazione incompleta, nessun confronto dei file", run.id)
+        else:
+            try:
+                file_changes.record_changes(session, run)
+            except Exception as exc:
+                errors = _record_failure(session, run, errors, "changes since the last scan", exc)
     except RunCancelled:
         # Stop richiesto dall'utente: non un errore. Il lavoro già salvato
         # resta (file scansionati, identità, match_attempt, candidati): la

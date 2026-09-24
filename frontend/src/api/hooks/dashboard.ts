@@ -17,9 +17,10 @@ export function useDashboardHistory(limit = 30) {
   })
 }
 
-export function useDashboardWhatsNew(limit = 20) {
+export function useDashboardChanges() {
   return useQuery({
-    queryKey: ['dashboard', 'whats-new', limit],
-    queryFn: () => unwrap(api.GET('/api/dashboard/whats-new', { params: { query: { limit } } })),
+    queryKey: ['dashboard', 'changes'],
+    queryFn: () => unwrap(api.GET('/api/dashboard/changes')),
+    refetchInterval: 60_000,
   })
 }

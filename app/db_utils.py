@@ -21,3 +21,8 @@ def bulk_upsert(session: Session, table, rows: list[dict], conflict_cols: list[s
         update_dict = {col: getattr(stmt.excluded, col) for col in update_cols}
         stmt = stmt.on_conflict_do_update(index_elements=conflict_cols, set_=update_dict)
         session.execute(stmt)
+
+
+def bulk_insert(session: Session, table, rows: list[dict]) -> None:
+    for start in range(0, len(rows), UPSERT_CHUNK_ROWS):
+        session.execute(sqlite_insert(table).values(rows[start : start + UPSERT_CHUNK_ROWS]))

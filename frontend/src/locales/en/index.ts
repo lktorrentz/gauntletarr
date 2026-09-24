@@ -1,6 +1,7 @@
 import { activity } from './activity'
 import { application } from './application'
 import { auth } from './auth'
+import { changes } from './changes'
 import { common } from './common'
 import { dashboard } from './dashboard'
 import { disks } from './disks'
@@ -31,6 +32,7 @@ export const en = {
   ...activity,
   ...application,
   ...auth,
+  ...changes,
   ...common,
   ...dashboard,
   ...disks,

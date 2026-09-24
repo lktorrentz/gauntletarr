@@ -1022,15 +1022,19 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/dashboard/whats-new": {
+    "/api/dashboard/changes": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Whats New */
-        get: operations["get_whats_new_api_dashboard_whats_new_get"];
+        /**
+         * Get Changes
+         * @description Cambiamenti per file dell'ultima scansione confrontata con la
+         *     precedente (app/file_changes.py): file nuovi, spariti, cambiati di stato.
+         */
+        get: operations["get_changes_api_dashboard_changes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1332,6 +1336,27 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** ChangesResponse */
+        ChangesResponse: {
+            /** Run Id */
+            run_id: number | null;
+            /** Since */
+            since: string | null;
+            /** Until */
+            until: string | null;
+            /** Baseline Only */
+            baseline_only: boolean;
+            /** Health Delta */
+            health_delta: number | null;
+            /** Total */
+            total: number;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Changes */
+            changes: components["schemas"]["FileChangeItem"][];
+        };
         /** CheckResultResponse */
         CheckResultResponse: {
             /** Torrent Name */
@@ -1573,6 +1598,27 @@ export interface components {
             patterns: string[];
             /** Enabled By Default */
             enabled_by_default: boolean;
+        };
+        /** FileChangeItem */
+        FileChangeItem: {
+            /** Side */
+            side: string;
+            /** Kind */
+            kind: string;
+            /** Disk Id */
+            disk_id: number;
+            /** Relative Path */
+            relative_path: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** State */
+            state: string | null;
+            /** Previous State */
+            previous_state: string | null;
+            /** Content Type */
+            content_type: string | null;
+            /** Tmdb Id */
+            tmdb_id: number | null;
         };
         /** FileCheckResponse */
         FileCheckResponse: {
@@ -2549,23 +2595,6 @@ export interface components {
             consistent: boolean;
             /** Warning */
             warning?: string | null;
-        };
-        /** WhatsNewItem */
-        WhatsNewItem: {
-            /** Candidate Id */
-            candidate_id: number;
-            /** Media Item Id */
-            media_item_id: number;
-            /** Tracker Id */
-            tracker_id: number;
-            /** Name */
-            name: string;
-            /** Direction */
-            direction: string;
-            /** Confidence */
-            confidence: number;
-            /** Created At */
-            created_at: string | null;
         };
     };
     responses: never;
@@ -4707,7 +4736,7 @@ export interface operations {
             };
         };
     };
-    get_whats_new_api_dashboard_whats_new_get: {
+    get_changes_api_dashboard_changes_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -4724,7 +4753,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WhatsNewItem"][];
+                    "application/json": components["schemas"]["ChangesResponse"];
                 };
             };
             /** @description Validation Error */

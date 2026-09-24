@@ -2,9 +2,10 @@ import { TrendingDownIcon, TrendingUpIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
 
-import { useDashboard, useDashboardHistory, useDashboardWhatsNew } from '@/api/hooks/dashboard'
+import { useDashboard, useDashboardHistory } from '@/api/hooks/dashboard'
 import type { Schemas } from '@/api/client'
 import { useUploads } from '@/api/hooks/uploads'
+import { ChangesCard } from '@/components/ChangesCard'
 import { ScanHistoryCard } from '@/components/ScanHistoryCard'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -238,7 +239,6 @@ function HealthHistoryChart() {
 export function DashboardPage() {
   const { data, isPending } = useDashboard()
   const { data: history } = useDashboardHistory(2)
-  const { data: whatsNew } = useDashboardWhatsNew()
   const { data: uploads } = useUploads()
 
   if (isPending || !data) {
@@ -296,25 +296,9 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('dashboard.whatsNew')}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-2">
-          {whatsNew?.length === 0 && <p className="text-sm text-muted-foreground">{t('dashboard.nothingNew')}</p>}
-          {whatsNew?.map((item) => (
-            <div key={item.candidate_id} className="flex items-center justify-between gap-2 border-b pb-2 text-sm last:border-b-0">
-              <span className="truncate">{item.name}</span>
-              <div className="flex shrink-0 items-center gap-2">
-                <Badge variant="secondary">{item.direction}</Badge>
-                <span className="text-xs text-muted-foreground">{(item.confidence * 100).toFixed(0)}%</span>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-      <ScanHistoryCard />
+      <div className="grid gap-6 xl:grid-cols-5">
+        <ChangesCard className="xl:col-span-3" />
+        <ScanHistoryCard className="xl:col-span-2" />
       </div>
     </div>
   )

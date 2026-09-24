@@ -15,11 +15,11 @@ def test_dashboard_history_empty(client):
     assert response.json() == []
 
 
-def test_dashboard_whats_new_empty(client):
-    response = client.get("/api/dashboard/whats-new")
+def test_dashboard_changes_empty(client):
+    response = client.get("/api/dashboard/changes")
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["total"] == 0 and response.json()["baseline_only"] is False
 
 
 def test_dashboard_reflects_run_log(client):

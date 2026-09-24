@@ -13,8 +13,6 @@ export const dashboard = {
   'dashboard.drafts': 'Drafts',
   'dashboard.ready': 'Ready',
   'dashboard.uploaded': 'Uploaded',
-  'dashboard.whatsNew': "What's new",
-  'dashboard.nothingNew': 'Nothing new.',
 
   // Hero KPI cards
   'dashboard.healthImproving': 'Improving vs previous scan',

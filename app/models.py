@@ -220,6 +220,8 @@ class RunLog(Base):
     errors: Mapped[int] = mapped_column(server_default=text("0"))
     last_error: Mapped[str | None]
     errors_json: Mapped[str | None]  # JSON: ogni errore della run, in ordine (app/pipeline.py::_note_error)
+    # Fotografia dello stato dei file scattata a fine run (app/file_changes.py).
+    snapshot_saved: Mapped[bool | None]
 
 
 # ============ FISICO (scritto SOLO dal processo di scan, app/scanner.py) ============
@@ -480,6 +482,41 @@ class MatchReview(Base):
     candidate: Mapped["Candidate"] = relationship()
     media_file: Mapped["MediaFile | None"] = relationship()
     seed_file: Mapped["SeedFile | None"] = relationship()
+
+
+class FileStateSnapshot(Base):
+    """Vedi docs/schema.sql: stato di ogni file all'ultima fotografia
+    (app/file_changes.py), base del confronto della scansione successiva."""
+
+    __tablename__ = "file_state_snapshot"
+    __table_args__ = (UniqueConstraint("side", "disk_id", "relative_path"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    side: Mapped[str] = mapped_column(nullable=False)  # "media" | "torrent"
+    disk_id: Mapped[int] = mapped_column(nullable=False)
+    relative_path: Mapped[str] = mapped_column(nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    state: Mapped[str] = mapped_column(nullable=False)
+    stopped: Mapped[bool | None]
+
+
+class FileChange(Base):
+    """Vedi docs/schema.sql: un file nuovo, sparito o cambiato di stato fra
+    una scansione e la precedente (app/file_changes.py)."""
+
+    __tablename__ = "file_change"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("run_log.id", ondelete="CASCADE"), nullable=False)
+    side: Mapped[str] = mapped_column(nullable=False)
+    disk_id: Mapped[int] = mapped_column(nullable=False)
+    relative_path: Mapped[str] = mapped_column(nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    change: Mapped[str] = mapped_column(nullable=False)  # added | removed | state | stopped | resumed
+    state: Mapped[str | None]  # stato dopo (None se rimosso)
+    previous_state: Mapped[str | None]  # stato prima (None se nuovo)
+    content_type: Mapped[str | None]  # per aprire la scheda di dettaglio
+    tmdb_id: Mapped[int | None]
 
 
 class MatchAttempt(Base):

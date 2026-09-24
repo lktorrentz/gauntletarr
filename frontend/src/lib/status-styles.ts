@@ -27,6 +27,23 @@ export const STATUS_STYLES: Record<StatusKey, { dot: string; badge: string; grad
   },
 }
 
+// Tipi di cambiamento per file fra due scansioni (Dashboard, app/file_changes.py):
+// i cambi di stato riusano il colore dello stato di arrivo.
+export const CHANGE_STYLES: Record<string, { dot: string; badge: string }> = {
+  new_media: { dot: 'bg-cyan-500', badge: 'border-cyan-500/40 bg-cyan-500/15 text-cyan-700 dark:text-cyan-300' },
+  new_torrent: { dot: 'bg-blue-500', badge: 'border-blue-500/40 bg-blue-500/15 text-blue-700 dark:text-blue-300' },
+  removed_media: {
+    dot: 'bg-orange-500', badge: 'border-orange-500/40 bg-orange-500/15 text-orange-700 dark:text-orange-300',
+  },
+  removed_torrent: { dot: 'bg-rose-500', badge: 'border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300' },
+  now_seeding: STATUS_STYLES.seeding,
+  resumed: STATUS_STYLES.seeding,
+  now_orphaned: STATUS_STYLES.orphan,
+  now_ignored: STATUS_STYLES.ignored,
+  stopped: STATUS_STYLES.stopped,
+  state_changed: STATUS_STYLES.unmatched,
+}
+
 // Stati del backend (app/library.py, seed job) -> stile.
 export function statusKeyOf(state: string): StatusKey | null {
   switch (state) {

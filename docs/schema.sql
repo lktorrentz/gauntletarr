@@ -162,6 +162,8 @@ CREATE TABLE IF NOT EXISTS run_log (
                                                 -- dashboard's historical chart (SPEC.md §10). Formula
                                                 -- settled in Fase 5, see app/health.py.
     errors                INTEGER DEFAULT 0,
+    snapshot_saved        BOOLEAN,             -- the per-file state snapshot was taken at the end of this run
+                                                -- (app/file_changes.py). Additive, nullable.
     errors_json           TEXT,                -- JSON list of every error of the run, in order (at most 50),
                                                 -- shown in the scan history. Additive, nullable.
     last_error            TEXT                 -- short summary of the last exception caught during this
@@ -409,6 +411,35 @@ CREATE TABLE IF NOT EXISTS match_attempt (
     UNIQUE(tracker_id, seed_file_id)
 );
 
+-- Per-file state at the latest snapshot (app/file_changes.py): replaced at
+-- every comparison, it's the baseline for "changes since last scan".
+CREATE TABLE IF NOT EXISTS file_state_snapshot (
+    id              INTEGER PRIMARY KEY,
+    side            TEXT NOT NULL,        -- 'media' | 'torrent'
+    disk_id         INTEGER NOT NULL,
+    relative_path   TEXT NOT NULL,
+    size_bytes      INTEGER NOT NULL,
+    state           TEXT NOT NULL,
+    stopped         BOOLEAN,
+    UNIQUE(side, disk_id, relative_path)
+);
+
+-- Files added, removed or changing state between a scan and the previous
+-- one (Dashboard, "Changes since last scan"). Kept for the last 30 compared scans.
+CREATE TABLE IF NOT EXISTS file_change (
+    id              INTEGER PRIMARY KEY,
+    run_id          INTEGER NOT NULL REFERENCES run_log(id) ON DELETE CASCADE,
+    side            TEXT NOT NULL,
+    disk_id         INTEGER NOT NULL,
+    relative_path   TEXT NOT NULL,
+    size_bytes      INTEGER NOT NULL,
+    change          TEXT NOT NULL,        -- added | removed | state | stopped | resumed
+    state           TEXT,
+    previous_state  TEXT,
+    content_type    TEXT,
+    tmdb_id         INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS seed_job (
     id                          INTEGER PRIMARY KEY,
     candidate_id                INTEGER NOT NULL REFERENCES candidate(id) ON DELETE CASCADE,
@@ -495,3 +526,4 @@ CREATE INDEX IF NOT EXISTS idx_seed_job_candidate_id ON seed_job(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_seed_job_source_media_file_id ON seed_job(source_media_file_id);
 CREATE INDEX IF NOT EXISTS idx_seed_job_source_seed_file_id ON seed_job(source_seed_file_id);
 CREATE INDEX IF NOT EXISTS idx_upload_job_tracker_id ON upload_job(tracker_id);
+CREATE INDEX IF NOT EXISTS idx_file_change_run_id ON file_change(run_id);

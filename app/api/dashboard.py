@@ -1,9 +1,7 @@
 """Dashboard (docs/SPEC.md §10, Fase 5): gauge "salute libreria", KPI
 (pending review/falliti/non risolti/orphan_torrent/ignored), storico dello
-snapshot di salute per il grafico, feed "novità" — inteso qui come gli
-ultimi candidate trovati (candidate.created_at, l'unico timestamp di
-scoperta già presente nel modello dati), non un log di attività dedicato
-che introdurrebbe una tabella nuova senza un bisogno concreto già emerso.
+snapshot di salute per il grafico, cambiamenti per file dall'ultima
+scansione (app/file_changes.py).
 """
 
 from datetime import datetime
@@ -14,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app import health
 from app.deps import get_session
-from app.models import Candidate, RunLog
+from app.models import FileChange, RunLog
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -55,14 +53,43 @@ class HistoryPoint(BaseModel):
     errors: int
 
 
-class WhatsNewItem(BaseModel):
-    candidate_id: int
-    media_item_id: int
-    tracker_id: int
-    name: str
-    direction: str
-    confidence: float
-    created_at: datetime | None
+class FileChangeItem(BaseModel):
+    side: str  # "media" | "torrent"
+    kind: str  # new_media | new_torrent | removed_media | removed_torrent | now_seeding | now_orphaned | ...
+    disk_id: int
+    relative_path: str
+    size_bytes: int
+    state: str | None
+    previous_state: str | None
+    content_type: str | None
+    tmdb_id: int | None
+
+
+class ChangesResponse(BaseModel):
+    run_id: int | None  # la scansione che ha rilevato i cambiamenti
+    since: datetime | None  # fine della scansione precedente con cui si è confrontato
+    until: datetime | None
+    baseline_only: bool  # c'è solo la prima fotografia: nessun confronto ancora
+    health_delta: float | None  # punti di salute rispetto alla scansione precedente
+    total: int
+    counts: dict[str, int]
+    changes: list[FileChangeItem]  # al massimo `limit`, i conteggi valgono per tutti
+
+
+def _kind(change: FileChange) -> str:
+    if change.change == "added":
+        return f"new_{change.side}"
+    if change.change == "removed":
+        return f"removed_{change.side}"
+    if change.change in ("stopped", "resumed"):
+        return change.change
+    if change.state == "seeding":
+        return "now_seeding"
+    if (change.state or "").startswith("orphan"):
+        return "now_orphaned"
+    if change.state == "ignored":
+        return "now_ignored"
+    return "state_changed"
 
 
 def _last_run_summary(session: Session) -> LastRunSummary | None:
@@ -101,13 +128,37 @@ def get_history(limit: int = 30, session: Session = Depends(get_session)):
     ]
 
 
-@router.get("/whats-new", response_model=list[WhatsNewItem])
-def get_whats_new(limit: int = 20, session: Session = Depends(get_session)):
-    candidates = session.query(Candidate).order_by(Candidate.id.desc()).limit(limit).all()
-    return [
-        WhatsNewItem(
-            candidate_id=c.id, media_item_id=c.media_item_id, tracker_id=c.tracker_id, name=c.name,
-            direction=c.direction, confidence=c.confidence, created_at=c.created_at,
+@router.get("/changes", response_model=ChangesResponse)
+def get_changes(limit: int = 1000, session: Session = Depends(get_session)):
+    """Cambiamenti per file dell'ultima scansione confrontata con la
+    precedente (app/file_changes.py): file nuovi, spariti, cambiati di stato."""
+    snapshots = (
+        session.query(RunLog).filter(RunLog.snapshot_saved.is_(True)).order_by(RunLog.id.desc()).limit(2).all()
+    )
+    if len(snapshots) < 2:
+        latest = snapshots[0] if snapshots else None
+        return ChangesResponse(
+            run_id=latest.id if latest else None, since=None, until=latest.finished_at if latest else None,
+            baseline_only=latest is not None, health_delta=None, total=0, counts={}, changes=[],
         )
-        for c in candidates
-    ]
+    current, previous = snapshots
+    rows = session.query(FileChange).filter_by(run_id=current.id).order_by(FileChange.id).all()
+    counts: dict[str, int] = {}
+    items = []
+    for row in rows:
+        kind = _kind(row)
+        counts[kind] = counts.get(kind, 0) + 1
+        if len(items) < max(1, min(limit, 5000)):
+            items.append(FileChangeItem(
+                side=row.side, kind=kind, disk_id=row.disk_id, relative_path=row.relative_path,
+                size_bytes=row.size_bytes, state=row.state, previous_state=row.previous_state,
+                content_type=row.content_type, tmdb_id=row.tmdb_id,
+            ))
+    delta = (
+        current.health_snapshot - previous.health_snapshot
+        if current.health_snapshot is not None and previous.health_snapshot is not None else None
+    )
+    return ChangesResponse(
+        run_id=current.id, since=previous.finished_at, until=current.finished_at, baseline_only=False,
+        health_delta=delta, total=len(rows), counts=counts, changes=items,
+    )

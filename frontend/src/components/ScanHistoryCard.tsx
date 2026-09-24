@@ -19,12 +19,12 @@ function Status({ run }: { run: Run }) {
 
 // Cronologia delle scansioni (le "run" della pipeline): in dashboard accanto
 // alle novità, perché racconta lo stesso: cosa è successo e quando.
-export function ScanHistoryCard() {
+export function ScanHistoryCard({ className }: { className?: string }) {
   const { data: runs, isPending } = useRuns()
   const shown = runs?.slice(0, MAX_SHOWN)
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle>{t('scans.title')}</CardTitle>
         <CardDescription>{t('scans.description')}</CardDescription>
