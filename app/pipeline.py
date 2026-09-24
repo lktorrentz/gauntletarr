@@ -34,6 +34,7 @@ questo. Un try/except esterno a tutte le fasi resta comunque come rete
 di sicurezza per qualunque cosa sfugga ai blocchi già protetti (es. una
 query() di per sé fallita, non solo il lavoro di una singola fase)."""
 
+import json
 import logging
 import os
 from datetime import UTC, datetime
@@ -75,7 +76,7 @@ def close_interrupted_runs(session: Session) -> int:
         run.phase_total = run.phase_done = None
         run.phase_detail = None
         run.errors = (run.errors or 0) + 1
-        run.last_error = f"Interrupted by a restart during '{phase}': the next run picks up from there"
+        _note_error(run, f"Interrupted by a restart during '{phase}': the next scan picks up from there")
         logger.warning("Run #%s interrotta da un riavvio durante '%s', chiusa", run.id, phase)
     if interrupted:
         session.commit()
@@ -89,11 +90,25 @@ def start_run(session: Session, run_type: str) -> RunLog:
     return run
 
 
+MAX_RUN_ERRORS_KEPT = 50
+
+
+def _note_error(run: RunLog, message: str) -> None:
+    """last_error resta l'ultimo; errors_json li tiene tutti (fino a
+    MAX_RUN_ERRORS_KEPT), per mostrarli nella cronologia delle scansioni."""
+    run.last_error = message
+    try:
+        kept = json.loads(run.errors_json) if run.errors_json else []
+    except ValueError:
+        kept = []
+    run.errors_json = json.dumps((kept + [message])[-MAX_RUN_ERRORS_KEPT:])
+
+
 def _record_failure(session: Session, run: RunLog, errors: int, label: str, exc: Exception) -> int:
     logger.exception("Run #%s: %s fallito", run.id, label)
     session.rollback()
     run.errors = errors + 1
-    run.last_error = f"{label}: {exc}"
+    _note_error(run, f"{label}: {exc}")
     session.commit()
     return errors + 1
 
@@ -149,7 +164,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             try:
                 files = scanner.list_disk_files(disk)
             except Exception as exc:
-                errors = _record_failure(session, run, errors, f"scan del disco {disk.label!r}", exc)
+                errors = _record_failure(session, run, errors, f"scan of disk {disk.label!r}", exc)
                 continue
             listed.append((disk, files))
             progress.add_total(len(files))
@@ -159,7 +174,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             try:
                 counts = scanner.scan_disk(session, disk, run, files=files, on_progress=progress.advance)
             except Exception as exc:
-                errors = _record_failure(session, run, errors, f"scan del disco {disk.label!r}", exc)
+                errors = _record_failure(session, run, errors, f"scan of disk {disk.label!r}", exc)
                 continue
             logger.info(
                 "Run #%s: disco %r scansionato — %d media file, %d seed file",
@@ -182,7 +197,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                     run.id, arr_index.counts["identities"], arr_index.counts["grabs"],
                 )
         except Exception as exc:
-            errors = _record_failure(session, run, errors, "indicizzazione Radarr/Sonarr", exc)
+            errors = _record_failure(session, run, errors, "Radarr/Sonarr indexing", exc)
         try:
             resolver = adapter_factory.build_media_resolver(session, arr_index)
         except TmdbApiKeyMissingError:
@@ -196,16 +211,16 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             try:
                 posters_dir = os.path.join(data_dir, "posters")
                 counts = media_resolution.resolve_unmatched_media_files(
-                    session, resolver, posters_dir, progress=progress
+                    session, resolver, posters_dir, progress=progress, arr_index=arr_index
                 )
                 totals["resolved"] = counts["resolved"]
                 totals["unresolved"] = counts["unresolved"]
                 logger.info(
-                    "Run #%s: risoluzione TMDB — %d risolti, %d non risolti",
-                    run.id, counts["resolved"], counts["unresolved"],
+                    "Run #%s: risoluzione TMDB — %d risolti, %d non risolti, %d identità corrette",
+                    run.id, counts["resolved"], counts["unresolved"], counts["corrected"],
                 )
             except Exception as exc:
-                errors = _record_failure(session, run, errors, "risoluzione TMDB", exc)
+                errors = _record_failure(session, run, errors, "TMDB resolution", exc)
         else:
             progress.detail("TMDB not configured: skipped")
         # Titoli e poster mancanti (voci create prima che si salvassero, o
@@ -223,7 +238,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                     run.id, filled["completed"], filled["failed"],
                 )
         except Exception as exc:
-            errors = _record_failure(session, run, errors, "completamento di titoli e poster", exc)
+            errors = _record_failure(session, run, errors, "completing titles and posters", exc)
 
         phase("indexing", total=0)
         indexing_failed = False
@@ -253,7 +268,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
                     session, torrent_client, adapter, run, on_progress=on_torrent
                 )
             except Exception as exc:
-                errors = _record_failure(session, run, errors, f"client torrent {torrent_client.label!r}", exc)
+                errors = _record_failure(session, run, errors, f"torrent client {torrent_client.label!r}", exc)
                 indexing_failed = True
                 continue
             logger.info(
@@ -287,13 +302,13 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             logger.warning("Run #%s: matching torrent -> client saltato: %s", run.id, t2c_problem)
             errors += 1
             run.errors = errors
-            run.last_error = f"Torrent → client matching skipped: {t2c_problem}"
+            _note_error(run, f"Torrent → client matching skipped: {t2c_problem}")
             session.commit()
 
         try:
             review.close_resolved_reviews(session)
         except Exception as exc:
-            errors = _record_failure(session, run, errors, "pulizia della coda di revisione", exc)
+            errors = _record_failure(session, run, errors, "review queue cleanup", exc)
 
         phase("matching", total=0)
         trackers = session.query(Tracker).filter_by(enabled=True).all()
@@ -347,13 +362,13 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             totals["candidates_found"] += candidates
             if rate_limited or failed:
                 problem = (
-                    "rate limit (429) persistente, matching interrotto: i file rimanenti al prossimo giro"
+                    "persistent rate limit (429), matching stopped: the remaining files are searched next time"
                     if rate_limited
-                    else f"{failed} file non cercati per errore (dettagli nei log)"
+                    else f"{failed} files not searched because of an error (details in the logs)"
                 )
                 errors += 1
                 run.errors = errors
-                run.last_error = f"tracker {tracker_row.label!r}: {problem}"
+                _note_error(run, f"tracker {tracker_row.label!r}: {problem}")
                 session.commit()
 
         phase("executing", total=0)
@@ -368,14 +383,14 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
             else:
                 logger.info("Run #%s: %d review eseguite automaticamente", run.id, exec_counts["executed"])
         except Exception as exc:
-            errors = _record_failure(session, run, errors, "esecuzione automatica delle review", exc)
+            errors = _record_failure(session, run, errors, "automatic execution of reviews", exc)
 
         phase("reconciling", total=0)
         try:
             review.reconcile_pending_seed_jobs(session, progress=progress)
             logger.info("Run #%s: reconcile dei seed_job in corso completato", run.id)
         except Exception as exc:
-            errors = _record_failure(session, run, errors, "reconcile dei seed_job in corso", exc)
+            errors = _record_failure(session, run, errors, "checking pending rechecks", exc)
     except RunCancelled:
         # Stop richiesto dall'utente: non un errore. Il lavoro già salvato
         # resta (file scansionati, identità, match_attempt, candidati): la
@@ -392,7 +407,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
         logger.exception("Run #%s: errore inatteso durante l'esecuzione", run.id)
         session.rollback()
         errors += 1
-        run.last_error = f"errore inatteso: {exc}"
+        _note_error(run, f"unexpected error: {exc}")
 
     progress.finish()
     run.finished_at = datetime.now(UTC)
@@ -406,7 +421,7 @@ def run_bulk_import(session: Session, run: RunLog, data_dir: str) -> RunLog:
         run.ignored_count = snapshot["ignored_count"]
         run.health_snapshot = snapshot["health_pct"]
     except Exception as exc:
-        errors = _record_failure(session, run, errors, "calcolo dello snapshot di salute", exc)
+        errors = _record_failure(session, run, errors, "library health snapshot", exc)
         run.pending_review = len(review.list_ready_for_review(session))
     run.errors = errors
     session.commit()

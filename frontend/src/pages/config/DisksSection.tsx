@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { t } from '@/lib/i18n'
 import { DiskBrowserDialog } from '@/pages/config/DiskBrowserDialog'
+import { autosaveFeedback } from '@/lib/autosave'
 
 type Disk = Schemas['DiskResponse']
 
@@ -157,7 +158,7 @@ function RelPathCell({
         open={browserOpen}
         onOpenChange={setBrowserOpen}
         title={title}
-        onSelect={(path) => updateDisk.mutate({ diskId, body: { [field]: path } })}
+        onSelect={(path) => updateDisk.mutate({ diskId, body: { [field]: path } }, autosaveFeedback(title))}
       />
     </>
   )

@@ -918,6 +918,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/full-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Full Checks */
+        get: operations["list_full_checks_api_full_checks_get"];
+        put?: never;
+        /** Start Full Check */
+        post: operations["start_full_check_api_full_checks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/full-checks/{check_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Full Check */
+        get: operations["get_full_check_api_full_checks__check_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/full-checks/{check_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Full Check */
+        post: operations["cancel_full_check_api_full_checks__check_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/schedule": {
         parameters: {
             query?: never;
@@ -1280,6 +1332,31 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** CheckResultResponse */
+        CheckResultResponse: {
+            /** Torrent Name */
+            torrent_name: string;
+            /** Info Hash */
+            info_hash: string;
+            /** Expected Info Hash */
+            expected_info_hash: string | null;
+            /** Piece Length */
+            piece_length: number;
+            /** Pieces */
+            pieces: number;
+            /** Ok */
+            ok: number;
+            /** Mismatched */
+            mismatched: number;
+            /** Unreadable */
+            unreadable: number;
+            /** Percent */
+            percent: number;
+            /** Bad Pieces */
+            bad_pieces: number[];
+            /** Files */
+            files: components["schemas"]["FileCheckResponse"][];
+        };
         /** DashboardResponse */
         DashboardResponse: {
             /** Health Pct */
@@ -1378,6 +1455,8 @@ export interface components {
         DetailSeedJob: {
             /** Id */
             id: number;
+            /** Candidate Id */
+            candidate_id: number;
             /** Candidate Name */
             candidate_name: string;
             /** Final Status */
@@ -1487,6 +1566,65 @@ export interface components {
             patterns: string[];
             /** Enabled By Default */
             enabled_by_default: boolean;
+        };
+        /** FileCheckResponse */
+        FileCheckResponse: {
+            /** Torrent Path */
+            torrent_path: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Local Path */
+            local_path: string | null;
+            /** Location */
+            location: string | null;
+            /** Local Size Bytes */
+            local_size_bytes: number | null;
+            /** Pieces */
+            pieces: number;
+            /** Ok */
+            ok: number;
+            /** Mismatched */
+            mismatched: number;
+            /** Unreadable */
+            unreadable: number;
+            /** First Bad Offset */
+            first_bad_offset: number | null;
+        };
+        /** FullCheckRequest */
+        FullCheckRequest: {
+            /** Candidate Id */
+            candidate_id: number;
+            /** Seed Job Id */
+            seed_job_id?: number | null;
+            /** Media File Id */
+            media_file_id?: number | null;
+        };
+        /** FullCheckResponse */
+        FullCheckResponse: {
+            /** Id */
+            id: string;
+            /** Candidate Id */
+            candidate_id: number;
+            /** Seed Job Id */
+            seed_job_id: number | null;
+            /** Label */
+            label: string;
+            /** Status */
+            status: string;
+            /** Bytes Total */
+            bytes_total: number | null;
+            /** Bytes Done */
+            bytes_done: number;
+            /** Error */
+            error: string | null;
+            result: components["schemas"]["CheckResultResponse"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1910,6 +2048,11 @@ export interface components {
             /** Last Error */
             last_error: string | null;
             /**
+             * Error Messages
+             * @default []
+             */
+            error_messages: string[];
+            /**
              * Cancel Requested
              * @default false
              */
@@ -1972,12 +2115,22 @@ export interface components {
             candidate_id: number;
             /** Candidate Name */
             candidate_name?: string | null;
+            /** Direction */
+            direction?: string | null;
+            /** Tracker */
+            tracker?: string | null;
+            /** Torrent Client */
+            torrent_client?: string | null;
             /** Final Status */
             final_status: string;
             /** Recheck Status */
             recheck_status: string | null;
             /** Error Message */
             error_message: string | null;
+            /** Hardlink Created At */
+            hardlink_created_at?: string | null;
+            /** Torrent Added At */
+            torrent_added_at?: string | null;
         };
         /** SettingResponse */
         SettingResponse: {
@@ -2184,8 +2337,11 @@ export interface components {
             adapter_type: string;
             /** Base Url */
             base_url: string;
-            /** Announce Url */
-            announce_url: string | null;
+            /**
+             * Has Announce Url
+             * @default false
+             */
+            has_announce_url: boolean;
             /** Rate Limit Per Min */
             rate_limit_per_min: number | null;
             /** Enabled */
@@ -4284,6 +4440,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CandidateAuditResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_full_checks_api_full_checks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullCheckResponse"][];
+                };
+            };
+        };
+    };
+    start_full_check_api_full_checks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FullCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullCheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_full_check_api_full_checks__check_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                check_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullCheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_full_check_api_full_checks__check_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                check_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullCheckResponse"];
                 };
             };
             /** @description Validation Error */

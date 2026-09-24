@@ -1,4 +1,4 @@
-import { PencilIcon, PlusIcon, SettingsIcon, TrashIcon } from 'lucide-react'
+import { CheckIcon, FileUpIcon, PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -24,6 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { t } from '@/lib/i18n'
 import { selectLabel } from '@/lib/utils'
 import { UploadProfileDialog } from '@/pages/config/UploadProfileDialog'
+import { autosaveFeedback } from '@/lib/autosave'
 
 type Tracker = Schemas['TrackerResponse']
 
@@ -211,7 +212,7 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
   const [label, setLabel] = useState(tracker.label)
   const [baseUrl, setBaseUrl] = useState(tracker.base_url)
   const [apiToken, setApiToken] = useState('')
-  const [announceUrl, setAnnounceUrl] = useState(tracker.announce_url ?? '')
+  const [announceUrl, setAnnounceUrl] = useState('')
   const [rateLimit, setRateLimit] = useState(tracker.rate_limit_per_min?.toString() ?? '')
   const [rssKey, setRssKey] = useState('')
   const updateTracker = useUpdateTracker()
@@ -233,6 +234,7 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
         onSuccess: () => {
           setOpen(false)
           setApiToken('')
+          setAnnounceUrl('')
           setRssKey('')
         },
         onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
@@ -268,7 +270,12 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="t-edit-announce-url">{t('trackers.announceUrl')}</Label>
-            <Input id="t-edit-announce-url" value={announceUrl} onChange={(e) => setAnnounceUrl(e.target.value)} />
+            <Input
+              id="t-edit-announce-url"
+              value={announceUrl}
+              onChange={(e) => setAnnounceUrl(e.target.value)}
+              placeholder={tracker.has_announce_url ? t('trackers.announceUrlKnown') : undefined}
+            />
           </div>
           <RssKeyField
             id="t-edit-rss-key"
@@ -296,6 +303,19 @@ function EditTrackerDialog({ tracker }: { tracker: Tracker }) {
   )
 }
 
+// Announce URL e chiave RSS contengono la passkey: la tabella dice solo se
+// ci sono, l'API non le restituisce mai (has_announce_url, has_rss_key).
+function SecretPresence({ present }: { present: boolean }) {
+  return present ? (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <CheckIcon className="size-3.5 text-emerald-500" />
+      {t('trackers.secretSet')}
+    </span>
+  ) : (
+    <span className="text-xs text-muted-foreground">—</span>
+  )
+}
+
 export function TrackersSection() {
   const { data: trackers, isPending } = useTrackers()
   const updateTracker = useUpdateTracker()
@@ -315,6 +335,7 @@ export function TrackersSection() {
               <TableHead>{t('trackers.label')}</TableHead>
               <TableHead>{t('trackers.apiUrl')}</TableHead>
               <TableHead>{t('trackers.announceUrlColumn')}</TableHead>
+              <TableHead>{t('trackers.rssKeyColumn')}</TableHead>
               <TableHead>{t('trackers.clientColumn')}</TableHead>
               <TableHead>{t('trackers.enabled')}</TableHead>
               <TableHead />
@@ -323,7 +344,7 @@ export function TrackersSection() {
           <TableBody>
             {isPending && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                   {t('common.loading')}
                 </TableCell>
               </TableRow>
@@ -332,21 +353,32 @@ export function TrackersSection() {
               <TableRow key={tracker.id}>
                 <TableCell className="font-medium">{tracker.label}</TableCell>
                 <TableCell className="font-mono text-xs">{tracker.base_url}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {tracker.announce_url ?? '—'}
+                <TableCell>
+                  <SecretPresence present={tracker.has_announce_url} />
+                </TableCell>
+                <TableCell>
+                  <SecretPresence present={tracker.has_rss_key} />
                 </TableCell>
                 <TableCell>
                   <TrackerClientSelect
                     value={tracker.torrent_client_id ?? null}
                     onChange={(torrentClientId) =>
-                      updateTracker.mutate({ id: tracker.id, body: { torrent_client_id: torrentClientId } })
+                      updateTracker.mutate(
+                        { id: tracker.id, body: { torrent_client_id: torrentClientId } },
+                        autosaveFeedback(`${tracker.label} · ${t('trackers.clientColumn')}`),
+                      )
                     }
                   />
                 </TableCell>
                 <TableCell>
                   <Switch
                     checked={tracker.enabled}
-                    onCheckedChange={(enabled) => updateTracker.mutate({ id: tracker.id, body: { enabled } })}
+                    onCheckedChange={(enabled) =>
+                      updateTracker.mutate(
+                        { id: tracker.id, body: { enabled } },
+                        autosaveFeedback(`${tracker.label} · ${t('trackers.enabled')}`),
+                      )
+                    }
                   />
                 </TableCell>
                 <TableCell className="flex justify-end gap-1">
@@ -356,7 +388,7 @@ export function TrackersSection() {
                     title={t('trackers.uploadProfile')}
                     onClick={() => setProfileTrackerId(tracker.id)}
                   >
-                    <SettingsIcon className="size-4" />
+                    <FileUpIcon className="size-4" />
                   </Button>
                   <EditTrackerDialog tracker={tracker} />
                   <Button variant="ghost" size="icon-sm" title={t('common.delete')} onClick={() => deleteTracker.mutate(tracker.id)}>
@@ -367,7 +399,7 @@ export function TrackersSection() {
             ))}
             {trackers?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                   {t('trackers.noTrackers')}
                 </TableCell>
               </TableRow>

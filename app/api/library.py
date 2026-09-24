@@ -196,6 +196,7 @@ class DetailCandidate(BaseModel):
 
 class DetailSeedJob(BaseModel):
     id: int
+    candidate_id: int
     candidate_name: str
     final_status: str
     recheck_status: str | None

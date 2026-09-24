@@ -45,6 +45,6 @@ def test_a_full_season_of_episodes_costs_one_tmdb_call(db_session, tmp_path):
 
     counts = media_resolution.resolve_unmatched_media_files(db_session, resolver, str(tmp_path / "posters"))
 
-    assert counts == {"resolved": 24, "unresolved": 0, "excluded": 0}
+    assert counts == {"resolved": 24, "unresolved": 0, "excluded": 0, "corrected": 0}
     assert calls["count"] == 1, "24 episodi della stessa serie devono costare una sola chiamata TMDB"
     assert db_session.query(MediaFile).filter(MediaFile.media_item_id.isnot(None)).count() == 24

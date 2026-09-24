@@ -33,6 +33,7 @@ import { ServiceLogo } from '@/components/ServiceLogo'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { t } from '@/lib/i18n'
+import { autosaveFeedback } from '@/lib/autosave'
 
 // Radarr e Sonarr non sono ancora consumati da nessun adapter (nessun
 // resolver li chiama davvero) — ma la tabella è già multi-istanza da
@@ -497,7 +498,9 @@ function ArrInstancesCard({
                 <TableCell>
                   <Switch
                     checked={instance.enabled}
-                    onCheckedChange={(enabled) => updateMutation.mutate({ id: instance.id, body: { enabled } })}
+                    onCheckedChange={(enabled) =>
+                      updateMutation.mutate({ id: instance.id, body: { enabled } }, autosaveFeedback(instance.label))
+                    }
                   />
                 </TableCell>
                 <TableCell className="flex justify-end gap-1">

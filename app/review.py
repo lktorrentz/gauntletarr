@@ -230,12 +230,21 @@ def reject(session: Session, review: MatchReview, decided_by: str = "user") -> M
     return review
 
 
+def _identity_changed(review: MatchReview, mf: MediaFile) -> bool:
+    """Il candidato era stato cercato per un contenuto che il file non è più
+    (identità corretta da Radarr/Sonarr o da una rilettura del nome): quel
+    torrent è di un altro film/episodio, la review non ha più senso."""
+    candidate = review.candidate
+    return (candidate is not None and mf.media_item_id is not None
+            and candidate.media_item_id != mf.media_item_id)
+
+
 def close_resolved_reviews(session: Session) -> int:
     """Chiude (rifiuto di sistema, mai contato come un "no" dell'utente, vedi
     _user_rejected_torrents) le review ancora in coda il cui file non ha più
     bisogno di niente: libreria -> torrent con un hardlink ormai presente,
-    torrent -> client con il file ormai tracciato da un client, o un file
-    non più presente sul disco. Senza questo, una review restava in coda
+    torrent -> client con il file ormai tracciato da un client, un file
+    non più presente sul disco o la cui identità è cambiata. Senza questo, una review restava in coda
     per sempre: il matching sostituisce solo le review dei file che ricerca,
     e un file non più orfano non lo ricerca più. Anche un file ora escluso
     esce dalla coda. Chiamata dalla pipeline
@@ -265,7 +274,7 @@ def close_resolved_reviews(session: Session) -> int:
         if review.media_file_id is not None:
             mf = review.media_file
             resolved = (mf is None or not is_current(mf, latest_media) or mf.id in hardlinked
-                        or exclusions.is_excluded(mf.relative_path))
+                        or exclusions.is_excluded(mf.relative_path) or _identity_changed(review, mf))
         else:
             sf = review.seed_file
             resolved = (sf is None or not is_current(sf, latest_seed) or sf.id in tracked

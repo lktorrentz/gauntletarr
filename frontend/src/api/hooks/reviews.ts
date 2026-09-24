@@ -67,7 +67,8 @@ export function useRetryFailed() {
   return useMutation({
     mutationFn: (seedJobId: number) =>
       unwrap(api.POST('/api/reviews/failed/{seed_job_id}/retry', { params: { path: { seed_job_id: seedJobId } } })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reviews', 'failed'] }),
+    // ['reviews'] copre anche l'elenco delle esecuzioni (seed-jobs/recent).
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reviews'] }),
   })
 }
 
@@ -103,7 +104,9 @@ export function useReconcileNow() {
 export function useRecentSeedJobs() {
   return useQuery({
     queryKey: ['reviews', 'seed-jobs', 'recent'],
-    queryFn: () => unwrap(api.GET('/api/reviews/seed-jobs/recent')),
+    // Le stesse 200 righe servono al watcher dei recheck e all'elenco
+    // delle esecuzioni in Reseeding.
+    queryFn: () => unwrap(api.GET('/api/reviews/seed-jobs/recent', { params: { query: { limit: 200 } } })),
     refetchInterval: (query) =>
       query.state.data?.some((job) => job.final_status === 'in_progress') ? 10_000 : 60_000,
   })

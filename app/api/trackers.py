@@ -44,7 +44,8 @@ class TrackerResponse(BaseModel):
     label: str
     adapter_type: str
     base_url: str
-    announce_url: str | None
+    # Contiene la passkey: come la chiave RSS, l'API dice solo se c'è.
+    has_announce_url: bool = False
     rate_limit_per_min: int | None
     enabled: bool
     has_rss_key: bool = False  # mai la chiave stessa, solo se ce n'è una (manuale o appresa)
@@ -54,7 +55,7 @@ class TrackerResponse(BaseModel):
     def from_model(cls, t: Tracker) -> "TrackerResponse":
         return cls(
             id=t.id, label=t.label, adapter_type=t.adapter_type, base_url=t.base_url,
-            announce_url=t.announce_url, rate_limit_per_min=t.rate_limit_per_min, enabled=t.enabled,
+            has_announce_url=bool(t.announce_url), rate_limit_per_min=t.rate_limit_per_min, enabled=t.enabled,
             has_rss_key=bool(t.rss_key), torrent_client_id=t.torrent_client_id,
         )
 

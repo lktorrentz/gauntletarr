@@ -6,6 +6,7 @@ import { dashboard } from './dashboard'
 import { disks } from './disks'
 import { errors } from './errors'
 import { exclusions } from './exclusions'
+import { fullCheck } from './fullCheck'
 import { integrations } from './integrations'
 import { itemDetail } from './itemDetail'
 import { layout } from './layout'
@@ -14,6 +15,7 @@ import { logs } from './logs'
 import { metadata } from './metadata'
 import { reseeding } from './reseeding'
 import { runStatus } from './runStatus'
+import { scans } from './scans'
 import { security } from './security'
 import { timeLanguage } from './timeLanguage'
 import { torrent } from './torrent'
@@ -34,6 +36,7 @@ export const en = {
   ...disks,
   ...errors,
   ...exclusions,
+  ...fullCheck,
   ...integrations,
   ...itemDetail,
   ...layout,
@@ -42,6 +45,7 @@ export const en = {
   ...metadata,
   ...reseeding,
   ...runStatus,
+  ...scans,
   ...security,
   ...timeLanguage,
   ...torrent,

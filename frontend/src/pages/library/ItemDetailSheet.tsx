@@ -15,6 +15,7 @@ import type { Schemas } from '@/api/client'
 import { useExcludeFile, useItemDetail, useSearchNow } from '@/api/hooks/library'
 import { useApproveReview, useReconcileNow, useRejectReview } from '@/api/hooks/reviews'
 import { AuthedPoster } from '@/components/AuthedPoster'
+import { FullCheckButton } from '@/components/FullCheckButton'
 import { StateBadge, StatusBadge } from '@/components/StateBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -286,9 +287,12 @@ function Matching({ detail }: { detail: Detail }) {
                   {c.name}
                   {c.videos > 1 && <span className="ml-1 font-sans text-muted-foreground">({c.videos} videos)</span>}
                 </span>
-                <span className="shrink-0 text-right text-muted-foreground tabular-nums">
-                  {c.tracker} · {(c.confidence * 100).toFixed(0)}%
-                  {c.ambiguity_reason && <span className="block">{c.ambiguity_reason}</span>}
+                <span className="grid shrink-0 justify-items-end gap-1 text-right text-muted-foreground tabular-nums">
+                  <span>
+                    {c.tracker} · {(c.confidence * 100).toFixed(0)}%
+                    {c.ambiguity_reason && <span className="block">{c.ambiguity_reason}</span>}
+                  </span>
+                  <FullCheckButton target={{ candidateId: c.id }} label={c.name} />
                 </span>
               </div>
             ))}
@@ -332,6 +336,11 @@ function History({ detail }: { detail: Detail }) {
             {job.torrent_added_at && ` · ${relativeFromNow(job.torrent_added_at)}`}
           </p>
           {job.error_message && <p className="text-destructive">{job.error_message}</p>}
+          {job.final_status !== 'seeding' && (
+            <div>
+              <FullCheckButton target={{ candidateId: job.candidate_id, seedJobId: job.id }} label={job.candidate_name} />
+            </div>
+          )}
         </div>
       ))}
     </Section>

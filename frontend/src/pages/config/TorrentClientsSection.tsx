@@ -32,6 +32,7 @@ import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { t } from '@/lib/i18n'
 import { selectLabel } from '@/lib/utils'
+import { autosaveFeedback } from '@/lib/autosave'
 
 type TorrentClient = Schemas['TorrentClientResponse']
 type Disk = Schemas['DiskResponse']
@@ -317,8 +318,9 @@ function DiskAssociationRow({
         <Switch
           checked={enabled}
           onCheckedChange={(checked) => {
-            if (checked) associate.mutate({ torrentClientId, diskId: disk.id, torrentClientRootPath: draft })
-            else dissociate.mutate({ torrentClientId, diskId: disk.id })
+            const feedback = autosaveFeedback(disk.label)
+            if (checked) associate.mutate({ torrentClientId, diskId: disk.id, torrentClientRootPath: draft }, feedback)
+            else dissociate.mutate({ torrentClientId, diskId: disk.id }, feedback)
           }}
         />
       </div>
@@ -427,7 +429,9 @@ export function TorrentClientsSection() {
                 <TableCell>
                   <Switch
                     checked={tc.enabled}
-                    onCheckedChange={(enabled) => updateTorrentClient.mutate({ id: tc.id, body: { enabled } })}
+                    onCheckedChange={(enabled) =>
+                      updateTorrentClient.mutate({ id: tc.id, body: { enabled } }, autosaveFeedback(tc.label))
+                    }
                   />
                 </TableCell>
                 <TableCell className="flex justify-end gap-1">

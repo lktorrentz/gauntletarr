@@ -3,13 +3,13 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 import { GripVerticalIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
-import { toast } from 'sonner'
 
 import { useSetSetting, useSetting } from '@/api/hooks/settings'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { autosaveFeedback } from '@/lib/autosave'
 
 // Deve restare in sync con adapter_factory.DEFAULT_IMAGE_HOST_PRIORITY e
 // con gli host realmente implementati (app/adapters/image_host/).
@@ -84,9 +84,9 @@ export function ImageHostPriorityField() {
   function save(next: string[], message: string) {
     setDraft(next)
     setSetting.mutate(next.join(','), {
-      onSuccess: () => toast.success(message),
+      onSuccess: autosaveFeedback(message).onSuccess,
       onError: (error) => {
-        toast.error(t('common.saveFailed', { message: error.message }))
+        autosaveFeedback(message).onError(error)
         setDraft(null)
       },
     })

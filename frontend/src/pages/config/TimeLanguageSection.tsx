@@ -5,6 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { t } from '@/lib/i18n'
+import { formatBytes, type SizeUnits } from '@/lib/library-filters'
+import { cn } from '@/lib/utils'
+import { autosaveFeedback } from '@/lib/autosave'
 
 const DATE_FORMATS = ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY'] as const
 
@@ -32,7 +35,7 @@ function SettingSelectField({
     <div className="grid gap-1.5">
       <Label>{label}</Label>
       {description && <p className="text-xs text-muted-foreground">{description}</p>}
-      <Select value={value} onValueChange={(v) => setSetting.mutate(v)}>
+      <Select value={value} onValueChange={(v) => setSetting.mutate(v, autosaveFeedback(label))}>
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
@@ -44,6 +47,56 @@ function SettingSelectField({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+
+// Dimensioni tipiche (un film 4K, un episodio, un file piccolo) per far
+// vedere come cambia la stessa dimensione con le due unità.
+const SIZE_SAMPLES = [58_300_000_000, 1_460_000_000, 350_000_000]
+
+const SIZE_UNIT_OPTIONS: { value: SizeUnits; title: string; description: string }[] = [
+  { value: 'decimal', title: t('timeLanguage.sizeUnitsDecimalTitle'), description: t('timeLanguage.sizeUnitsDecimalHelp') },
+  { value: 'binary', title: t('timeLanguage.sizeUnitsBinaryTitle'), description: t('timeLanguage.sizeUnitsBinaryHelp') },
+]
+
+function SizeUnitsField() {
+  const { data } = useSetting('size_units')
+  const setSetting = useSetSetting('size_units')
+  const current: SizeUnits = data?.value === 'binary' ? 'binary' : 'decimal'
+
+  return (
+    <div role="radiogroup" aria-label={t('timeLanguage.sizeUnitsTitle')} className="grid gap-3 sm:grid-cols-2">
+      {SIZE_UNIT_OPTIONS.map((option) => {
+        const selected = option.value === current
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={setSetting.isPending}
+            onClick={() => !selected && setSetting.mutate(option.value, autosaveFeedback(option.title))}
+            className={cn(
+              'grid gap-2 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50',
+              selected && 'border-primary bg-primary/5 ring-1 ring-primary',
+            )}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">{option.title}</span>
+              {selected && (
+                <span className="rounded bg-primary px-1.5 py-0.5 text-[length:var(--text-xxs)] font-medium text-primary-foreground">
+                  {t('timeLanguage.sizeUnitsCurrent')}
+                </span>
+              )}
+            </div>
+            <span className="text-xs text-muted-foreground">{option.description}</span>
+            <span className="font-mono text-xs">
+              {SIZE_SAMPLES.map((bytes) => formatBytes(bytes, option.value)).join(' · ')}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -113,15 +166,7 @@ export function TimeLanguageSection() {
           <CardDescription>{t('timeLanguage.sizeUnitsDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <SettingSelectField
-            settingKey="size_units"
-            label={t('timeLanguage.sizeUnitsTitle')}
-            options={[
-              { value: 'decimal', label: t('timeLanguage.sizeUnitsDecimal') },
-              { value: 'binary', label: t('timeLanguage.sizeUnitsBinary') },
-            ]}
-            defaultValue="decimal"
-          />
+          <SizeUnitsField />
         </CardContent>
       </Card>
     </div>

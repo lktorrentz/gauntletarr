@@ -1,27 +1,30 @@
-import { ChevronRightIcon, PlayIcon, RotateCcwIcon } from 'lucide-react'
+import { ChevronRightIcon, RotateCcwIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { useRuns, useTriggerRun } from '@/api/hooks/runs'
 import {
   useApproveReview,
   useCandidateAudit,
-  useFailedSeedJobs,
+  useRecentSeedJobs,
   useRejectReview,
   useRetryFailed,
   useReviews,
 } from '@/api/hooks/reviews'
 import { useSchedule, useSetSchedule } from '@/api/hooks/schedule'
+import { ErrorsPopover } from '@/components/ErrorsPopover'
+import { FullCheckButton } from '@/components/FullCheckButton'
+import { StateBadge } from '@/components/StateBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ToggleGroupItem, ToggleGroupSingle } from '@/components/ui/toggle-group'
 import { t } from '@/lib/i18n'
 import { formatBytes } from '@/lib/library-filters'
+import { parseApiDate, relativeFromNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { parseApiDate } from '@/lib/time'
 
 type Review = NonNullable<ReturnType<typeof useReviews>['data']>[number]
 type Layout = NonNullable<Review['layout']>
@@ -180,144 +183,119 @@ function ReviewCard() {
   )
 }
 
-function RunsCard() {
-  const { data: runs, isPending } = useRuns()
-  const triggerRun = useTriggerRun()
+type SeedJob = NonNullable<ReturnType<typeof useRecentSeedJobs>['data']>[number]
+type ExecutionFilter = 'all' | 'seeding' | 'in_progress' | 'failed'
+
+const FILTERS: ExecutionFilter[] = ['all', 'seeding', 'in_progress', 'failed']
+
+function ExecutionRow({ job }: { job: SeedJob }) {
+  const retry = useRetryFailed()
+  const when = job.torrent_added_at ?? job.hardlink_created_at
+  return (
+    <TableRow>
+      <TableCell className="max-w-0 w-full">
+        <p className="truncate font-mono text-xs" title={job.candidate_name ?? undefined}>
+          {job.candidate_name ?? t('reseeding.candidateHash', { id: job.candidate_id })}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          {[job.tracker, job.torrent_client, job.direction && t(`reseeding.direction.${job.direction}`)]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      </TableCell>
+      <TableCell className="whitespace-nowrap text-xs text-muted-foreground" title={when ? parseApiDate(when).toLocaleString() : undefined}>
+        {when ? relativeFromNow(when) : '—'}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1.5">
+          <StateBadge state={job.final_status} compact />
+          {job.error_message && (
+            <ErrorsPopover count={1} messages={[job.error_message]} title={t('reseeding.executionError')} />
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex justify-end gap-1.5">
+          {job.final_status !== 'seeding' && (
+            <FullCheckButton
+              target={{ candidateId: job.candidate_id, seedJobId: job.id }}
+              label={job.candidate_name ?? t('reseeding.candidateHash', { id: job.candidate_id })}
+            />
+          )}
+          {job.final_status === 'failed' && (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={retry.isPending}
+              onClick={() =>
+                retry.mutate(job.id, {
+                  onSuccess: () => toast.success(t('reseeding.retryCompleted')),
+                  onError: (error) => toast.error(t('reseeding.retryFailed', { message: error.message })),
+                })
+              }
+            >
+              <RotateCcwIcon className="size-3" />
+              {t('reseeding.retry')}
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+// Tutte le esecuzioni (hardlink + torrent aggiunto al client), non solo
+// quelle fallite: si vede anche cosa è tornato in seed e cosa aspetta il recheck.
+function ExecutionsCard() {
+  const { data: jobs, isPending } = useRecentSeedJobs()
+  const [filter, setFilter] = useState<ExecutionFilter>('all')
+  const count = (f: ExecutionFilter) => (f === 'all' ? jobs?.length ?? 0 : jobs?.filter((j) => j.final_status === f).length ?? 0)
+  const shown = jobs?.filter((j) => filter === 'all' || j.final_status === filter)
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Runs</CardTitle>
-        <Button
-          onClick={() =>
-            triggerRun.mutate(undefined, {
-              onError: (error) => toast.error(t('common.runFailed', { message: error.message })),
-            })
-          }
-          disabled={triggerRun.isPending}
-        >
-          <PlayIcon className="size-4" />
-          {t('common.runNow')}
-        </Button>
+      <CardHeader>
+        <CardTitle>{t('reseeding.executions')}</CardTitle>
+        <CardDescription>{t('reseeding.executionsHint')}</CardDescription>
+        <CardAction>
+          <ToggleGroupSingle value={filter} onValueChange={(v) => setFilter(v as ExecutionFilter)} variant="outline" size="sm">
+            {FILTERS.map((f) => (
+              <ToggleGroupItem key={f} value={f}>
+                {t(`reseeding.filter.${f}`)}
+                <span className="ml-1 font-mono text-xs text-muted-foreground tabular-nums">{count(f)}</span>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroupSingle>
+        </CardAction>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t('reseeding.type')}</TableHead>
-              <TableHead>{t('reseeding.started')}</TableHead>
-              <TableHead>{t('reseeding.phase')}</TableHead>
-              <TableHead>{t('reseeding.scanned')}</TableHead>
-              <TableHead>{t('reseeding.errors')}</TableHead>
+              <TableHead>{t('reseeding.torrent')}</TableHead>
+              <TableHead>{t('reseeding.added')}</TableHead>
+              <TableHead>{t('reseeding.status')}</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isPending && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
                   {t('common.loading')}
                 </TableCell>
               </TableRow>
             )}
-            {runs?.map((run) => (
-              <TableRow key={run.id}>
-                <TableCell>{run.run_type}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {parseApiDate(run.started_at).toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  {run.current_phase ? (
-                    <Badge>{run.current_phase}</Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">{t('reseeding.finished')}</span>
-                  )}
-                </TableCell>
-                <TableCell>{run.items_scanned}</TableCell>
-                <TableCell>
-                  {run.errors > 0 ? <Badge variant="destructive">{run.errors}</Badge> : 0}
-                  {run.last_error && (
-                    <p className="mt-1 max-w-xs truncate text-xs text-destructive" title={run.last_error}>
-                      {run.last_error}
-                    </p>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {runs?.length === 0 && (
+            {shown?.map((job) => <ExecutionRow key={job.id} job={job} />)}
+            {shown?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  {t('reseeding.noRunsYet')}
+                <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                  {t('reseeding.noExecutions')}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
-  )
-}
-
-function FailedJobRow({ job }: { job: NonNullable<ReturnType<typeof useFailedSeedJobs>['data']>[number] }) {
-  const [open, setOpen] = useState(false)
-  const retry = useRetryFailed()
-
-  return (
-    <Collapsible open={open} onOpenChange={setOpen} className="border-b last:border-b-0">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <CollapsibleTrigger>
-          <ChevronRightIcon className={cn('size-4 text-muted-foreground transition-transform', open && 'rotate-90')} />
-        </CollapsibleTrigger>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{t('reseeding.candidateHash', { id: job.candidate_id })}</p>
-          <p className="truncate text-xs text-destructive">{job.error_message}</p>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            retry.mutate(job.id, {
-              onSuccess: () => toast.success(t('reseeding.retryCompleted')),
-              onError: (error) => toast.error(t('reseeding.retryFailed', { message: error.message })),
-            })
-          }
-        >
-          <RotateCcwIcon className="size-4" />
-          Retry
-        </Button>
-      </div>
-      <CollapsibleContent>
-        <div className="grid gap-1 border-t bg-muted/30 p-3 text-xs">
-          <p>
-            <span className="text-muted-foreground">Recheck: </span>
-            {job.recheck_status ?? '—'}
-          </p>
-          <p className="whitespace-pre-wrap font-mono text-destructive">{job.error_message}</p>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  )
-}
-
-// Non esiste un run_id sui seed job (nessuna FK verso RunResponse nello schema
-// backend) — impossibile filtrare le esecuzioni fallite per una specifica run
-// cliccata. Ogni riga qui sotto è invece espandibile singolarmente per il suo
-// dettaglio completo, il modo più diretto per vedere un fallimento senza
-// modificare lo schema.
-function FailedJobsCard() {
-  const { data, isPending } = useFailedSeedJobs()
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('reseeding.failedJobs')}</CardTitle>
-        <CardDescription>{t('reseeding.failedJobsHint')}</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        {isPending && <p className="p-3 text-sm text-muted-foreground">{t('common.loading')}</p>}
-        {data?.map((job) => (
-          <FailedJobRow key={job.id} job={job} />
-        ))}
-        {data?.length === 0 && <p className="p-3 text-sm text-muted-foreground">{t('reseeding.noFailedJobs')}</p>}
       </CardContent>
     </Card>
   )
@@ -367,8 +345,7 @@ export function ReseedingPage() {
   return (
     <div className="grid gap-6">
       <ReviewCard />
-      <RunsCard />
-      <FailedJobsCard />
+      <ExecutionsCard />
       <ScheduleCard />
     </div>
   )

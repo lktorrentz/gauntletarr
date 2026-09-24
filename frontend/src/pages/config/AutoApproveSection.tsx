@@ -1,4 +1,3 @@
-import { toast } from 'sonner'
 
 import { useSetSetting, useSetting } from '@/api/hooks/settings'
 import { SettingField } from '@/components/SettingField'
@@ -6,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { t } from '@/lib/i18n'
+import { autosaveFeedback } from '@/lib/autosave'
 
 // Spenta di default (app/review.py auto_execute_enabled): decisione
 // dell'utente, niente che modifichi file o client parte senza la sua
@@ -23,9 +23,7 @@ function AutoExecuteSwitch() {
         checked={enabled}
         disabled={setSetting.isPending}
         onCheckedChange={(on) =>
-          setSetting.mutate(on ? 'true' : 'false', {
-            onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
-          })
+          setSetting.mutate(on ? 'true' : 'false', autosaveFeedback(t('integrations.autoExecuteLabel')))
         }
         className="mt-0.5"
       />

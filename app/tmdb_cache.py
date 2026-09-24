@@ -28,7 +28,10 @@ class CachingTMDBClient:
         return self._search("tv", self._client.search_tv, query, year)
 
     def _search(self, content_type: str, search_fn, query: str, year: int | None) -> dict | None:
-        normalized_query = query.strip().lower()
+        # "v2|": le ricerche salvate prima usavano un filtro sull'anno diverso
+        # (year invece di primary_release_year) e potevano puntare al film
+        # sbagliato di una saga: non vanno più riusate.
+        normalized_query = f"v2|{query.strip().lower()}"
         normalized_year = year or 0
 
         cached = (

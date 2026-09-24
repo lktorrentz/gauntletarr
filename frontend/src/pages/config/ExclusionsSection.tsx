@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { t } from '@/lib/i18n'
+import { autosaveFeedback } from '@/lib/autosave'
 
 // Stesse chiavi app_settings che app/api/library.py già legge
 // (_load_exclusions): i preset come elenco di chiavi separate da virgola,
@@ -49,9 +50,9 @@ function PresetsCard() {
     setSetting.mutate(next.join(','), {
       onSuccess: () => {
         invalidateLibrary()
-        toast.success(t('exclusions.presetsSaved'))
+        autosaveFeedback(t(`exclusions.preset.${key}`)).onSuccess()
       },
-      onError: (error) => toast.error(t('common.saveFailed', { message: error.message })),
+      onError: autosaveFeedback(t(`exclusions.preset.${key}`)).onError,
     })
   }
 

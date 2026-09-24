@@ -278,3 +278,18 @@ def test_approval_adds_the_torrent_to_the_client_chosen_for_its_tracker(db_sessi
     db_session.commit()
     _adapter, client_id = review._client_for_candidate(db_session, candidate)
     assert client_id == public.id
+
+
+def test_review_for_a_content_the_file_no_longer_is_leaves_the_queue(db_session):
+    tracker = _tracker(db_session)
+    item = _media_item(db_session)
+    mf = _media_file_stub(db_session, item)
+    r = _review_for(db_session, _candidate(db_session, item, tracker, confidence=0.5), media_file_id=mf.id)
+    corrected = MediaItem(content_type="movie", tmdb_id=2)
+    db_session.add(corrected)
+    db_session.commit()
+    mf.media_item_id = corrected.id  # identità corretta da Radarr: il torrent era di un altro film
+    db_session.commit()
+
+    assert review.close_resolved_reviews(db_session) == 1
+    assert (r.status, r.decided_by) == ("rejected", "system")

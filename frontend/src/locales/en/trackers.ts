@@ -19,6 +19,9 @@ export const trackers = {
   'trackers.rssKeyHelp':
     "You shouldn't need this: the key is read automatically from the tracker's API and kept up to date. It is only used to fix download links saved by Sonarr/Radarr before your key changed. A key set here is used until the tracker's API reports a different one, which then replaces it.",
   'trackers.announceUrlColumn': 'Announce URL',
+  'trackers.rssKeyColumn': 'RSS key',
+  'trackers.secretSet': 'Set',
+  'trackers.announceUrlKnown': 'Already set (contains your passkey) — leave blank to keep it',
   'trackers.create': 'Create',
   'trackers.editTracker': 'Edit tracker',
   'trackers.editTypeLocked': "Type (unit3d) can't be changed — delete and recreate to change it.",

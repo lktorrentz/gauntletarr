@@ -19,8 +19,19 @@ from app.file_types import is_video
 from app.models import MediaFile, MediaItem
 from app.poster_cache import download_poster, poster_file
 from app.run_progress import NULL_PROGRESS
+from app.settings_repo import get_setting, set_setting
 
 logger = logging.getLogger(__name__)
+
+# Versione delle regole con cui guessit + TMDB identificano un file. Quando
+# cambia, i file identificati dal solo nome (resolver_source
+# "filename_parser") si rileggono una volta: la v1 cercava su TMDB solo il
+# titolo base (senza il sottotitolo che guessit mette in alternative_title)
+# e con `year` invece di `primary_release_year` — "Mission Impossible
+# Fallout (2018)" poteva diventare un altro film della saga.
+IDENTITY_RULES_VERSION = "2"
+IDENTITY_RULES_KEY = "identity_rules_version"
+ARR_SOURCES = ("radarr", "sonarr")
 
 
 def _apply_arr_link(item: MediaItem, source: str | None, instance_id: int | None, slug: str | None,
@@ -59,44 +70,72 @@ def get_or_create_media_item(session: Session, resolved: ResolvedMedia) -> Media
     return item
 
 
+def _files_to_resolve(session: Session, arr_index, reread_parsed: bool) -> list[MediaFile]:
+    """File ancora senza identità, più quelli da rileggere:
+    - Radarr/Sonarr fanno fede: un file che conoscono ma identificato da
+      altro (nome del file) si riallinea alla loro identità;
+    - un cambio di IDENTITY_RULES_VERSION rilegge i file identificati dal nome."""
+    files = []
+    for mf in session.query(MediaFile).all():
+        if not is_video(mf.relative_path):  # nfo, sottotitoli, immagini: nessuna identità da cercare
+            continue
+        if mf.media_item_id is None:
+            files.append(mf)
+        elif mf.resolver_source in ARR_SOURCES:
+            continue
+        elif reread_parsed and mf.resolver_source == "filename_parser":
+            files.append(mf)
+        elif arr_index is not None and arr_index.identity_for(mf.relative_path, mf.size_bytes) is not None:
+            files.append(mf)
+    return files
+
+
 def resolve_unmatched_media_files(
-    session: Session, resolver: MediaResolverAdapter, posters_dir: str, progress=NULL_PROGRESS
+    session: Session, resolver: MediaResolverAdapter, posters_dir: str, progress=NULL_PROGRESS, arr_index=None
 ) -> dict[str, int]:
-    """Per ogni media_file senza media_item_id ancora, prova a risolverlo.
+    """Per ogni media_file senza media_item_id ancora (o da rileggere, vedi
+    _files_to_resolve), prova a risolverlo.
     Un fallimento di rete/resolver su un singolo file viene loggato e
-    contato come unresolved — non deve mai far fallire l'intero giro.
+    contato come unresolved — non deve mai far fallire l'intero giro; un
+    file già identificato che non si riesce a rileggere tiene l'identità che ha.
     I file esclusi (Configuration > Exclusions) non vengono mai risolti:
     niente chiamate TMDB per sample, trailer e simili."""
     exclusions = load_exclusions(session)
-    videos = [
-        mf for mf in session.query(MediaFile).filter(MediaFile.media_item_id.is_(None)).all()
-        if is_video(mf.relative_path)  # nfo, sottotitoli, immagini: nessuna identità da cercare
-    ]
+    reread_parsed = get_setting(session, IDENTITY_RULES_KEY) != IDENTITY_RULES_VERSION
+    videos = _files_to_resolve(session, arr_index, reread_parsed)
     excluded = sum(1 for mf in videos if exclusions.is_excluded(mf.relative_path))
     media_files = [mf for mf in videos if not exclusions.is_excluded(mf.relative_path)]
     progress.add_total(len(media_files))
     resolved = 0
     unresolved = 0
+    corrected = 0
 
     for mf in media_files:
         progress.advance()
         abs_path = os.path.join(mf.disk.root_path, mf.relative_path)
+        previous = mf.media_item_id
         try:
             result = resolver.resolve(abs_path)
         except Exception:
             logger.exception("Resolver fallito su %r", abs_path)
-            unresolved += 1
+            if previous is None:
+                unresolved += 1
             continue
 
         if result is None:
-            unresolved += 1
+            if previous is None:
+                unresolved += 1
             continue
 
         media_item = get_or_create_media_item(session, result)
         mf.media_item_id = media_item.id
         mf.resolver_source = result.source or resolver.SOURCE
         session.commit()
-        resolved += 1
+        if previous is None:
+            resolved += 1
+        elif previous != media_item.id:
+            corrected += 1
+            logger.info("Identità corretta per %r: media_item %s -> %s", mf.relative_path, previous, media_item.id)
 
         if result.poster_path:
             try:
@@ -106,7 +145,9 @@ def resolve_unmatched_media_files(
                 # resta identificato, mostrerà solo un placeholder in UI (§6).
                 logger.warning("Download poster fallito per tmdb_id=%s", result.tmdb_id, exc_info=True)
 
-    return {"resolved": resolved, "unresolved": unresolved, "excluded": excluded}
+    if reread_parsed:
+        set_setting(session, IDENTITY_RULES_KEY, IDENTITY_RULES_VERSION)
+    return {"resolved": resolved, "unresolved": unresolved, "excluded": excluded, "corrected": corrected}
 
 
 def complete_media_items(

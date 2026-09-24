@@ -37,10 +37,14 @@ class TMDBClient:
         self._client = client or httpx.Client(base_url=TMDB_API_BASE, timeout=10.0)
 
     def search_movie(self, query: str, year: int | None = None) -> dict | None:
-        return self._search("/search/movie", query, {"year": year} if year else {})
+        # primary_release_year e non year: "year" su TMDB vale per QUALUNQUE
+        # data di uscita (riedizioni comprese), e con una saga dallo stesso
+        # titolo base restituiva il film sbagliato (es. Mission: Impossible
+        # del 1996 cercando quello del 2018, per una riedizione).
+        return self._search("/search/movie", query, {"primary_release_year": year} if year else {}, year)
 
     def search_tv(self, query: str, year: int | None = None) -> dict | None:
-        return self._search("/search/tv", query, {"first_air_date_year": year} if year else {})
+        return self._search("/search/tv", query, {"first_air_date_year": year} if year else {}, year)
 
     def details(self, content_type: str, tmdb_id: int) -> dict:
         """{title, year, poster_path} di un contenuto già identificato: una
@@ -63,9 +67,17 @@ class TMDBClient:
         response.raise_for_status()
         return response.json().get("poster_path")
 
-    def _search(self, path: str, query: str, extra_params: dict) -> dict | None:
+    def _search(self, path: str, query: str, extra_params: dict, year: int | None = None) -> dict | None:
         params = {"api_key": self.api_key, "query": query, **extra_params}
         response = self._client.get(path, params=params)
         response.raise_for_status()
         results = response.json().get("results", [])
-        return results[0] if results else None
+        if not results:
+            return None
+        # Fra i risultati, quello uscito proprio nell'anno del nome del file,
+        # se c'è; altrimenti il più rilevante secondo TMDB.
+        if year:
+            for result in results:
+                if year_of(result.get("release_date") or result.get("first_air_date")) == year:
+                    return result
+        return results[0]

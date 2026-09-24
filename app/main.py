@@ -10,6 +10,7 @@ from app import auth, db, pipeline, scheduler, startup_checks
 from app.api.auth import router as auth_router
 from app.api.dashboard import router as dashboard_router
 from app.api.disks import router as disks_router
+from app.api.full_checks import router as full_checks_router
 from app.api.library import router as library_router
 from app.api.radarr_instances import router as radarr_instances_router
 from app.api.reviews import router as reviews_router
@@ -79,6 +80,7 @@ app.include_router(trackers_router, dependencies=[_protected])
 app.include_router(radarr_instances_router, dependencies=[_protected])
 app.include_router(sonarr_instances_router, dependencies=[_protected])
 app.include_router(reviews_router, dependencies=[_protected])
+app.include_router(full_checks_router, dependencies=[_protected])
 app.include_router(schedule_router, dependencies=[_protected])
 app.include_router(dashboard_router, dependencies=[_protected])
 app.include_router(uploads_router, dependencies=[_protected])

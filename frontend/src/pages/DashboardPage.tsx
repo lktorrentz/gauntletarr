@@ -5,6 +5,7 @@ import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
 import { useDashboard, useDashboardHistory, useDashboardWhatsNew } from '@/api/hooks/dashboard'
 import type { Schemas } from '@/api/client'
 import { useUploads } from '@/api/hooks/uploads'
+import { ScanHistoryCard } from '@/components/ScanHistoryCard'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
@@ -295,6 +296,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
+      <div className="grid gap-6 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>{t('dashboard.whatsNew')}</CardTitle>
@@ -312,6 +314,8 @@ export function DashboardPage() {
           ))}
         </CardContent>
       </Card>
+      <ScanHistoryCard />
+      </div>
     </div>
   )
 }

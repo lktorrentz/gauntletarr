@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { t } from '@/lib/i18n'
 import { ImageHostPriorityField } from '@/pages/config/ImageHostPriorityField'
+import { autosaveFeedback } from '@/lib/autosave'
 
 function TonemapSwitch() {
   const { data } = useSetting('upload_tonemap_hdr')
@@ -24,7 +25,7 @@ function TonemapSwitch() {
       <Switch
         id="upload-tonemap"
         checked={checked}
-        onCheckedChange={(v) => setSetting.mutate(v ? 'true' : 'false')}
+        onCheckedChange={(v) => setSetting.mutate(v ? 'true' : 'false', autosaveFeedback(t('uploadSettings.tonemapLabel')))}
       />
     </div>
   )

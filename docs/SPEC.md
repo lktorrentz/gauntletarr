@@ -191,6 +191,8 @@ Pipeline unchanged in structure (personal history if available → catalog searc
 - raise confidence when size+mediainfo already agree but aren't absolutely certain;
 - **the only signal acceptable for auto-executing the torrent→client direction** (section 3), where a higher threshold than the media→torrent case is needed, because there the file already exists and a wrong match adds a non-matching torrent in a way that's less recoverable with just a recheck.
 
+**Full hash check (diagnosis):** matching verifies only a sample of pieces. From a candidate or an execution the user can run a check of 100% of the pieces (`app/full_check.py`), boundary pieces included. It reads the files where the client sees them first, then from the library, and reports per file the pieces that match, differ or can't be read, plus whether the info hash changed. It's read-only and runs in the background, one check at a time. It tells a different release apart from a wrong path when a recheck keeps failing, and never replaces the client's recheck.
+
 **A forced recheck on the client remains mandatory in every case** when adding to the client (never `skip_checking`) — the piece hash is a stronger matching signal, not a substitute for the client's own verification.
 
 ## 7. Library view: tree + poster grid

@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { t } from '@/lib/i18n'
 import { selectLabel } from '@/lib/utils'
+import { autosaveFeedback } from '@/lib/autosave'
 
 function jsonField(value: Record<string, number>) {
   return JSON.stringify(value, null, 2)
@@ -153,7 +154,9 @@ export function UploadProfileDialog({
               <Switch
                 id="up-anon"
                 checked={profile.default_anonymous}
-                onCheckedChange={(v) => updateProfile.mutate({ default_anonymous: v })}
+                onCheckedChange={(v) =>
+                  updateProfile.mutate({ default_anonymous: v }, autosaveFeedback(t('trackers.defaultAnonymous')))
+                }
               />
             </div>
             <div className="flex items-center justify-between">
@@ -161,7 +164,12 @@ export function UploadProfileDialog({
               <Switch
                 id="up-personal"
                 checked={profile.default_personal_release}
-                onCheckedChange={(v) => updateProfile.mutate({ default_personal_release: v })}
+                onCheckedChange={(v) =>
+                  updateProfile.mutate(
+                    { default_personal_release: v },
+                    autosaveFeedback(t('trackers.defaultPersonalRelease')),
+                  )
+                }
               />
             </div>
             <div className="flex justify-between">

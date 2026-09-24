@@ -20,11 +20,11 @@ export const errors = {
   'errors.folder_already_exists': 'Folder already exists: {path}',
   'errors.path_outside_scope': 'Path outside the allowed scope: {path}',
 
-  'errors.run_not_found': 'Run {id} not found.',
+  'errors.run_not_found': 'Scan {id} not found.',
   'errors.media_item_not_found': 'This item is not in the library.',
-  'errors.run_in_progress': 'A run is in progress: try again when it has finished.',
+  'errors.run_in_progress': 'A scan is in progress: try again when it has finished.',
   'errors.invalid_path': 'Invalid path.',
-  'errors.run_already_finished': 'Run {id} has already finished.',
+  'errors.run_already_finished': 'Scan {id} has already finished.',
 
   'errors.review_not_found': 'Review {id} not found.',
   'errors.seed_job_not_found': 'SeedJob {id} not found.',

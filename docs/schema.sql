@@ -162,6 +162,8 @@ CREATE TABLE IF NOT EXISTS run_log (
                                                 -- dashboard's historical chart (SPEC.md §10). Formula
                                                 -- settled in Fase 5, see app/health.py.
     errors                INTEGER DEFAULT 0,
+    errors_json           TEXT,                -- JSON list of every error of the run, in order (at most 50),
+                                                -- shown in the scan history. Additive, nullable.
     last_error            TEXT                 -- short summary of the last exception caught during this
                                                 -- run (e.g. "torrent client 'X': <message>"), so it's
                                                 -- visible in the UI without digging through the Logs tab —

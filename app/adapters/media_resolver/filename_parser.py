@@ -29,6 +29,19 @@ def _result_year(result: dict) -> int | None:
     return result.get("year") or year_of(result.get("release_date") or result.get("first_air_date"))
 
 
+def _queries(title: str, alternative_title) -> list[str]:
+    alternative = _first_if_list(alternative_title)
+    return [f"{title} {alternative}", title] if alternative else [title]
+
+
+def _first_hit(search, queries: list[str], year: int | None) -> dict | None:
+    for query in queries:
+        result = search(query, year)
+        if result is not None:
+            return result
+    return None
+
+
 class FilenameParserResolver(MediaResolverAdapter):
     SOURCE = "filename_parser"
 
@@ -43,8 +56,14 @@ class FilenameParserResolver(MediaResolverAdapter):
         year = _first_if_list(guess.get("year"))
         content_type = guess_content_type_from_guessit(guess)
 
+        # guessit mette il sottotitolo in alternative_title ("Mission Impossible
+        # - Fallout" -> title "Mission Impossible", alternative "Fallout"):
+        # cercare il solo titolo base dava lo stesso risultato per un'intera
+        # saga. Prima titolo + sottotitolo, poi il solo titolo come ripiego.
+        queries = _queries(title, guess.get("alternative_title"))
+
         if content_type == "movie":
-            result = self._tmdb.search_movie(title, year)
+            result = _first_hit(self._tmdb.search_movie, queries, year)
             if result is None:
                 return None
             return ResolvedMedia(
@@ -56,7 +75,7 @@ class FilenameParserResolver(MediaResolverAdapter):
         episode = _first_if_list(guess.get("episode"))
         if season is None or episode is None:
             return None
-        result = self._tmdb.search_tv(title, year)
+        result = _first_hit(self._tmdb.search_tv, queries, year)
         if result is None:
             return None
         return ResolvedMedia(

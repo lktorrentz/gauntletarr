@@ -1,4 +1,6 @@
 export const activity = {
+  'activity.saved': 'Saved',
+  'activity.saveFailed': 'Save failed',
   'activity.approving': 'Approving and executing…',
   'activity.approveFailed': 'Approval failed',
   'activity.executionFailed': 'Execution failed',

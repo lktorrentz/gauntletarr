@@ -219,6 +219,7 @@ class RunLog(Base):
     health_snapshot: Mapped[float | None]
     errors: Mapped[int] = mapped_column(server_default=text("0"))
     last_error: Mapped[str | None]
+    errors_json: Mapped[str | None]  # JSON: ogni errore della run, in ordine (app/pipeline.py::_note_error)
 
 
 # ============ FISICO (scritto SOLO dal processo di scan, app/scanner.py) ============

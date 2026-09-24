@@ -192,7 +192,8 @@ def item_detail(session: Session, content_type: str, tmdb_id: int) -> dict | Non
             session.query(SeedJob).filter(SeedJob.source_media_file_id.in_(mf_ids)).order_by(SeedJob.id.desc()).all()
         ):
             seed_jobs.append({
-                "id": sj.id, "candidate_name": sj.candidate.name, "final_status": sj.final_status,
+                "id": sj.id, "candidate_id": sj.candidate_id, "candidate_name": sj.candidate.name,
+                "final_status": sj.final_status,
                 "recheck_status": sj.recheck_status, "error_message": sj.error_message,
                 "torrent_added_at": sj.torrent_added_at,
             })

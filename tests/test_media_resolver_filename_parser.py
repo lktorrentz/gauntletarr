@@ -64,3 +64,41 @@ def test_returns_none_for_tv_file_without_episode_number():
     resolver = _resolver(handler)
 
     assert resolver.resolve("Game.of.Thrones.Season.3.Complete.mkv") is None
+
+
+def test_subtitle_is_part_of_the_search_so_a_saga_is_not_collapsed_into_one_film():
+    from app.adapters.media_resolver.filename_parser import FilenameParserResolver
+
+    searched = []
+
+    class Tmdb:
+        def search_movie(self, query, year=None):
+            searched.append((query, year))
+            return {"id": 353081, "title": "Mission: Impossible - Fallout", "release_date": "2018-07-13"}
+
+        def search_tv(self, query, year=None):
+            return None
+
+    resolved = FilenameParserResolver(Tmdb()).resolve(
+        "/data/media/movies/Mission Impossible - Fallout (2018)/Mission Impossible - Fallout (2018) Bluray-2160p.mkv"
+    )
+
+    assert searched[0] == ("Mission Impossible Fallout", 2018)
+    assert (resolved.tmdb_id, resolved.title, resolved.year) == (353081, "Mission: Impossible - Fallout", 2018)
+
+
+def test_falls_back_to_the_base_title_when_title_plus_subtitle_finds_nothing():
+    from app.adapters.media_resolver.filename_parser import FilenameParserResolver
+
+    searched = []
+
+    class Tmdb:
+        def search_movie(self, query, year=None):
+            searched.append(query)
+            return None if query == "Movie Directors Cut" else {"id": 1, "title": "Movie", "release_date": "2001-01-01"}
+
+        def search_tv(self, query, year=None):
+            return None
+
+    FilenameParserResolver(Tmdb()).resolve("/m/Movie - Directors Cut (2001)/Movie - Directors Cut (2001).mkv")
+    assert searched[-1] == "Movie"

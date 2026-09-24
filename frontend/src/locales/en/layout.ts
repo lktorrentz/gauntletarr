@@ -3,7 +3,7 @@ export const layout = {
   'layout.switchToDarkTheme': 'Switch to dark theme',
   'layout.health': 'Health',
   'layout.toReview': 'To review',
-  'layout.lastRun': 'last run {time}',
+  'layout.lastRun': 'last scan {time}',
   'layout.timeNever': 'never',
   'layout.timeNow': 'just now',
   'layout.timeMinutesAgo': '{minutes} min ago',

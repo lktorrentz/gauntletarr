@@ -2,6 +2,8 @@
 rifiuto manuale dei match sotto soglia, retry delle esecuzioni fallite.
 """
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, object_session
@@ -10,7 +12,7 @@ from app import review
 from app.api_errors import coded_detail
 from app.deps import get_session
 from app.executor import ExecutionError
-from app.models import Candidate, MatchReview, RunLog, SeedJob
+from app.models import Candidate, MatchReview, RunLog, SeedJob, TorrentClient
 
 router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 
@@ -69,15 +71,27 @@ class SeedJobResponse(BaseModel):
     id: int
     candidate_id: int
     candidate_name: str | None = None
+    direction: str | None = None
+    tracker: str | None = None
+    torrent_client: str | None = None
     final_status: str
     recheck_status: str | None
     error_message: str | None
+    hardlink_created_at: datetime | None = None
+    torrent_added_at: datetime | None = None
 
     @classmethod
     def from_model(cls, sj: SeedJob) -> "SeedJobResponse":
+        candidate = sj.candidate
+        session = object_session(sj)
+        client = session.get(TorrentClient, sj.torrent_client_id) if session and sj.torrent_client_id else None
         return cls(
-            id=sj.id, candidate_id=sj.candidate_id, candidate_name=sj.candidate.name if sj.candidate else None,
+            id=sj.id, candidate_id=sj.candidate_id, candidate_name=candidate.name if candidate else None,
+            direction=candidate.direction if candidate else None,
+            tracker=candidate.tracker.label if candidate and candidate.tracker else None,
+            torrent_client=client.label if client else None,
             final_status=sj.final_status, recheck_status=sj.recheck_status, error_message=sj.error_message,
+            hardlink_created_at=sj.hardlink_created_at, torrent_added_at=sj.torrent_added_at,
         )
 
 

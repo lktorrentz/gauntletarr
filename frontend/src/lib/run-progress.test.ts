@@ -6,7 +6,7 @@ function run(overrides: Partial<RunResponse>): RunResponse {
   return {
     id: 1, run_type: 'manual', started_at: '2026-09-23T10:00:00Z', finished_at: null, current_phase: null,
     phase_total: null, phase_done: null, phase_detail: null, phases: {}, items_scanned: 0, matches_found: 0,
-    auto_executed: 0, pending_review: 0, errors: 0, last_error: null, cancel_requested: false, cancelled: false,
+    auto_executed: 0, pending_review: 0, errors: 0, last_error: null, error_messages: [], cancel_requested: false, cancelled: false,
     ...overrides,
   }
 }

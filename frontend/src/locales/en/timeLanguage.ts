@@ -10,8 +10,11 @@ export const timeLanguage = {
   'timeLanguage.sizeUnitsTitle': 'File sizes',
   'timeLanguage.sizeUnitsDescription':
     'How file sizes are shown everywhere, including the min/max size filters.',
-  'timeLanguage.sizeUnitsDecimal': 'Decimal — KB, MB, GB, TB (1 GB = 1000 MB)',
-  'timeLanguage.sizeUnitsBinary': 'Binary — KiB, MiB, GiB, TiB (1 GiB = 1024 MiB)',
+  'timeLanguage.sizeUnitsDecimalTitle': 'Decimal — KB, MB, GB',
+  'timeLanguage.sizeUnitsDecimalHelp': '1 GB = 1000 MB. What disk makers and most trackers use.',
+  'timeLanguage.sizeUnitsBinaryTitle': 'Binary — KiB, MiB, GiB',
+  'timeLanguage.sizeUnitsBinaryHelp': '1 GiB = 1024 MiB. What qBittorrent and most file managers show.',
+  'timeLanguage.sizeUnitsCurrent': 'In use',
   'timeLanguage.notYetAppliedNote':
     "Saved, but not applied to dates shown elsewhere in the app yet — that's a separate follow-up.",
 } as const
