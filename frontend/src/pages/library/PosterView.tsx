@@ -56,7 +56,7 @@ function StatusDots({ counts, showCounts }: { counts: Record<StatusKey, number>;
   )
 }
 
-function toCards(items: MediaItemOverview[]): PosterCard[] {
+export function toCards(items: MediaItemOverview[]): PosterCard[] {
   const cards = new Map<string, PosterCard>()
   for (const item of items) {
     const key = `${item.content_type}-${item.tmdb_id}`
@@ -78,7 +78,10 @@ function toCards(items: MediaItemOverview[]): PosterCard[] {
     }
     cards.set(key, card)
   }
-  return [...cards.values()].sort((a, b) =>
+  // Un titolo con soli file esclusi (es. un sample o un extra identificato
+  // come film) è fuori da ogni controllo come i suoi file: senza questo
+  // contava nel Total senza essere né seeding né orfano.
+  return [...cards.values()].filter((c) => c.counts.seeding + c.counts.orphan > 0).sort((a, b) =>
     (a.title ?? '\uffff').localeCompare(b.title ?? '\uffff') || a.tmdb_id - b.tmdb_id,
   )
 }
