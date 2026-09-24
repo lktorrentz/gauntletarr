@@ -33,6 +33,7 @@ class MediaFileState(BaseModel):
     relative_path: str
     size_bytes: int
     state: str
+    stopped: bool = False  # seeding, ma ogni torrent che lo contiene è fermo nel client
     excluded: bool
     linked_paths: list[str]
     # Contenuto a cui appartiene il file (per aprire la scheda di dettaglio),
@@ -48,6 +49,7 @@ class SeedFileState(BaseModel):
     size_bytes: int
     media_file_id: int | None
     state: str
+    stopped: bool = False
     excluded: bool
     linked_paths: list[str]
     content_type: str | None = None  # dal file in libreria collegato, se c'è
@@ -60,6 +62,7 @@ class MediaItemFile(BaseModel):
     relative_path: str
     size_bytes: int = 0
     state: str
+    stopped: bool = False
     excluded: bool
     linked_paths: list[str]
     duplicate: bool = False  # altra copia dello stesso contenuto su un inode diverso
@@ -169,6 +172,7 @@ class DetailFile(BaseModel):
     size_bytes: int
     is_video: bool
     state: str
+    stopped: bool = False
     excluded: bool
     in_review: bool
     hardlinks: list[DetailHardlink]
@@ -199,6 +203,7 @@ class DetailSeedJob(BaseModel):
     candidate_id: int
     candidate_name: str
     final_status: str
+    display_status: str  # "removed" se era in seed ma il torrent non è più nel client
     recheck_status: str | None
     error_message: str | None
     torrent_added_at: datetime | None

@@ -16,7 +16,7 @@ import { useExcludeFile, useItemDetail, useSearchNow } from '@/api/hooks/library
 import { useApproveReview, useReconcileNow, useRejectReview } from '@/api/hooks/reviews'
 import { AuthedPoster } from '@/components/AuthedPoster'
 import { FullCheckButton } from '@/components/FullCheckButton'
-import { StateBadge, StatusBadge } from '@/components/StateBadge'
+import { StateBadge, StatusBadge, StoppedBadge } from '@/components/StateBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -96,6 +96,7 @@ function FileRow({ file, showEpisode }: { file: DetailFile; showEpisode: boolean
             ) : (
               <>
                 <StateBadge state={file.state} />
+                {file.stopped && <StoppedBadge />}
                 {file.in_review && <StatusBadge status="review">{t('itemDetail.inReview')}</StatusBadge>}
                 {file.duplicates.length > 0 && (
                   <StatusBadge status="duplicate">{t('itemDetail.duplicate')}</StatusBadge>
@@ -331,12 +332,12 @@ function History({ detail }: { detail: Detail }) {
         <div key={job.id} className="grid gap-0.5 text-xs">
           <p className="font-mono break-all">{job.candidate_name}</p>
           <p className="text-muted-foreground">
-            <StateBadge state={job.final_status} />{' '}
+            <StateBadge state={job.display_status} />{' '}
             {job.recheck_status && t('itemDetail.recheck', { status: job.recheck_status })}
             {job.torrent_added_at && ` · ${relativeFromNow(job.torrent_added_at)}`}
           </p>
           {job.error_message && <p className="text-destructive">{job.error_message}</p>}
-          {job.final_status !== 'seeding' && (
+          {job.display_status !== 'seeding' && (
             <div>
               <FullCheckButton target={{ candidateId: job.candidate_id, seedJobId: job.id }} label={job.candidate_name} />
             </div>

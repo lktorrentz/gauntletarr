@@ -18,10 +18,11 @@ Definizione usata qui (coerente con la tabella di SPEC.md sezione 3):
 
 from sqlalchemy.orm import Session
 
+from app.adapters.torrent_client.base import is_stopped_state
 from app.duplicates import find_duplicate_media_files
 from app.exclusions import CompiledExclusions
 from app.file_types import is_video
-from app.models import ClientTorrentFile, MatchReview, MediaFile, MediaItem, SeedFile, SeedJob
+from app.models import ClientTorrent, ClientTorrentFile, MatchReview, MediaFile, MediaItem, SeedFile, SeedJob
 from app.scan_state import is_current, latest_scan_by_disk
 
 _NO_EXCLUSIONS = CompiledExclusions(patterns=[])
@@ -52,6 +53,24 @@ def _identity_by_media_file(session: Session) -> dict[int, tuple[str, int]]:
     }
 
 
+def _tracking(session: Session) -> tuple[set[int], set[int]]:
+    """(seed_file tracciati da un client, seed_file tracciati da almeno un
+    torrent non fermo): un file in più torrent (cross-seed) è "stopped" solo
+    se lo sono tutti."""
+    tracked: set[int] = set()
+    active: set[int] = set()
+    for seed_file_id, state in (
+        session.query(ClientTorrentFile.seed_file_id, ClientTorrent.state)
+        .join(ClientTorrent, ClientTorrent.id == ClientTorrentFile.client_torrent_id)
+        .filter(ClientTorrentFile.seed_file_id.isnot(None))
+        .all()
+    ):
+        tracked.add(seed_file_id)
+        if not is_stopped_state(state):
+            active.add(seed_file_id)
+    return tracked, active
+
+
 def media_file_states(
     session: Session, disk_id: int | None = None, exclusions: CompiledExclusions = _NO_EXCLUSIONS
 ) -> list[dict]:
@@ -59,17 +78,16 @@ def media_file_states(
     if disk_id is not None:
         query = query.filter_by(disk_id=disk_id)
 
-    tracked_seed_file_ids = {
-        row[0] for row in session.query(ClientTorrentFile.seed_file_id).filter(
-            ClientTorrentFile.seed_file_id.isnot(None)
-        ).all()
-    }
-    seeding_media_file_ids = {
-        row[0]
-        for row in session.query(SeedFile.media_file_id)
-        .filter(SeedFile.media_file_id.isnot(None), SeedFile.id.in_(tracked_seed_file_ids))
-        .all()
-    } if tracked_seed_file_ids else set()
+    tracked_seed_file_ids, active_seed_file_ids = _tracking(session)
+    seeding_media_file_ids: set[int] = set()
+    active_media_file_ids: set[int] = set()
+    for seed_file_id, media_file_id in (
+        session.query(SeedFile.id, SeedFile.media_file_id).filter(SeedFile.media_file_id.isnot(None)).all()
+    ):
+        if seed_file_id in tracked_seed_file_ids:
+            seeding_media_file_ids.add(media_file_id)
+        if seed_file_id in active_seed_file_ids:
+            active_media_file_ids.add(media_file_id)
     linked_paths = _media_file_to_seed_paths(session)
     latest = latest_scan_by_disk(session, MediaFile)
     identity = _identity_by_media_file(session)
@@ -81,6 +99,7 @@ def media_file_states(
             "relative_path": mf.relative_path,
             "size_bytes": mf.size_bytes,
             "state": "seeding" if mf.id in seeding_media_file_ids else "orphan_media",
+            "stopped": mf.id in seeding_media_file_ids and mf.id not in active_media_file_ids,
             "excluded": exclusions.is_excluded(mf.relative_path),
             "linked_paths": linked_paths.get(mf.id, []),
             "content_type": identity.get(mf.id, (None, None))[0],
@@ -98,11 +117,7 @@ def seed_file_states(
     if disk_id is not None:
         query = query.filter_by(disk_id=disk_id)
 
-    tracked_seed_file_ids = {
-        row[0] for row in session.query(ClientTorrentFile.seed_file_id).filter(
-            ClientTorrentFile.seed_file_id.isnot(None)
-        ).all()
-    }
+    tracked_seed_file_ids, active_seed_file_ids = _tracking(session)
     media_paths_by_id = {
         row[0]: row[1] for row in session.query(MediaFile.id, MediaFile.relative_path).all()
     }
@@ -123,6 +138,7 @@ def seed_file_states(
             "size_bytes": sf.size_bytes,
             "media_file_id": sf.media_file_id,
             "state": _state(sf),
+            "stopped": sf.id in tracked_seed_file_ids and sf.id not in active_seed_file_ids,
             "excluded": exclusions.is_excluded(sf.relative_path),
             "linked_paths": [media_paths_by_id[sf.media_file_id]] if sf.media_file_id in media_paths_by_id else [],
             "content_type": identity.get(sf.media_file_id, (None, None))[0],
@@ -142,6 +158,7 @@ def media_items_overview(
     rendering lato frontend."""
     file_states = media_file_states(session, disk_id=disk_id, exclusions=exclusions)
     states_by_id = {s["id"]: s["state"] for s in file_states}
+    stopped_by_id = {s["id"]: s["stopped"] for s in file_states}
     excluded_by_id = {s["id"]: s["excluded"] for s in file_states}
     linked_by_id = {s["id"]: s["linked_paths"] for s in file_states}
 
@@ -199,6 +216,7 @@ def media_items_overview(
                     "relative_path": mf.relative_path,
                     "size_bytes": mf.size_bytes,
                     "state": states_by_id.get(mf.id, "orphan_media"),
+                    "stopped": stopped_by_id.get(mf.id, False),
                     "excluded": excluded_by_id.get(mf.id, False),
                     "linked_paths": linked_by_id.get(mf.id, []),
                     "duplicate": mf.id in duplicate_ids,

@@ -293,3 +293,49 @@ def test_review_for_a_content_the_file_no_longer_is_leaves_the_queue(db_session)
 
     assert review.close_resolved_reviews(db_session) == 1
     assert (r.status, r.decided_by) == ("rejected", "system")
+
+
+def test_a_seeding_execution_whose_torrent_left_the_client_no_longer_blocks_a_new_review(db_session):
+    tracker = _tracker(db_session)
+    item = _media_item(db_session)
+    mf = _media_file_stub(db_session, item)
+    sf = _seed_file_stub(db_session, mf)
+    old = _candidate(db_session, item, tracker, confidence=0.99)
+    db_session.add(SeedJob(candidate_id=old.id, source_media_file_id=mf.id, final_status="seeding", info_hash="ABC"))
+    db_session.commit()
+    # Ora il file del torrent è orfano lato client: stesso torrent, verso torrent -> client.
+    again = _candidate(db_session, item, tracker, confidence=0.99, direction="torrent_to_client")
+
+    created = review.create_review_for_seed_file(db_session, sf, [again])
+
+    assert created is not None and created.candidate_id == again.id
+
+
+def test_a_seeding_execution_still_in_the_client_keeps_its_torrent_busy(db_session):
+    from app.models import ClientTorrent, TorrentClient
+
+    tracker = _tracker(db_session)
+    item = _media_item(db_session)
+    mf = _media_file_stub(db_session, item)
+    sf = _seed_file_stub(db_session, mf)
+    old = _candidate(db_session, item, tracker, confidence=0.99)
+    client = TorrentClient(label="q", adapter_type="qbittorrent", base_url="http://q")
+    db_session.add(client)
+    db_session.commit()
+    db_session.add_all([
+        SeedJob(candidate_id=old.id, source_media_file_id=mf.id, final_status="seeding", info_hash="ABC"),
+        ClientTorrent(torrent_client_id=client.id, info_hash="abc", name="x", save_path="/x", state="uploading",
+                      last_polled_at=datetime.now(UTC)),
+    ])
+    db_session.commit()
+    again = _candidate(db_session, item, tracker, confidence=0.99, direction="torrent_to_client")
+
+    assert review.create_review_for_seed_file(db_session, sf, [again]) is None
+
+
+def test_a_seeding_execution_whose_torrent_left_the_client_is_shown_as_removed():
+    job = SeedJob(final_status="seeding", info_hash="ABC")
+
+    assert review.seed_job_display_status(job, {"abc"}) == "seeding"
+    assert review.seed_job_display_status(job, set()) == "removed"
+    assert review.seed_job_display_status(SeedJob(final_status="failed", info_hash="x"), set()) == "failed"

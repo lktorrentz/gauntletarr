@@ -208,7 +208,7 @@ function ExecutionRow({ job }: { job: SeedJob }) {
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-1.5">
-          <StateBadge state={job.final_status} compact />
+          <StateBadge state={job.display_status ?? job.final_status} compact />
           {job.error_message && (
             <ErrorsPopover count={1} messages={[job.error_message]} title={t('reseeding.executionError')} />
           )}
@@ -216,7 +216,7 @@ function ExecutionRow({ job }: { job: SeedJob }) {
       </TableCell>
       <TableCell>
         <div className="flex justify-end gap-1.5">
-          {job.final_status !== 'seeding' && (
+          {(job.display_status ?? job.final_status) !== 'seeding' && (
             <FullCheckButton
               target={{ candidateId: job.candidate_id, seedJobId: job.id }}
               label={job.candidate_name ?? t('reseeding.candidateHash', { id: job.candidate_id })}
@@ -249,8 +249,10 @@ function ExecutionRow({ job }: { job: SeedJob }) {
 function ExecutionsCard() {
   const { data: jobs, isPending } = useRecentSeedJobs()
   const [filter, setFilter] = useState<ExecutionFilter>('all')
-  const count = (f: ExecutionFilter) => (f === 'all' ? jobs?.length ?? 0 : jobs?.filter((j) => j.final_status === f).length ?? 0)
-  const shown = jobs?.filter((j) => filter === 'all' || j.final_status === filter)
+  // "removed" (era in seed, torrent tolto dal client) conta solo in All.
+  const statusOf = (j: SeedJob) => j.display_status ?? j.final_status
+  const count = (f: ExecutionFilter) => (f === 'all' ? jobs?.length ?? 0 : jobs?.filter((j) => statusOf(j) === f).length ?? 0)
+  const shown = jobs?.filter((j) => filter === 'all' || statusOf(j) === filter)
 
   return (
     <Card>

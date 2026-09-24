@@ -11,6 +11,8 @@ const STATE_LABELS: Record<string, string> = {
   orphan_torrent: 'orphaned',
   ignored: 'ignored',
   unmatched: 'unmatched',
+  in_progress: 'in progress',
+  removed: 'removed from client',
 }
 
 // "compact": dentro le righe delle tabelle ad albero — mono, dimensione
@@ -33,6 +35,16 @@ export function StatusBadge({
     <Badge variant="outline" className={cn(STATUS_STYLES[status].badge, compact && COMPACT)}>
       {children}
     </Badge>
+  )
+}
+
+// Accanto a "seeding": ogni torrent che contiene il file è fermo nel client
+// (resta tracciato, ma in quel momento non condivide).
+export function StoppedBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <StatusBadge status="stopped" compact={compact}>
+      stopped
+    </StatusBadge>
   )
 }
 

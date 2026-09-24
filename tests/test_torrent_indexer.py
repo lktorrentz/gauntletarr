@@ -59,7 +59,7 @@ def test_resolves_seed_file_by_path_same_root(db_session):
 
     counts = torrent_indexer.index_torrent_client(db_session, tc, adapter, run)
 
-    assert counts == {"torrents_indexed": 1, "files_indexed": 1, "files_linked": 1}
+    assert counts == {"torrents_indexed": 1, "files_indexed": 1, "files_linked": 1, "torrents_removed": 0}
     ctf = db_session.query(ClientTorrentFile).one()
     assert ctf.seed_file_id == seed_file.id
 
@@ -175,7 +175,7 @@ def test_client_with_no_disks_still_indexes_torrents_without_linking(db_session)
 
     counts = torrent_indexer.index_torrent_client(db_session, tc, adapter, run)
 
-    assert counts == {"torrents_indexed": 1, "files_indexed": 1, "files_linked": 0}
+    assert counts == {"torrents_indexed": 1, "files_indexed": 1, "files_linked": 0, "torrents_removed": 0}
     assert db_session.query(ClientTorrentFile).one().seed_file_id is None
 
 
@@ -200,3 +200,41 @@ def test_client_without_associations_is_matched_against_every_disk_by_path(db_se
 
     assert counts["files_linked"] == 1
     assert db_session.query(ClientTorrentFile).one().seed_file_id == seed_file.id
+
+
+def test_a_torrent_removed_from_the_client_leaves_the_index(db_session):
+    from app.models import ClientTorrent
+
+    disk, tc = _make_disk_and_client(db_session, root_path="/mnt/disk1")
+    run = pipeline.start_run(db_session, run_type="manual")
+    kept = _make_seed_file(db_session, disk, "torrents/Kept.mkv", run)
+    _make_seed_file(db_session, disk, "torrents/Removed.mkv", run)
+    both = [
+        ClientTorrentInfo(info_hash=h, name=f"{n}.mkv", save_path="/mnt/disk1/torrents", state="stoppedUP",
+                          files=[ClientTorrentFileInfo(path_in_torrent=f"{n}.mkv", size_bytes=123)])
+        for h, n in (("h1", "Kept"), ("h2", "Removed"))
+    ]
+    torrent_indexer.index_torrent_client(db_session, tc, FakeAdapter(both), run)
+
+    later = pipeline.start_run(db_session, run_type="manual")
+    counts = torrent_indexer.index_torrent_client(db_session, tc, FakeAdapter(both[:1]), later)
+
+    assert counts["torrents_removed"] == 1
+    assert [ct.info_hash for ct in db_session.query(ClientTorrent).all()] == ["h1"]
+    assert [f.seed_file_id for f in db_session.query(ClientTorrentFile).all()] == [kept.id]
+
+
+def test_the_single_torrent_refresh_never_removes_the_others(db_session):
+    from app.models import ClientTorrent
+
+    disk, tc = _make_disk_and_client(db_session, root_path="/mnt/disk1")
+    run = pipeline.start_run(db_session, run_type="manual")
+    torrents = [
+        ClientTorrentInfo(info_hash=h, name=h, save_path="/mnt/disk1/torrents", state="uploading", files=[])
+        for h in ("h1", "h2")
+    ]
+    torrent_indexer.index_torrent_client(db_session, tc, FakeAdapter(torrents), run)
+
+    torrent_indexer.store_client_torrents(db_session, tc, torrents[:1], run.id)
+
+    assert db_session.query(ClientTorrent).count() == 2

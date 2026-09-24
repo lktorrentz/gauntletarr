@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 import guessit
 from sqlalchemy.orm import Session
 
+from app.adapters.torrent_client.base import is_stopped_state
 from app.duplicates import find_duplicate_media_files
 from app.exclusions import load_exclusions
 from app.file_types import is_video
@@ -36,7 +37,7 @@ from app.models import (
     TorrentClient,
     Tracker,
 )
-from app.review import READY_FOR_DECISION_STATUSES
+from app.review import READY_FOR_DECISION_STATUSES, hashes_in_clients, seed_job_display_status
 from app.scan_state import is_current, latest_scan_by_disk
 
 MAX_CANDIDATES = 30
@@ -142,6 +143,7 @@ def item_detail(session: Session, content_type: str, tmdb_id: int) -> dict | Non
             "size_bytes": mf.size_bytes,
             "is_video": is_video(mf.relative_path),
             "state": "seeding" if tracked else "orphan_media",
+            "stopped": bool(tracked) and all(is_stopped_state(t["state"]) for t in tracked),
             "excluded": exclusions.is_excluded(mf.relative_path),
             "in_review": mf.id in in_review,
             "hardlinks": [
@@ -187,13 +189,14 @@ def item_detail(session: Session, content_type: str, tmdb_id: int) -> dict | Non
             break
 
     seed_jobs = []
+    in_client = hashes_in_clients(session)
     if mf_ids:
         for sj in (
             session.query(SeedJob).filter(SeedJob.source_media_file_id.in_(mf_ids)).order_by(SeedJob.id.desc()).all()
         ):
             seed_jobs.append({
                 "id": sj.id, "candidate_id": sj.candidate_id, "candidate_name": sj.candidate.name,
-                "final_status": sj.final_status,
+                "final_status": sj.final_status, "display_status": seed_job_display_status(sj, in_client),
                 "recheck_status": sj.recheck_status, "error_message": sj.error_message,
                 "torrent_added_at": sj.torrent_added_at,
             })

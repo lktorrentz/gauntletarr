@@ -1,8 +1,10 @@
 // Colori degli stati, uguali in tutta l'interfaccia (badge, pallini, card):
 // verde seeding, rosso orfano, viola duplicato, ambra in attesa di
 // approvazione, azzurro ignorato (in seed ma non in libreria), grigio
-// escluso/non identificato. Unica fonte: nessun componente sceglie da sé.
-export type StatusKey = 'seeding' | 'orphan' | 'duplicate' | 'review' | 'ignored' | 'excluded' | 'unmatched' | 'failed'
+// escluso/non identificato, ardesia fermo nel client o tolto dal client.
+// Unica fonte: nessun componente sceglie da sé.
+export type StatusKey =
+  | 'seeding' | 'orphan' | 'duplicate' | 'review' | 'ignored' | 'excluded' | 'unmatched' | 'failed' | 'stopped'
 
 export const STATUS_STYLES: Record<StatusKey, { dot: string; badge: string; gradient: string }> = {
   seeding: {
@@ -19,6 +21,10 @@ export const STATUS_STYLES: Record<StatusKey, { dot: string; badge: string; grad
   excluded: { dot: 'bg-zinc-400', gradient: 'from-zinc-400/10', badge: 'border-zinc-400/40 bg-zinc-400/15 text-zinc-600 dark:text-zinc-300' },
   unmatched: { dot: 'bg-zinc-400', gradient: 'from-zinc-400/10', badge: 'border-zinc-400/40 bg-zinc-400/15 text-zinc-600 dark:text-zinc-300' },
   failed: { dot: 'bg-red-500', gradient: 'from-red-500/10', badge: 'border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-300' },
+  stopped: {
+    dot: 'bg-slate-500', gradient: 'from-slate-500/10',
+    badge: 'border-slate-500/40 bg-slate-500/15 text-slate-700 dark:text-slate-300',
+  },
 }
 
 // Stati del backend (app/library.py, seed job) -> stile.
@@ -35,6 +41,8 @@ export function statusKeyOf(state: string): StatusKey | null {
       return 'unmatched'
     case 'failed':
       return 'failed'
+    case 'removed':
+      return 'stopped'
     default:
       return null
   }

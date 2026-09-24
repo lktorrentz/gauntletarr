@@ -1421,6 +1421,11 @@ export interface components {
             is_video: boolean;
             /** State */
             state: string;
+            /**
+             * Stopped
+             * @default false
+             */
+            stopped: boolean;
             /** Excluded */
             excluded: boolean;
             /** In Review */
@@ -1461,6 +1466,8 @@ export interface components {
             candidate_name: string;
             /** Final Status */
             final_status: string;
+            /** Display Status */
+            display_status: string;
             /** Recheck Status */
             recheck_status: string | null;
             /** Error Message */
@@ -1784,6 +1791,11 @@ export interface components {
             size_bytes: number;
             /** State */
             state: string;
+            /**
+             * Stopped
+             * @default false
+             */
+            stopped: boolean;
             /** Excluded */
             excluded: boolean;
             /** Linked Paths */
@@ -1808,6 +1820,11 @@ export interface components {
             size_bytes: number;
             /** State */
             state: string;
+            /**
+             * Stopped
+             * @default false
+             */
+            stopped: boolean;
             /** Excluded */
             excluded: boolean;
             /** Linked Paths */
@@ -2098,6 +2115,11 @@ export interface components {
             media_file_id: number | null;
             /** State */
             state: string;
+            /**
+             * Stopped
+             * @default false
+             */
+            stopped: boolean;
             /** Excluded */
             excluded: boolean;
             /** Linked Paths */
@@ -2123,6 +2145,8 @@ export interface components {
             torrent_client?: string | null;
             /** Final Status */
             final_status: string;
+            /** Display Status */
+            display_status?: string | null;
             /** Recheck Status */
             recheck_status: string | null;
             /** Error Message */

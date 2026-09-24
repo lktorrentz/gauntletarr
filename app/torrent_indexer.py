@@ -33,7 +33,16 @@ from sqlalchemy.orm import Session
 
 from app.adapters.torrent_client.base import ClientTorrentInfo, TorrentClientAdapter
 from app.db_utils import bulk_upsert
-from app.models import ClientTorrent, ClientTorrentFile, Disk, DiskTorrentClient, RunLog, SeedFile, TorrentClient
+from app.models import (
+    ClientTorrent,
+    ClientTorrentFile,
+    Disk,
+    DiskTorrentClient,
+    RunLog,
+    SeedFile,
+    SeedJob,
+    TorrentClient,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +81,51 @@ def index_torrent_client(
     )
     logger.debug("Client %r: adapter.list_torrents() ha restituito %d torrent", torrent_client.label, len(torrents))
 
-    return store_client_torrents(session, torrent_client, torrents, run.id)
+    counts = store_client_torrents(session, torrent_client, torrents, run.id)
+    counts["torrents_removed"] = prune_missing_torrents(session, torrent_client, torrents, run.id)
+    return counts
+
+
+def prune_missing_torrents(
+    session: Session, torrent_client: TorrentClient, torrents: list[ClientTorrentInfo], run_id: int
+) -> int:
+    """Dopo un'indicizzazione COMPLETA e riuscita del client (list_torrents
+    solleva su qualunque errore, mai una lista parziale): i torrent che il
+    client non ha più, e i file non più nei torrent rimasti, escono dal DB.
+    Senza questo un torrent rimosso dal client restava "tracciato" per
+    sempre: il suo file risultava in seeding e non tornava mai orfano, quindi
+    mai più cercato né proposto in review. Mai chiamata dall'aggiornamento
+    mirato di un solo torrent (store_client_torrents da seed_refresh)."""
+    present = {t.info_hash for t in torrents}
+    stale_ids = [
+        ct_id
+        for ct_id, info_hash in session.query(ClientTorrent.id, ClientTorrent.info_hash)
+        .filter_by(torrent_client_id=torrent_client.id)
+        .all()
+        if info_hash not in present
+    ]
+    for chunk_start in range(0, len(stale_ids), 500):
+        chunk = stale_ids[chunk_start:chunk_start + 500]
+        session.query(SeedJob).filter(SeedJob.result_client_torrent_id.in_(chunk)).update(
+            {SeedJob.result_client_torrent_id: None}, synchronize_session=False
+        )
+        session.query(ClientTorrentFile).filter(ClientTorrentFile.client_torrent_id.in_(chunk)).delete(
+            synchronize_session=False
+        )
+        session.query(ClientTorrent).filter(ClientTorrent.id.in_(chunk)).delete(synchronize_session=False)
+    kept_ids = session.query(ClientTorrent.id).filter_by(torrent_client_id=torrent_client.id)
+    removed_files = (
+        session.query(ClientTorrentFile)
+        .filter(ClientTorrentFile.client_torrent_id.in_(kept_ids), ClientTorrentFile.last_scan_id != run_id)
+        .delete(synchronize_session=False)
+    )
+    session.commit()
+    if stale_ids or removed_files:
+        logger.info(
+            "Client %r: %d torrent non più presenti nel client rimossi (%d file di torrent rimasti non più presenti)",
+            torrent_client.label, len(stale_ids), removed_files,
+        )
+    return len(stale_ids)
 
 
 def store_client_torrents(

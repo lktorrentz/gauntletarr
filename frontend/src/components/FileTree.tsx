@@ -2,7 +2,7 @@ import { ChevronRightIcon, FileIcon, FileVideoIcon, FolderIcon, FolderOpenIcon }
 import { useMemo, useState } from "react";
 
 import { HardlinkInfo } from "@/components/HardlinkInfo";
-import { StateBadge, StatusBadge } from "@/components/StateBadge";
+import { StateBadge, StatusBadge, StoppedBadge } from "@/components/StateBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { t } from "@/lib/i18n";
 import { fileKey, formatBytes } from "@/lib/library-filters";
@@ -12,6 +12,7 @@ export interface TreeFileEntry {
   disk_id?: number;
   relative_path: string;
   state: string;
+  stopped?: boolean;
   excluded: boolean;
   linked_paths: string[];
   size_bytes: number;
@@ -176,6 +177,7 @@ export function FileTree({ files, expandAll = false, duplicateKeys, onOpenFile }
                   ) : (
                     <>
                       <StateBadge state={file.state} compact />
+                      {file.stopped && <StoppedBadge compact />}
                       {duplicateKeys?.has(fileKey(file)) && (
                         <StatusBadge status="duplicate" compact>
                           {t("library.duplicate")}

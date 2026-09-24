@@ -100,3 +100,11 @@ class TorrentClientAdapter(ABC):
         torrent, per l'avanzamento della run: il totale è noto appena il
         client restituisce l'elenco, i file arrivano poi uno a uno."""
         raise NotImplementedError
+
+
+def is_stopped_state(state: str | None) -> bool:
+    """Torrent fermato nel client (qBittorrent 4 "paused*", 5 "stopped*";
+    qui riporta gli stessi stati): il file resta tracciato, quindi "seeding"
+    nel modello a stati (docs/SPEC.md §3), ma in quel momento non condivide."""
+    return (state or "").lower().startswith(("paused", "stopped"))
+

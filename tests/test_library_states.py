@@ -84,3 +84,40 @@ def test_four_state_combinations(db_session, tmp_path):
     # Hardlinkato ma il client non lo traccia più: dal lato media non è "seeding" a
     # tutti gli effetti (docs/SPEC.md sezione 3 richiede hardlink E tracciamento client).
     assert media_states[os.path.join("media", "movies", "Lost.mkv")] == "orphan_media"
+
+
+def test_a_stopped_torrent_is_still_seeding_but_flagged_stopped(db_session, tmp_path):
+    root = tmp_path / "disk1"
+    (root / "media").mkdir(parents=True)
+    (root / "torrents").mkdir(parents=True)
+    disk = Disk(label="disk1", root_path=str(root), media_rel_path="media", torrents_rel_path="torrents")
+    tc = TorrentClient(label="qbt", adapter_type="qbittorrent", base_url="http://qbt")
+    db_session.add_all([disk, tc])
+    db_session.commit()
+    for name in ("Stopped.mkv", "CrossSeeded.mkv"):
+        (root / "media" / name).write_bytes(name.encode())
+        os.link(root / "media" / name, root / "torrents" / name)
+    run = pipeline.start_run(db_session, run_type="manual")
+    scanner.scan_disk(db_session, disk, run)
+
+    def torrent(info_hash, name, state):
+        return ClientTorrentInfo(info_hash=info_hash, name=name, save_path=str(root / "torrents"), state=state,
+                                 files=[ClientTorrentFileInfo(path_in_torrent=name, size_bytes=1)])
+
+    torrent_indexer.index_torrent_client(db_session, tc, FakeAdapter([
+        torrent("h1", "Stopped.mkv", "stoppedUP"),
+        torrent("h2", "CrossSeeded.mkv", "pausedUP"),
+    ]), run)
+    tc2 = TorrentClient(label="other", adapter_type="qbittorrent", base_url="http://other")
+    db_session.add(tc2)
+    db_session.commit()
+    active_elsewhere = FakeAdapter([torrent("h3", "CrossSeeded.mkv", "uploading")])
+    torrent_indexer.index_torrent_client(db_session, tc2, active_elsewhere, run)
+
+    media = {os.path.basename(s["relative_path"]): s for s in library.media_file_states(db_session)}
+    seeds = {os.path.basename(s["relative_path"]): s for s in library.seed_file_states(db_session)}
+
+    assert (media["Stopped.mkv"]["state"], media["Stopped.mkv"]["stopped"]) == ("seeding", True)
+    assert seeds["Stopped.mkv"]["stopped"] is True
+    # Fermo in un client ma attivo in un altro: condivide, quindi non "stopped".
+    assert (media["CrossSeeded.mkv"]["state"], media["CrossSeeded.mkv"]["stopped"]) == ("seeding", False)

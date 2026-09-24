@@ -25,7 +25,16 @@ from sqlalchemy.orm import Session
 from app.adapter_factory import build_torrent_client_adapter
 from app.exclusions import load_exclusions
 from app.executor import ExecutionError, execute_review, reconcile_seed_job, retry_seed_job
-from app.models import Candidate, ClientTorrentFile, MatchReview, MediaFile, SeedFile, SeedJob, TorrentClient
+from app.models import (
+    Candidate,
+    ClientTorrent,
+    ClientTorrentFile,
+    MatchReview,
+    MediaFile,
+    SeedFile,
+    SeedJob,
+    TorrentClient,
+)
 from app.run_progress import NULL_PROGRESS
 from app.scan_state import is_current, latest_scan_by_disk
 from app.seed_refresh import refresh_seeded_torrent
@@ -89,6 +98,20 @@ def _user_rejected_torrents(
     return {(tracker_id, remote) for tracker_id, remote in query.all()}
 
 
+def hashes_in_clients(session: Session) -> set[str]:
+    """Info hash (minuscoli) dei torrent oggi presenti in un client."""
+    return {(row[0] or "").lower() for row in session.query(ClientTorrent.info_hash).all()}
+
+
+def seed_job_display_status(seed_job: SeedJob, in_client: set[str]) -> str:
+    """final_status, tranne un'esecuzione riuscita il cui torrent l'utente
+    ha poi tolto dal client: "removed" (solo per l'interfaccia, il seed_job
+    resta com'è nel DB)."""
+    if seed_job.final_status == "seeding" and (seed_job.info_hash or "").lower() not in in_client:
+        return "removed"
+    return seed_job.final_status
+
+
 def _torrents_already_in_progress(
     session: Session, *, media_file_id: int | None, seed_file_id: int | None
 ) -> set[tuple[int, str]]:
@@ -106,11 +129,19 @@ def _torrents_already_in_progress(
     )
     running = (
         session.query(Candidate.tracker_id, Candidate.torrent_id_remote, SeedJob.source_media_file_id,
-                      SeedJob.source_seed_file_id)
+                      SeedJob.source_seed_file_id, SeedJob.final_status, SeedJob.info_hash)
         .join(SeedJob, SeedJob.candidate_id == Candidate.id)
         .filter(SeedJob.final_status.in_(("in_progress", "seeding")))
         .all()
     )
+    # Un'esecuzione "seeding" il cui torrent l'utente ha poi rimosso dal
+    # client non occupa più quel torrent: si deve poter riproporre.
+    in_client = hashes_in_clients(session)
+    running = [
+        (tracker_id, remote, mf_id, sf_id)
+        for tracker_id, remote, mf_id, sf_id, status, info_hash in running
+        if status == "in_progress" or (info_hash or "").lower() in in_client
+    ]
     return {
         (tracker_id, remote)
         for tracker_id, remote, mf_id, sf_id in [*active, *running]

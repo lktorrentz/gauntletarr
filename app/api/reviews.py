@@ -75,22 +75,29 @@ class SeedJobResponse(BaseModel):
     tracker: str | None = None
     torrent_client: str | None = None
     final_status: str
+    # final_status per l'interfaccia: "removed" se era in seed ma il torrent
+    # non è più nel client (review.seed_job_display_status).
+    display_status: str | None = None
     recheck_status: str | None
     error_message: str | None
     hardlink_created_at: datetime | None = None
     torrent_added_at: datetime | None = None
 
     @classmethod
-    def from_model(cls, sj: SeedJob) -> "SeedJobResponse":
+    def from_model(cls, sj: SeedJob, in_client: set[str] | None = None) -> "SeedJobResponse":
         candidate = sj.candidate
         session = object_session(sj)
+        if in_client is None and session is not None:
+            in_client = review.hashes_in_clients(session)
         client = session.get(TorrentClient, sj.torrent_client_id) if session and sj.torrent_client_id else None
         return cls(
             id=sj.id, candidate_id=sj.candidate_id, candidate_name=candidate.name if candidate else None,
             direction=candidate.direction if candidate else None,
             tracker=candidate.tracker.label if candidate and candidate.tracker else None,
             torrent_client=client.label if client else None,
-            final_status=sj.final_status, recheck_status=sj.recheck_status, error_message=sj.error_message,
+            final_status=sj.final_status,
+            display_status=review.seed_job_display_status(sj, in_client or set()),
+            recheck_status=sj.recheck_status, error_message=sj.error_message,
             hardlink_created_at=sj.hardlink_created_at, torrent_added_at=sj.torrent_added_at,
         )
 
@@ -164,7 +171,8 @@ def recent_seed_jobs(limit: int = 50, session: Session = Depends(get_session)):
     """Ultime esecuzioni, dalla più recente: l'interfaccia le osserva per
     avvisare quando un recheck in background finisce (seeding o fallito)."""
     rows = session.query(SeedJob).order_by(SeedJob.id.desc()).limit(max(1, min(limit, 200))).all()
-    return [SeedJobResponse.from_model(sj) for sj in rows]
+    in_client = review.hashes_in_clients(session)
+    return [SeedJobResponse.from_model(sj, in_client) for sj in rows]
 
 
 @router.post("/seed-jobs/reconcile", response_model=ReconcileResponse)
